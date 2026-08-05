@@ -1,0 +1,161 @@
+{
+  "id": "ch10",
+  "chapter": 10,
+  "part": "Part V: Production",
+  "title": "AI Engineering Architecture and User Feedback",
+  "summary": "How a production AI application grows from a single model call: enhance context, add guardrails, add a model router and gateway, add caches, add agent patterns — each step motivated by a failure the previous architecture could not handle. Then observability and orchestration, and finally the data flywheel: extracting explicit and implicit user feedback, designing for it without degrading the product, and knowing where feedback misleads.",
+  "keyTakeaways": [
+    "The architecture is built by successive addition, and each layer exists to answer a specific failure: missing context, unsafe or malformed output, wrong model for the job, repeated work, and tasks that need multiple steps.",
+    "Guardrails come in two directions — input guardrails protect against leaking private data and against malicious prompts, output guardrails catch unsafe, wrong-format, or ungrounded responses — and each adds latency you must budget.",
+    "A model gateway centralizes access (keys, quotas, logging, fallback, cost accounting) while a router chooses which model handles a request; together they make multi-model architectures manageable and cheap.",
+    "Caching spans exact-match response caching, prefix/prompt caching of shared context, and semantic caching keyed by embedding similarity — the last is the risky one, since a near-match is not the same question.",
+    "Observability for AI keeps the classic signals (latency, throughput, errors, cost) and adds AI-specific ones: quality scores, hallucination and refusal rates, retrieval hit rate, tool-call success, token spend per request, and drift in inputs.",
+    "User feedback is the flywheel that turns usage into evaluation data and training data — explicit signals like ratings are sparse and biased, implicit signals like edits, regenerations, copies, and abandonment are richer but noisier.",
+    "Feedback must be designed into the interaction rather than bolted on, and interpreted carefully: it is skewed toward extremes, can be gamed, and optimizing it naively produces sycophantic or addictive behavior rather than useful behavior."
+  ],
+  "questions": [
+    {
+      "q": "What is the organizing principle behind the book's step-by-step architecture?",
+      "options": [
+        "Every AI application should implement all layers from day one",
+        "Start with the simplest thing — a model call — and add each component only when a concrete failure demands it, since every layer adds latency, cost, and failure modes",
+        "Start with an agent framework and remove pieces as needed",
+        "Design for the maximum expected scale before writing code"
+      ],
+      "answer": 1,
+      "explain": "Each addition — context, guardrails, router, cache, agents — is justified by a specific problem. Adopting the full stack upfront buys complexity you cannot debug and latency you cannot afford, and obscures which component is responsible for a regression."
+    },
+    {
+      "q": "What do input guardrails primarily protect against?",
+      "options": [
+        "Slow responses from the model provider",
+        "Sending sensitive data (PII, secrets) to an external model, and malicious inputs such as jailbreaks and prompt injection",
+        "Tokenizer mismatches between models",
+        "Users typing in unsupported languages"
+      ],
+      "answer": 1,
+      "explain": "Two distinct risks share the input path: leakage — private information leaving your boundary — and attack, where the input is trying to subvert the system. Detection and redaction handle the first; isolation, filtering, and capability limits handle the second."
+    },
+    {
+      "q": "What is the fundamental tradeoff introduced by output guardrails?",
+      "options": [
+        "They require finetuning the base model",
+        "They only work on non-streaming responses, and every check adds latency before the user sees anything — so safety, quality, and responsiveness must be balanced explicitly",
+        "They make the response longer",
+        "They prevent the use of caching"
+      ],
+      "answer": 1,
+      "explain": "Checking a completed response for safety, grounding, or format means either buffering the stream (hurting perceived latency) or streaming and risking retraction. Teams usually classify by risk: stream low-risk content, buffer and check high-risk content."
+    },
+    {
+      "q": "What does a model gateway do that a router does not?",
+      "options": [
+        "It chooses which model answers each query",
+        "It compresses prompts before sending them",
+        "It provides a single access point for all model calls — credential management, rate limits and quotas, logging and cost accounting, retries and fallbacks — regardless of which model is chosen",
+        "It caches responses by semantic similarity"
+      ],
+      "answer": 2,
+      "explain": "The gateway is infrastructure: one place that owns keys, spend, observability, and failover across providers. The router is a policy on top of it deciding where a given request should go. Conflating them makes both harder to change."
+    },
+    {
+      "q": "Why does intent-based routing to different models save money without hurting most users?",
+      "options": [
+        "Because small models are always as good as large ones",
+        "Because routers can compress the prompt",
+        "Because providers discount routed requests",
+        "Because production traffic is heavily skewed toward simple requests, so sending the easy majority to a small cheap model and escalating only hard requests preserves quality where it matters"
+      ],
+      "answer": 3,
+      "explain": "The distribution does the work: most queries are simple. The engineering requirement is measuring quality per route, since a router that misclassifies hard queries as easy degrades exactly the requests users care most about."
+    },
+    {
+      "q": "What is the specific risk of semantic caching that exact-match caching does not have?",
+      "options": [
+        "It cannot be invalidated",
+        "Two questions can be close in embedding space and still have different correct answers, so a similarity hit can serve a subtly wrong response",
+        "It requires more storage than exact caching",
+        "It only works for English"
+      ],
+      "answer": 1,
+      "explain": "Exact caching is safe by construction. Semantic caching bets that similarity implies interchangeability — false for negations, dates, entity swaps, and user-specific context. It needs a conservative threshold, scoping by user/context, and evaluation of what it serves."
+    },
+    {
+      "q": "Which set of signals is specific to monitoring AI applications, beyond standard service metrics?",
+      "options": [
+        "CPU utilization, disk I/O, and open file descriptors",
+        "Quality scores, hallucination/groundedness rate, refusal rate, retrieval hit rate, tool-call success, token spend per request, and input drift",
+        "TLS handshake time and DNS resolution latency",
+        "Thread pool saturation and garbage collection pauses"
+      ],
+      "answer": 1,
+      "explain": "Latency, errors, and throughput still matter, but they miss the AI-specific failure: the system returns a fast, well-formed, confident, wrong answer. Only quality-oriented signals — plus cost per request, which is variable in a way traditional services are not — catch that."
+    },
+    {
+      "q": "Why does the book treat token spend as a monitoring signal rather than a finance concern?",
+      "options": [
+        "Because providers require spend reporting",
+        "Because cost per request varies with prompt length, retrieved context, retries, and agent steps — so a spend spike is an operational symptom (a runaway loop, a bloated prompt, a broken cache) as much as a bill",
+        "Because tokens correlate with GPU temperature",
+        "Because cost determines the model's quality"
+      ],
+      "answer": 1,
+      "explain": "A traditional request's cost is roughly fixed; an AI request's is not. Cost per request is therefore a diagnostic time series — regressions in it usually mean an agent looping, a cache miss rate change, or context creeping upward."
+    },
+    {
+      "q": "Which of these are implicit user-feedback signals the book highlights?",
+      "options": [
+        "Only thumbs-up and thumbs-down ratings",
+        "Server latency and error rates",
+        "Regenerating the response, editing the output, copying it, ending the conversation early, rephrasing the same question, and the sentiment of the next message",
+        "The number of tokens in the user's prompt"
+      ],
+      "answer": 2,
+      "explain": "Explicit ratings are sparse and biased toward extremes. Behavior is abundant: a regeneration or a rephrase says the answer failed; a copy or an accepted suggestion says it worked. The engineering job is capturing these deliberately rather than hoping to reconstruct them from logs."
+    },
+    {
+      "q": "What is the danger of optimizing directly for user feedback signals?",
+      "options": [
+        "Feedback data cannot be stored for privacy reasons",
+        "Feedback rewards what users like in the moment, which drives sycophancy, flattery, and engagement-maximizing behavior rather than correctness or usefulness",
+        "Feedback signals are always identical across users",
+        "Optimizing for feedback requires finetuning"
+      ],
+      "answer": 1,
+      "explain": "Preference is not truth. A model tuned to maximize approval learns to agree, hedge less, and please — degrading exactly the trustworthiness the product depends on. Feedback should feed evaluation and dataset curation, balanced against objective correctness measures."
+    },
+    {
+      "type": "open",
+      "prompt": "Take a prototype that is a single model call and describe how you would evolve it into a production architecture, justifying each layer by the failure it addresses.",
+      "points": [
+        "Baseline: a direct model call with a versioned prompt and an evaluation set — no layer is added without a measurement to justify it.",
+        "Context enhancement (retrieval, tools) when failures show the model lacks information; measure retrieval quality separately.",
+        "Guardrails when failures are unsafe outputs, leaked data, malformed responses, or injection attempts — input and output sides, with latency budgeted.",
+        "Router and gateway when there are multiple models: gateway centralizes keys, quota, logging, fallback, and cost accounting; router sends easy traffic to cheap models.",
+        "Caching when repeated or shared work is measurable — exact response cache, prefix cache for shared preambles, semantic cache only with conservative thresholds and scoping.",
+        "Agent patterns only when the task genuinely requires dynamic multi-step behavior, with step limits and tool scoping.",
+        "Observability throughout: traces of the full request path, quality metrics, cost per request, drift, and user feedback.",
+        "Orchestration to tie components together, chosen so the pipeline stays debuggable and the framework does not obscure what is sent to the model.",
+        "Rollout discipline: each layer ships behind evaluation, with the ability to disable it and compare."
+      ],
+      "answer": "I would keep the prototype as the baseline and refuse to add anything without a failure that names it. The baseline is a versioned prompt, a model call, and an evaluation set built from real inputs — because without that set, every later layer is a guess. The first thing production traffic reveals is usually missing information, so context enhancement comes next: retrieval over our corpus, plus tools for anything computable. I evaluate retrieval separately from generation from the start, since otherwise every future failure is unattributable. Then guardrails, driven by the failures we actually see: on the input side, redaction of sensitive data before it leaves our boundary and defenses against injection; on the output side, checks for unsafe content, format validity, and groundedness. I budget latency for these explicitly and stream low-risk content while buffering high-risk content, because a guardrail that adds two seconds to every response is a product regression. Once more than one model is in play, I put a gateway in front of everything — one place owning credentials, quotas, retries, fallback across providers, logging, and cost accounting — and then a router on top of it, sending the easy majority of traffic to a small model and escalating hard requests, with quality measured per route rather than in aggregate. Caching follows the measurements: exact-match caching for genuinely repeated requests, prefix caching for our long shared preamble, and semantic caching only with a conservative threshold and correct scoping, because a near-neighbor question can have a different answer. Agent patterns come last and only if the task truly branches on intermediate results, with a step budget and least-privilege tools. Underneath all of it, observability from day one: end-to-end traces that show retrieval, prompt, model, and tool calls; quality and groundedness scores; cost per request as a time series; and user feedback capture designed into the UI. Each layer ships behind a flag so I can turn it off and compare, because in this stack the only way to know a component earns its latency is to measure the system without it.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Design the user-feedback strategy for an AI writing assistant: what you collect, how you collect it, and how you use it without being misled.",
+      "points": [
+        "Collect explicit feedback sparingly and in context — a rating at the moment of use, with an optional reason — accepting that it will be sparse and biased toward extremes.",
+        "Instrument implicit signals deliberately: accepted vs rejected suggestions, edits made to the output (and their size), regenerations, copies, abandonment, and rephrased prompts.",
+        "Design the interaction so feedback is a natural byproduct of use rather than an interruption that degrades UX.",
+        "Log the full context with each signal — prompt version, model version, retrieved context, settings — or the signal cannot be acted on later.",
+        "Route feedback into evaluation first: build failure sets from negative signals, and use them to grow the evaluation suite and prioritize fixes.",
+        "Use feedback data for dataset curation and finetuning, especially human edits, which are high-signal correction pairs.",
+        "Beware biases: only strongly satisfied or dissatisfied users rate, heavy users dominate the signal, and behavior varies by segment.",
+        "Beware degenerate optimization: maximizing approval yields sycophancy and engagement-seeking, so balance with objective correctness measures.",
+        "Respect privacy and consent: feedback data is user content, and its use for training needs clear policy and controls."
+      ],
+      "answer": "For a writing assistant the richest feedback is behavioral, so I would design the product to emit it. Every suggestion has an accept, reject, or edit outcome, and an edit is the highest-signal event in the whole system: it is a human-corrected version of exactly what the model produced, which is both an evaluation label and a finetuning pair. I would capture the diff, not just the fact of an edit. Alongside that: regenerations, copies, how far into a generated draft the user kept reading, whether they rephrased the same request, and whether the session was abandoned. Explicit ratings I keep, but I keep them small and in context — a thumbs control at the point of use with an optional one-tap reason — because I expect them to be sparse and skewed toward users who felt strongly. Every signal is logged with the full context: prompt version, model version, retrieval results, and settings, since a rating with no idea what produced it is unusable a week later. The first destination for all of it is evaluation, not training. Negative signals get clustered into failure sets, which become new slices in the evaluation suite and a priority list for fixes. Only after a pattern is understood does data flow toward curation and finetuning, with edits as the core corpus. Then the caveats, which are what keep this from going wrong. The population that gives feedback is not the population that uses the product, and power users dominate — so I slice signals by segment rather than trusting the aggregate. Feedback measures satisfaction, not correctness, so I never optimize it directly: a model tuned to be liked becomes agreeable and flattering, which for a writing assistant means confidently poor advice that users accept. So approval metrics sit beside objective quality checks, and a proposed change must move both. Finally, this is user content: what we collect, retain, and train on needs explicit policy, consent, and an opt-out, and sensitive content should be excluded from training paths entirely."
+    }
+  ]
+}

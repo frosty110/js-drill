@@ -1,0 +1,140 @@
+{
+  "id": "ch04",
+  "chapter": 4,
+  "part": "Part II: Building Multi-Agent Systems from Scratch",
+  "title": "Building Your First Agent",
+  "summary": "The agent loop implemented from first principles: a message list, a model call with tool schemas, parsing the tool calls it returns, executing them, appending the results as observations, and repeating until a termination condition. Around that core sit the things that make it usable — streaming, memory, cancellation, middleware for logging and guardrails, and traces detailed enough to debug.",
+  "keyTakeaways": [
+    "The core loop is small: build messages, call the model with tool schemas, execute any tool calls, append results, repeat until the model answers or a bound is hit — everything else is scaffolding around it.",
+    "Termination must be explicit — a final answer, a step cap, a wall-clock or token budget, or an error — because a loop with no bound will keep going.",
+    "Tool definitions are typed contracts: schema in, validated arguments, structured result out, and errors returned as observations the model can act on.",
+    "Streaming is a design requirement, not a nicety: without token and step streaming, every multi-step task is an opaque wait.",
+    "Middleware — logging, tracing, guardrails, retries, rate limiting — belongs around the loop as composable layers rather than tangled into the loop body.",
+    "State belongs outside the loop: the message list, the accumulated results, and any memory should be inspectable and serializable so a run can be resumed, replayed, and debugged.",
+    "Cancellation and timeouts must be plumbed through, since an agent holding a long-running tool call needs to stop when the user leaves.",
+    "Building it once from scratch is the point: frameworks hide this loop, and you cannot debug what you have never seen."
+  ],
+  "questions": [
+    {
+      "q": "What is the minimal structure of an agent loop?",
+      "options": [
+        "Prompt the model once and parse its output into actions",
+        "Assemble messages, call the model with tool schemas, execute returned tool calls, append results as observations, and repeat until a termination condition",
+        "Run several models in parallel and combine their outputs",
+        "Retrieve context, then generate an answer"
+      ],
+      "answer": 1,
+      "explain": "Everything an agent framework does is layered on this. Seeing it plainly is what makes framework behaviour — and framework bugs — comprehensible later."
+    },
+    {
+      "q": "Why must termination be explicit?",
+      "options": [
+        "Because providers require a stop parameter",
+        "Because the model stops on its own only when it decides to answer — with no cap on steps, time, or tokens, a confused agent will keep calling tools indefinitely",
+        "Because loops cannot be streamed",
+        "Because context windows reset each iteration"
+      ],
+      "answer": 1,
+      "explain": "The loop's exit conditions are the developer's responsibility: a final answer, a step cap, a budget in time and tokens, or an unrecoverable error. Each needs defined behaviour, ideally an honest report rather than a silent stop."
+    },
+    {
+      "q": "How should tool errors be handled inside the loop?",
+      "options": [
+        "Caught and returned to the model as observations with actionable messages, while bounding retries",
+        "Raised immediately to the user, ending the run",
+        "Suppressed so the loop continues cleanly",
+        "Retried silently until they succeed"
+      ],
+      "answer": 0,
+      "explain": "The model can only respond to what it sees. A specific error lets it fix its arguments or change tack; a suppressed one leads it to answer as if the call had returned nothing meaningful, which produces confident fabrication."
+    },
+    {
+      "q": "Why is streaming considered part of the agent's architecture rather than a UI concern?",
+      "options": [
+        "Because streaming reduces token cost",
+        "Because the loop must emit events — step started, tool called, result received, tokens generated — for any interface to show progress, so the loop has to be built to produce them",
+        "Because models require streaming to use tools",
+        "Because streaming enables parallel tool calls"
+      ],
+      "answer": 1,
+      "explain": "You cannot bolt progress onto a loop that returns only a final value. Designing the loop as an event emitter from the start is what makes streaming interfaces, live tracing, and mid-run cancellation possible."
+    },
+    {
+      "q": "What is the purpose of middleware around the agent loop?",
+      "options": [
+        "To choose which model handles each step",
+        "To compose cross-cutting concerns — logging, tracing, guardrails, retries, rate limiting — without entangling them in the loop's logic",
+        "To store the conversation history",
+        "To convert between model providers' formats"
+      ],
+      "answer": 1,
+      "explain": "These concerns apply to every step and change independently of the loop. Keeping them as layers means the core stays readable, and a guardrail or a tracer can be added or removed without touching the control flow."
+    },
+    {
+      "q": "Why should the agent's state live outside the loop as an explicit, serializable object?",
+      "options": [
+        "To reduce memory usage",
+        "Because frameworks require it",
+        "So a run can be inspected, persisted, resumed, and replayed — and so debugging does not depend on log archaeology",
+        "So multiple models can share it"
+      ],
+      "answer": 2,
+      "explain": "State held only in local variables disappears when the process ends. Externalizing the message list, results, and step metadata makes long-running work resumable and makes every run reproducible for analysis."
+    },
+    {
+      "q": "Why does cancellation need to be plumbed through explicitly?",
+      "options": [
+        "Because model providers charge for cancelled requests",
+        "Because a user who navigates away or a request that times out must actually stop in-flight model and tool calls, rather than leaving work running and billing accruing",
+        "Because cancellation improves answer quality",
+        "Because tools cannot be interrupted otherwise"
+      ],
+      "answer": 1,
+      "explain": "Agents hold long-running operations. Without cancellation propagated to the model call and the tool execution, abandoned work continues consuming budget and may still perform side effects the user no longer wants."
+    },
+    {
+      "q": "What is the argument for building the loop from scratch before adopting a framework?",
+      "options": [
+        "Frameworks are always slower",
+        "Custom loops are always more capable",
+        "Frameworks abstract the loop, so without having built one you cannot reason about what they are doing, debug their behaviour, or judge when their abstraction stops fitting",
+        "Frameworks cannot support streaming"
+      ],
+      "answer": 2,
+      "explain": "The loop is small enough to write in an afternoon and is the thing every framework wraps. Having built it, framework choices become evaluable rather than magical, and their failure modes become legible."
+    },
+    {
+      "type": "open",
+      "prompt": "Walk through implementing a minimal but production-shaped agent loop. What does it contain and what does each piece exist for?",
+      "points": [
+        "State: an explicit, serializable object holding messages, step count, accumulated results, and budget consumption.",
+        "Model call: messages plus typed tool schemas, with model and parameters configurable, and the response parsed for tool calls versus a final answer.",
+        "Tool execution: look up the tool, validate arguments against the schema, execute with a timeout, and return a structured result.",
+        "Error path: catch failures, classify them, and append actionable error observations rather than raising or suppressing.",
+        "Loop control: repeat until a final answer, a step cap, a budget limit, or an unrecoverable error; report the reason for termination.",
+        "Event emission: emit step, tool, and token events so interfaces and traces can consume progress live.",
+        "Middleware: logging/tracing, guardrails on inputs and outputs, retries with backoff, and rate limiting as composable layers.",
+        "Cancellation and timeouts propagated to model and tool calls.",
+        "Persistence: write state so a run can resume or be replayed; keep a full trace with arguments, results, tokens, and timings.",
+        "Safety: least-privilege tool credentials, argument validation server-side, approval hooks for consequential actions."
+      ],
+      "answer": "I would start with state as an explicit object rather than local variables: the message list, a step counter, accumulated tool results, and running budget consumption in tokens, time, and cost. Making it serializable from the beginning is what later gives me resumption, replay, and debuggable runs. The loop body is then small. Assemble the messages, call the model with the typed tool schemas, and inspect the response: either it is a final answer, in which case we exit, or it contains tool calls. For each call, look the tool up, validate the arguments against its schema before executing anything, run it with a timeout, and append a structured result. Errors are caught and classified — transient, permanent, or semantic — and appended as observations with actionable messages, because the model can only correct what it can see, and a swallowed error becomes a confident fabrication. Loop control has four exits: final answer, step cap, budget exhaustion, and unrecoverable error, and every exit reports which one it was rather than just returning. The loop emits events as it goes — step started, tool called with arguments, result received, tokens streaming — because interfaces and traces cannot be retrofitted onto a function that returns only a final value. Around the core I layer middleware: tracing that records every prompt, call, argument, result, token count and timing under one request id; input and output guardrails; retry with backoff on transient failures; and rate limiting. Cancellation is threaded through so an abandoned request actually stops the in-flight model and tool calls. Finally, the safety pieces that belong in the loop rather than the prompt: tool credentials scoped per tool, argument validation and authorization enforced server-side rather than trusting what the model produced, and an approval hook that consequential tools can require before executing."
+    },
+    {
+      "type": "open",
+      "prompt": "Your agent occasionally runs for dozens of steps and produces nothing useful. Describe how you would instrument and fix it.",
+      "points": [
+        "Get a full trace first: every step with prompt, tool, arguments, result, tokens, and time under one request id.",
+        "Look for repetition — identical or near-identical calls — which indicates a loop the agent cannot escape.",
+        "Check whether tool errors are being surfaced usefully or swallowed, since silent failures cause aimless retrying.",
+        "Check tool descriptions and argument schemas: wrong tool choice or malformed arguments produce long fruitless runs.",
+        "Verify there is a checkable goal and per-step success criteria, without which the agent cannot recognize progress or completion.",
+        "Add loop detection (hash of tool plus arguments), a no-progress window, and step, time, and cost budgets.",
+        "Feed impasse information back explicitly on replanning rather than letting it retry blindly.",
+        "Terminate with an honest report and escalation, returning partial results rather than nothing.",
+        "Turn each observed impasse into an evaluation case, and track step-count distribution as a monitored metric."
+      ],
+      "answer": "First I would make the run legible: a full trace under one request id with every prompt, tool call, argument, result, token count, and timing. Long useless runs are almost always obvious once you can read them, and invisible otherwise. The pattern I look for first is repetition — the same tool called with near-identical arguments several times — which means the agent is stuck and cannot tell. Right behind it is swallowed errors: if a tool failed and the loop returned an empty result, the agent has no idea anything went wrong and will keep trying variations of a doomed approach. Then I check the tool layer, because a surprising share of these runs are caused by definitions rather than reasoning: a vague description that makes two tools look interchangeable, an argument name the model keeps misfilling, a schema that accepts something meaningless. Fixing the definitions often shortens runs more than any prompt change. Next, the goal: is there a checkable success criterion, per step and overall? Without one the agent has no way to distinguish progress from motion, so it wanders and cannot recognize that it is done or that it is stuck. Then I add the guards. Loop detection by hashing tool plus arguments, a no-progress window that trips when N steps pass without a verified sub-goal or new information, and hard budgets in steps, wall-clock, and cost. When any of those trip, the response is not a silent stop: the agent is told explicitly what has failed and asked to replan with that information, and if it cannot, the run terminates with an honest report, the partial results, and an escalation. Finally, I would treat this as a permanent measurement rather than a one-time fix: step-count and cost distributions become monitored metrics with alerts on the tail, and each impasse I diagnose becomes a case in the evaluation set so the same shape of failure is caught before it ships again."
+    }
+  ]
+}

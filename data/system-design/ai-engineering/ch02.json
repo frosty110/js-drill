@@ -1,0 +1,153 @@
+{
+  "id": "ch02",
+  "chapter": 2,
+  "part": "Part I: Foundations",
+  "title": "Understanding Foundation Models",
+  "summary": "What the training choices upstream of you mean for the application you build downstream: training data and its language/domain skews, model architecture and size (parameters, tokens, FLOPs, scaling laws), post-training as supervised finetuning plus preference finetuning, and sampling — the step that makes the model probabilistic, and therefore the source of both creativity and hallucination.",
+  "keyTakeaways": [
+    "Training data decides what a model is good at: an internet-scraped corpus is dominated by English and by general web text, so both low-resource languages and specialized domains underperform in ways no prompt fixes.",
+    "Model size is best read as three numbers — parameter count, training-token count, and compute (FLOPs) — and scaling laws describe how to trade them off for a fixed budget; a bigger model trained on too little data is a waste.",
+    "Post-training turns a raw pretrained model into something usable: supervised finetuning teaches it to follow instructions and converse, then preference finetuning (RLHF-style, with a reward model or a direct method) aligns it with human preference.",
+    "Sampling is where the probability distribution becomes one concrete token: temperature flattens or sharpens the distribution, top-k and top-p truncate the tail, and stop conditions end generation.",
+    "The same sampling that enables creativity causes inconsistency and hallucination — the model samples a plausible continuation, not a verified fact — so applications must design for a probabilistic component rather than assume it away.",
+    "Structured outputs (JSON, a schema, a fixed enum) can be obtained by prompting, constrained decoding at the token level, or finetuning — constrained decoding is the one that makes malformed output impossible rather than unlikely."
+  ],
+  "questions": [
+    {
+      "q": "Why do models trained on general internet data underperform on low-resource languages even when they nominally 'support' them?",
+      "options": [
+        "Their tokenizers cannot represent non-Latin characters at all",
+        "Training-data volume is wildly skewed toward a few languages (English above all), so the model has seen far less of the low-resource language — and tokenization is usually less efficient for it too, raising cost and latency",
+        "The transformer attention mechanism is defined only over Latin script",
+        "Providers deliberately downweight other languages to save compute"
+      ],
+      "answer": 1,
+      "explain": "It is a data-distribution problem compounded by a tokenization problem: the same sentence in a low-resource language often costs several times more tokens, so you pay more, fill context faster, and get worse quality from a model that simply saw less of that language."
+    },
+    {
+      "q": "What is the practical reason a domain-specific model (say for protein sequences or medical records) can still be worth training when general foundation models are so strong?",
+      "options": [
+        "General models refuse all specialized queries for safety reasons",
+        "Domain models are always smaller and therefore always cheaper",
+        "The domain's data is largely absent from public internet text — the general model never saw it, so no amount of prompting recovers knowledge it does not have",
+        "Only domain models can produce structured output"
+      ],
+      "answer": 2,
+      "explain": "Prompting and retrieval can supply context, but they cannot install capability the pretraining never built. When the domain's data is proprietary or simply not on the web, a domain-specific model (or continued pretraining) is the only way to get the representation."
+    },
+    {
+      "q": "In the scaling-law framing, what is the mistake in simply making a model bigger with a fixed compute budget?",
+      "options": [
+        "Bigger models cannot be quantized",
+        "Parameters and training tokens must scale together — spending the budget on parameters while starving the model of data leaves it undertrained and worse than a smaller, better-fed model",
+        "Bigger models always overfit the validation set",
+        "Larger models cannot be served on GPUs with less than 80 GB of memory"
+      ],
+      "answer": 1,
+      "explain": "Scaling laws describe the compute-optimal split between model size and data size. A model with more parameters but too few training tokens wastes the budget; matching them is what buys the loss reduction. In practice serving cost also argues for smaller models trained longer."
+    },
+    {
+      "q": "What is the role of supervised finetuning (SFT) in post-training?",
+      "options": [
+        "It compresses the model to fit on a single GPU",
+        "It replaces pretraining for domain-specific models",
+        "It removes the model's ability to generate unsafe content by deleting parameters",
+        "It teaches the pretrained model to respond in the conversational, instruction-following format users expect, using demonstration data"
+      ],
+      "answer": 3,
+      "explain": "A pretrained model completes text; it does not naturally answer questions or follow instructions. SFT on high-quality demonstrations of (instruction, good response) pairs teaches the format and behavior. Preference finetuning then pushes it toward outputs humans actually prefer."
+    },
+    {
+      "q": "How does preference finetuning (as in RLHF) differ from supervised finetuning?",
+      "options": [
+        "It learns from comparisons between candidate outputs — which response humans preferred — rather than from a single demonstrated correct answer",
+        "It uses a larger learning rate on the same demonstration data",
+        "It trains a separate tokenizer for each user",
+        "It is unsupervised and needs no human input at all"
+      ],
+      "answer": 0,
+      "explain": "Judging which of two responses is better is far easier and cheaper for annotators than writing the ideal response. Classic RLHF trains a reward model on those comparisons and then optimizes the policy against it; direct methods optimize on the preference pairs without a separate reward model."
+    },
+    {
+      "q": "What does the temperature parameter actually do during sampling?",
+      "options": [
+        "It caps the number of tokens the model may generate",
+        "It rescales the logits before the softmax — higher values flatten the distribution and make unlikely tokens more probable, lower values sharpen it toward the argmax",
+        "It controls how many candidate responses are generated in parallel",
+        "It sets the fraction of the context window the model may attend to"
+      ],
+      "answer": 1,
+      "explain": "Temperature divides the logits: near 0 the distribution collapses toward always picking the most likely token (repetitive but consistent), while higher values spread probability mass toward the tail (more varied, more likely to go off the rails)."
+    },
+    {
+      "q": "How do top-k and top-p (nucleus) sampling differ?",
+      "options": [
+        "top-k samples from a fixed number of highest-probability tokens; top-p samples from the smallest set whose cumulative probability exceeds p, so the candidate set size adapts to how confident the model is",
+        "top-k applies to prompts and top-p applies to completions",
+        "top-k is deterministic and top-p is random",
+        "top-p truncates the context window while top-k truncates the vocabulary"
+      ],
+      "answer": 0,
+      "explain": "The adaptive set size is the point: when the model is confident, a few tokens hold most of the mass and top-p naturally narrows; when it is uncertain, the set widens. A fixed k either over-truncates confident steps or admits junk on uncertain ones."
+    },
+    {
+      "q": "Huyen argues hallucination is not a bug to be patched away but a consequence of how models produce text. Which framing matches that argument?",
+      "options": [
+        "The model looks up facts in a database that is occasionally stale",
+        "Hallucinations only occur when temperature is above 1.0",
+        "The model samples a plausible continuation from a probability distribution — plausibility, not truth, is the objective, so confidently wrong output is the expected failure mode",
+        "Hallucinations come entirely from tokenizer errors"
+      ],
+      "answer": 2,
+      "explain": "Nothing in next-token prediction checks facts. The model produces what looks like a good continuation given its training distribution, so it will fill gaps fluently. That is why applications ground outputs with retrieval, verify with tools, and evaluate rather than assume correctness."
+    },
+    {
+      "q": "The same prompt at the same settings can return different answers on different calls. What is the primary cause, and what follows for your application?",
+      "options": [
+        "The model weights change per call, so you must pin a random seed on the server",
+        "Sampling is stochastic, so outputs vary — your tests, evaluations, and any downstream parsing must tolerate variation rather than assume a fixed string",
+        "The network reorders tokens in transit; retries fix it",
+        "The context window is randomly truncated per request"
+      ],
+      "answer": 1,
+      "explain": "Sampling draws from a distribution, so identical inputs can yield different outputs (and providers may add further nondeterminism). Practically: do not assert on exact strings, expect flaky evaluation results, and use structure and verification rather than hoping for stability."
+    },
+    {
+      "q": "Which approach makes malformed structured output (for example invalid JSON) impossible rather than merely unlikely?",
+      "options": [
+        "Adding `Respond only in valid JSON` to the system prompt",
+        "Finetuning the model on many JSON examples",
+        "Constrained decoding — masking out tokens that would violate the grammar or schema at each generation step",
+        "Lowering the temperature to 0"
+      ],
+      "answer": 2,
+      "explain": "Prompting and finetuning both raise the probability of well-formed output without guaranteeing it. Constrained decoding filters the token distribution against the grammar, so an invalid token can never be sampled — at the cost of tooling support and some quality effects from the constraint."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the pipeline from pretraining to a deployed chat model — what each stage contributes, and what an application builder can and cannot change at each one.",
+      "points": [
+        "Pretraining with self-supervision on a large corpus builds general capability and knowledge; it fixes what the model fundamentally knows, and the application builder cannot change it without continued pretraining.",
+        "Supervised finetuning teaches instruction-following and conversational format from demonstrations, converting a text completer into an assistant.",
+        "Preference finetuning (reward model + RL, or a direct preference method) aligns outputs with what humans prefer, shaping tone, helpfulness, and refusals.",
+        "Sampling is the inference-time stage — temperature, top-k/top-p, stop conditions, structured-output constraints — and it is the one the application controls per request.",
+        "The builder's levers are context and prompt, sampling parameters, retrieval, and optionally their own finetune; training data and pretraining scale are inherited constraints."
+      ],
+      "answer": "Pretraining does the heavy lifting: self-supervised next-token prediction over a very large corpus builds the model's knowledge and general capability. Whatever the corpus underrepresented — a low-resource language, a proprietary domain — is a ceiling you inherit, and no prompt removes it. Post-training then makes it usable. Supervised finetuning on demonstration data teaches it to follow instructions and hold a conversation rather than merely continue text. Preference finetuning takes comparisons of candidate outputs, trains a reward model (or optimizes directly on the pairs), and pushes the policy toward what humans actually prefer — this is where tone, helpfulness, and refusal behavior get set. At inference, sampling turns the output distribution into concrete tokens: temperature reshapes the distribution, top-k or top-p truncate the tail, stop sequences end generation, and constrained decoding can force a schema. As an application builder, sampling parameters and the context I supply are mine to control on every request; retrieval lets me inject knowledge the model lacks; finetuning lets me shift behavior if I have data and a reason. Pretraining scale, corpus composition, and the provider's alignment choices are constraints I select among, not knobs I turn — which is why model selection is itself an engineering decision."
+    },
+    {
+      "type": "open",
+      "prompt": "Your feature must return a strict JSON object that downstream code parses, and users complain the same input sometimes yields different results. How do you make the output both well-formed and consistent, and what tradeoffs do you accept?",
+      "points": [
+        "Distinguish the two problems: well-formedness is a structure problem, consistency is a sampling/probabilistic problem, and they have different fixes.",
+        "For structure, prefer constrained decoding or a provider's structured-output/schema mode over prompt instructions; finetuning is a fallback when the format is unusual.",
+        "Validate and repair on the client side anyway — parse, validate against the schema, and retry or fall back rather than trusting the model.",
+        "For consistency, lower temperature (toward greedy decoding), fix seeds where supported, and cache identical requests — accepting reduced diversity.",
+        "Accept residual nondeterminism: providers do not guarantee reproducibility, so tests should assert on schema and semantics, not exact strings.",
+        "Note the quality tradeoff: heavy constraints and near-zero temperature can degrade reasoning quality, so evaluate the constrained pipeline end to end rather than assuming it is free."
+      ],
+      "answer": "These are two different problems. Well-formedness I solve structurally: use the provider's structured-output or constrained-decoding mode so the sampler can only emit tokens the schema allows, which makes invalid JSON impossible rather than unlikely. If that is unavailable, I keep a strict prompt plus a validate-and-retry loop, and consider finetuning only if the format is unusual enough that prompting keeps failing. Either way the client validates against the schema before use — I do not let unparsed model output reach downstream code, and I define a fallback for the case where validation keeps failing. Consistency is the sampling problem. Dropping temperature toward zero makes decoding near-greedy, which sharply reduces variation; pinning a seed helps where the provider supports it; caching identical requests removes the variation entirely for repeat inputs. What I accept in return: less diversity, and in some tasks worse quality, because low temperature and hard constraints can hurt reasoning — so I re-run my evaluation set against the constrained, low-temperature configuration rather than assuming the change is free. I also accept that exact reproducibility is not guaranteed by any provider, so my tests assert that the output parses and satisfies semantic checks, never that it equals a fixed string.",
+      "crux": true
+    }
+  ]
+}

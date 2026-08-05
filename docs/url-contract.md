@@ -138,7 +138,11 @@ its use there is no address bar at all.** A URL the user cannot reach is a URL
 they cannot paste, so every long-dwell surface needs an explicit affordance:
 
 - the unit screen has **Share** (`#share-unit`), which emits the static URL
-  carrying the reader's `?s=` result set;
+  carrying the reader's `?s=` result set. It sits in the unit *header*, not the
+  bottom CTA row: a design problem's detail screen runs several thousand pixels
+  (key ideas, components in play, the infographic deck), and an affordance you
+  have to scroll a whole screen to find fails the same test as a missing address
+  bar;
 - the sheet viewer has **Link**, which copies the sheet's own static page;
 - the drill has a per-question **🔗**, which copies the unit page anchored at
   that question.

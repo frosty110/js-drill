@@ -1,0 +1,142 @@
+{
+  "id": "ch10",
+  "chapter": 10,
+  "part": "Part III: Evaluating and Optimizing",
+  "title": "Evaluating Multi-Agent Systems",
+  "summary": "Measuring a system whose behaviour varies between runs. Multi-agent evaluation adds two things to ordinary agent evaluation: coordination metrics — redundancy, handoffs, turn counts, who contributed what — and the ablation that answers the only question that matters architecturally, which is whether the extra agents changed the outcome at all.",
+  "keyTakeaways": [
+    "Evaluate at three levels — end-to-end outcome, trajectory, and per-agent behaviour — because a multi-agent failure is otherwise unattributable.",
+    "The decisive experiment is the ablation: run the same evaluation set against a single-agent baseline, and justify each additional agent by the difference it makes.",
+    "Coordination has its own metrics: turn count, handoff count, duplicated work, context growth, and how often agents contradict each other.",
+    "Variance is a first-class result, not noise to average away — repeated runs of the same input reveal how predictable the system is, which matters as much as the mean.",
+    "LLM-as-judge is the practical tool for open-ended output, but it needs a pinned model, a versioned rubric, and calibration against human labels.",
+    "Cost and latency belong in the same report as quality: multi-agent designs usually buy quality with both, and the exchange rate must be visible.",
+    "Build evaluation sets from real tasks with verifiable success criteria, sliced by difficulty and type, and grow them with every production failure.",
+    "Per-agent evaluation with fixed inputs isolates each specialist from its upstream dependencies, which is what makes a regression localizable."
+  ],
+  "questions": [
+    {
+      "q": "Why is the single-agent ablation the decisive experiment for a multi-agent design?",
+      "options": [
+        "Because single agents are always cheaper",
+        "Because it answers whether the coordination cost buys anything — if the baseline matches the multi-agent system's quality, the topology is overhead",
+        "Because providers recommend it",
+        "Because it is the only way to measure latency"
+      ],
+      "answer": 1,
+      "explain": "Multi-agent architectures are frequently adopted on intuition. The ablation converts the architecture from an aesthetic choice into a measured one, and it often finds that a single agent with good tools performs comparably at a fraction of the cost."
+    },
+    {
+      "q": "Which metrics are specific to coordination rather than to agents in general?",
+      "options": [
+        "Turn count, handoff count, duplicated work between agents, context growth, and inter-agent contradiction rate",
+        "Token count and latency",
+        "Retrieval recall and precision",
+        "Refusal rate and toxicity"
+      ],
+      "answer": 0,
+      "explain": "These measure the topology itself. Duplicated work and excessive handoffs are the characteristic waste of multi-agent systems, and neither shows up in an end-to-end quality score."
+    },
+    {
+      "q": "Why should variance across repeated runs be reported as a result?",
+      "options": [
+        "Because providers charge per run",
+        "Because averaging hides it: two systems with the same mean quality can differ enormously in predictability, and an unpredictable system is worse to operate and harder to debug",
+        "Because variance determines the model's temperature",
+        "Because variance is required for statistical significance only"
+      ],
+      "answer": 1,
+      "explain": "Autonomous topologies produce different trajectories per run. Running the same inputs several times and reporting the spread tells you whether users will get consistent behaviour and whether a measured improvement is real or noise."
+    },
+    {
+      "q": "What does per-agent evaluation with fixed inputs achieve?",
+      "options": [
+        "It reduces total evaluation cost",
+        "It removes the need for end-to-end evaluation",
+        "It isolates each agent from its upstream dependencies, so a regression can be attributed to the specialist rather than to whatever fed it",
+        "It guarantees deterministic behaviour"
+      ],
+      "answer": 2,
+      "explain": "Giving the summarizer a known-good input measures the summarizer. Without that isolation, a degradation upstream looks like a downstream failure and the team optimizes the wrong component."
+    },
+    {
+      "q": "What discipline does LLM-as-judge require to be usable over time?",
+      "options": [
+        "Using the largest available model",
+        "A pinned judge model and versioned rubric, plus calibration against human labels — otherwise the metric shifts as the judge changes",
+        "Judging only with the same model that generated the output",
+        "Running the judge only once per release"
+      ],
+      "answer": 1,
+      "explain": "A judge is itself a model that gets updated and deprecated, and a rubric edit changes the metric. Without pinning and calibration, an apparent quality change may be a change in the instrument."
+    },
+    {
+      "q": "Why must cost and latency be reported alongside quality in multi-agent evaluation specifically?",
+      "options": [
+        "Because multi-agent systems are always slower",
+        "Because latency correlates with quality",
+        "Because cost reporting is a compliance requirement",
+        "Because they are the currency the topology spends — multi-agent designs typically buy quality with tokens and wall-clock, so the exchange rate is the actual decision"
+      ],
+      "answer": 3,
+      "explain": "A two-point quality gain for triple the cost and double the latency is usually a bad trade in a product, and it is invisible in a quality-only report — which is how expensive topologies get shipped."
+    },
+    {
+      "q": "What makes a good multi-agent evaluation set?",
+      "options": [
+        "Synthetic tasks generated by the same model family",
+        "Real tasks with verifiable success criteria, sliced by type and difficulty, including adversarial and out-of-scope cases, grown from production failures",
+        "A public agent benchmark used as the primary metric",
+        "A single large set with one aggregate score"
+      ],
+      "answer": 1,
+      "explain": "Public benchmarks shortlist; they do not decide. What predicts production behaviour is your own traffic with criteria something other than the agent can verify, sliced so failures are visible rather than averaged away."
+    },
+    {
+      "q": "Why is contradiction between agents worth measuring?",
+      "options": [
+        "Because it reveals coordination failure — agents working from different assumptions or stale state — and because unresolved contradictions surface to users as an incoherent system",
+        "Because contradictions always indicate a bug in the framework",
+        "Because it determines which agent to remove",
+        "Because contradictions increase token cost"
+      ],
+      "answer": 0,
+      "explain": "Disagreement can be healthy when the design intends cross-checking, but unmanaged contradiction usually means agents hold divergent views of shared state. Measuring it distinguishes deliberate verification from accidental incoherence."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the evaluation that would justify or reject a three-agent architecture compared with a single agent.",
+      "points": [
+        "Build a shared evaluation set of real tasks with verifiable success criteria, sliced by type and difficulty.",
+        "Implement a credible single-agent baseline with the same tools and comparable prompt effort — a strawman baseline invalidates the comparison.",
+        "Run both on the same set, multiple times per input, to capture variance as well as means.",
+        "Report quality per slice, not aggregate, since the multi-agent advantage usually lives in specific slices if it exists.",
+        "Report cost, token count, and p95 latency alongside quality.",
+        "Measure coordination metrics for the multi-agent system: turns, handoffs, duplicated work, contradictions.",
+        "Ablate incrementally — two agents, then three — to attribute the benefit to a specific role rather than to the topology as a whole.",
+        "Examine failure modes qualitatively: does each system fail safely, and does the multi-agent version fail in new ways.",
+        "Set a decision rule in advance: what quality gain justifies what cost and latency increase, per slice.",
+        "Decide, and be willing to collapse the topology to the parts that earned their place."
+      ],
+      "answer": "The experiment stands or falls on the baseline, so I would build a genuinely good single agent first: same tools, same retrieval, comparable prompt effort. Comparing a polished three-agent system against a deliberately weak single agent is the most common way teams convince themselves of an architecture, and it proves nothing. Both systems then run against the same evaluation set — real tasks with success criteria something other than the agent can verify, sliced by task type and difficulty, including the hard and adversarial cases. Each input runs several times, because trajectories vary and a single run per input cannot distinguish an improvement from noise. The report has quality per slice, never a single average, because if the multi-agent advantage exists it almost always lives in a specific slice: the complex research tasks, the long documents, the cases needing two specialisms. Next to quality sit cost, tokens, and p95 latency, since those are what the topology is spending. For the multi-agent system I also measure coordination directly: turn counts, handoffs, how often two agents did the same work, how often they contradicted each other. Those numbers usually explain the cost gap and often suggest the fix. Then I ablate incrementally rather than comparing one against three — add the second agent, measure, add the third, measure — so the benefit is attributed to a specific role. Frequently one role earns its keep and the others are ceremony. Alongside the numbers I read failures qualitatively: does each system fail safely, and does the multi-agent one introduce new failure modes such as dropped tasks or confidently agreed-upon errors. Crucially, I would write the decision rule before running any of it: what quality gain, on which slices, justifies what multiple of cost and latency. Without that, results get rationalized after the fact. And I would commit to acting on the outcome, including the likely one — keeping the one split that earned its place and collapsing the rest back into a single agent.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Your multi-agent system's quality score dropped 8% after a release, but nothing in your code changed. How do you investigate?",
+      "points": [
+        "Confirm the measurement first: check whether the judge model, rubric version, or evaluation set changed, since a metric shift can be an instrument shift.",
+        "Check variance: re-run the previous configuration to see whether 8% is outside normal run-to-run spread.",
+        "Check external dependencies: a provider model update, a changed default, a tool or API behaviour change, or corpus/index updates.",
+        "Use per-agent evaluation with fixed inputs to localize which component regressed.",
+        "Inspect traces from before and after for changed trajectories — different tool choices, more turns, new failure patterns.",
+        "Check coordination metrics for shifts in handoffs, duplication, or contradiction rates.",
+        "Check retrieval and data freshness, since corpus changes look like model regressions.",
+        "Slice the results: an aggregate drop may be one slice collapsing rather than a broad decline.",
+        "Once localized, add a regression case and, where possible, pin the dependency or adapt prompts, then re-measure.",
+        "Long term: version everything and monitor dependency changes as first-class events."
+      ],
+      "answer": "First I would question the instrument, because 'nothing changed' plus a metric drop very often means the measurement changed. Did the judge model get updated, did anyone edit the rubric, did the evaluation set gain or lose cases? A judge upgrade alone can move scores several points in either direction. Second, variance: I re-run the previous configuration a few times to establish the normal spread. In an autonomous multi-agent system, run-to-run variation of several points is common, and an 8% drop may not be a signal at all. If it survives both checks, I look outward. The most likely cause is a dependency I do not control: a provider silently updating a model behind the same name, a changed default parameter, a tool's API altering its response shape, or the retrieval corpus being reindexed. Any of those shifts behaviour with no commit in our repository. To localize, I use per-agent evaluation with fixed inputs, which isolates each specialist from what feeds it — that usually turns a vague system-level drop into 'the extraction agent's tool-call validity fell from 97% to 84%'. Then I read traces from before and after side by side, looking for changed trajectories: a different tool being chosen, more turns to reach the same place, a new failure pattern, more retries. Coordination metrics get the same treatment, since a rise in handoffs or duplicated work points at the orchestration rather than any single agent. I would also slice the results, because an aggregate 8% is frequently one slice collapsing while the rest is flat, and that slice names the cause. Once I have localized it, the fix follows the cause — pin or adapt to the provider change, repair the tool contract, fix the index — and the failing cases become permanent regression tests. The longer-term fix is process: version prompts, tools, models, and the judge, and treat provider and corpus changes as monitored events, so the next time this happens the question is answerable in minutes rather than days."
+    }
+  ]
+}

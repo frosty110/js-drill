@@ -334,10 +334,22 @@ function checkReconciliation() {
   // back. system-design.html declares its views in one table now; every value
   // there has to correspond to a surface.
   checked++;
-  const page = fs.readFileSync(path.join(ROOT, 'system-design.html'), 'utf8');
-  const m = page.match(/const ROUTE_VIEW = \{([\s\S]*?)\};/);
-  if (!m) {
-    fail.push('system-design.html: no ROUTE_VIEW table — the router is parsing hashes on its own again');
+  // The router used to be inline in system-design.html and now lives in a
+  // js/sd/ slice, so look for the table rather than for a filename — and
+  // require EXACTLY ONE declaration across the page and its slices. Two would
+  // be two routers, which is the condition this check exists to prevent.
+  const sdSources = [path.join(ROOT, 'system-design.html')]
+    .concat(fs.existsSync(path.join(ROOT, 'js', 'sd'))
+      ? fs.readdirSync(path.join(ROOT, 'js', 'sd')).sort().map(f => path.join(ROOT, 'js', 'sd', f))
+      : []);
+  const hits = sdSources
+    .map(f => ({ f, m: fs.readFileSync(f, 'utf8').match(/const ROUTE_VIEW = \{([\s\S]*?)\};/) }))
+    .filter(x => x.m);
+  const m = hits.length === 1 ? hits[0].m : null;
+  if (hits.length > 1) {
+    fail.push(`ROUTE_VIEW is declared in ${hits.length} files (${hits.map(h => path.relative(ROOT, h.f)).join(', ')}) — there must be exactly one router`);
+  } else if (!m) {
+    fail.push('system-design: no ROUTE_VIEW table in the page or its js/sd/ slices — the router is parsing hashes on its own again');
   } else {
     for (const kind of (m[1].match(/(\w+)\s*:/g) || []).map(x => x.replace(/\s*:$/, ''))) {
       checked++;

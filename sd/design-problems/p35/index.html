@@ -31,6 +31,19 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">7</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/work-queue/">Work Queue</a> <span class="ds-chip">signature</span> — The workers are people, so the queue hands out leases rather than assignments and reclaims anything a reviewer abandons without needing the client to cooperate.</li>
+      <li><a href="../../../sd/components/c/ordering/">Message Ordering</a> <span class="ds-chip">signature</span> — Arrival order carries no information about importance, so the queue orders by risk and deadline with an aging term that bounds how long the tail can wait.</li>
+      <li><a href="../../../sd/components/c/reservation/">Reservation / Hold</a> <span class="ds-chip">signature</span> — A claimed item is held under an expiring lease, which gives at-most-one-active-reviewer without a lock service and returns the item automatically when someone closes their laptop.</li>
+      <li><a href="../../../sd/components/c/audit-trail/">Audit Log &amp; Provenance</a> <span class="ds-chip">signature</span> — A reviewer&#39;s decision is written as an immutable event with its reason and the lease that authorised it, and a correction references the original rather than overwriting it.</li>
+      <li><a href="../../../sd/components/c/agent-decision-record/">Agent Decision Record</a> <span class="ds-chip">signature</span> — The reviewer&#39;s verdict is stored beside the agent&#39;s recommendation rather than replacing it, so the disagreement rate is a number instead of an impression.</li>
+      <li><a href="../../../sd/components/c/rate-limiting/">Rate Limiting</a> — Admission into the queue is metered per lane, so a 500K-item batch dump drains gradually instead of displacing the live stream that has deadlines attached.</li>
+      <li><a href="../../../sd/components/c/tenant-isolation/">Tenant Isolation</a> — Reviewer pools and queues are scoped per tenant, since someone cleared to see one institution&#39;s data usually is not cleared for another&#39;s.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Accept items escalated by upstream automated systems, hold them until a qualified human decides, and emit the decision back.</li><li>Distribute work so no two reviewers hold the same item and no item is stranded when a reviewer disappears.</li><li>Order by risk and by external deadline, with skill and permission routing, and dual control where policy demands it.</li><li>Record every decision with a reason as an immutable event, and expose queue health to the people who staff it.</li><li>Out of scope: the upstream classifiers that generate escalations, the reviewer UI itself, and the downstream action taken on the decision.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>~200 reviewers across 3 time zones, each clearing 40-80 items/hour, so peak service rate is ~4 items/sec across the fleet</li><li>Arrival is spiky and machine-driven: a steady ~2/sec baseline with 500K-item batch dumps when an upstream model or list is re-run</li><li>That gap is the design problem: a single batch can hold 70 reviewer-days of work and arrives in minutes</li><li>Queue depth is therefore measured in hours of backlog, not in rows; 500K items is a number, 70 days is a decision</li><li>Per-item state is small (a few KB of references), so this is a coordination and ordering problem, not a storage one</li></ul>

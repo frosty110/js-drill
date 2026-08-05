@@ -1,0 +1,141 @@
+{
+  "id": "ch08",
+  "chapter": 8,
+  "part": "Part II: Building Multi-Agent Systems from Scratch",
+  "title": "Building Modern Agent UX Applications",
+  "summary": "Wiring an agent system into a real application: a streaming transport between a long-running server-side agent and a browser, session and state management that survives reconnects, rendering intermediate steps and artifacts, requesting human input mid-run, and cancellation. The engineering problem is that an agent run is a long-lived stateful process and the web is built for short request/response cycles.",
+  "keyTakeaways": [
+    "An agent run is a long-lived process with intermediate events, which does not fit request/response — the transport (SSE, WebSocket, or polling with resumable state) is an architectural choice, not a detail.",
+    "Server-side state is authoritative: the client renders a projection of a run that must survive refreshes, reconnects, and multiple tabs.",
+    "Events should be typed and semantic — step started, tool called, artifact produced, input required, run finished — rather than a raw token stream the client has to parse.",
+    "Human input mid-run needs a first-class protocol: the run pauses, the interface renders a request, and the answer resumes the run without losing state.",
+    "Cancellation must propagate from the client through the server to in-flight model and tool calls, or abandoned runs keep spending.",
+    "Reconnection requires replayable event history: a client that drops for ten seconds should be able to catch up rather than restart.",
+    "Artifacts — files, tables, charts, diffs — deserve their own rendering path rather than being flattened into chat text.",
+    "Multi-agent runs need attribution in the stream so the interface can show who did what."
+  ],
+  "questions": [
+    {
+      "q": "Why does an agent run fit poorly into a standard request/response cycle?",
+      "options": [
+        "Because models cannot be called from a server",
+        "Because it is a long-lived process producing intermediate events over seconds or minutes, while HTTP request/response is built for a single short exchange",
+        "Because agents require WebSockets by specification",
+        "Because browsers cannot hold connections open"
+      ],
+      "answer": 1,
+      "explain": "The mismatch drives the architecture: you need a way to push progress, survive disconnects, resume, and cancel — none of which a single blocking request provides."
+    },
+    {
+      "q": "Where should the authoritative state of a run live?",
+      "options": [
+        "On the server, with the client rendering a projection that can be rebuilt after a refresh or reconnect",
+        "In the browser, so the UI is always responsive",
+        "In the model's context window",
+        "Split evenly between client and server"
+      ],
+      "answer": 0,
+      "explain": "Client-held state disappears on refresh and cannot be shared across tabs or devices. Server-authoritative state with a replayable event log is what makes a run survivable and inspectable."
+    },
+    {
+      "q": "Why should the stream carry typed semantic events rather than raw tokens?",
+      "options": [
+        "Because raw tokens cannot be sent over SSE",
+        "Because typed events cost fewer bytes",
+        "Because the interface needs to distinguish a tool call from an artifact from a request for input in order to render each appropriately — parsing that out of a token stream is fragile",
+        "Because models emit typed events natively"
+      ],
+      "answer": 2,
+      "explain": "A chat bubble is one rendering among many. Step boundaries, tool invocations, produced files, and input requests all need different treatment, which requires the protocol to name them rather than the client inferring them from text."
+    },
+    {
+      "q": "What does a first-class mid-run human input protocol require?",
+      "options": [
+        "The run to restart after the human answers",
+        "The run to pause with its state intact, an event that tells the interface what is being asked, and a resume path that continues from exactly where it stopped",
+        "A separate agent dedicated to human interaction",
+        "The human to edit the agent's prompt directly"
+      ],
+      "answer": 1,
+      "explain": "Pausing and resuming without losing state is the requirement. Restarting the run wastes everything done so far, and out-of-band question-asking leaves the interface with no idea what state the run is in."
+    },
+    {
+      "q": "Why must cancellation propagate all the way through?",
+      "options": [
+        "Because model providers require an explicit cancel call",
+        "Because a user closing the tab should stop in-flight model and tool calls — otherwise abandoned runs continue spending money and may still perform side effects",
+        "Because cancellation improves streaming performance",
+        "Because tools cannot time out on their own"
+      ],
+      "answer": 1,
+      "explain": "Disconnecting a browser does not stop a server-side loop. Without a cancellation signal threaded to the model call and the tool execution, abandoned work keeps running — and an agent with write tools may still act."
+    },
+    {
+      "q": "What does reconnection require from the event protocol?",
+      "options": [
+        "That every event be idempotent",
+        "That the client store all events locally",
+        "Replayable history with sequence numbers, so a client that drops can request everything since its last seen event and catch up rather than restarting",
+        "That the run pause whenever a client disconnects"
+      ],
+      "answer": 2,
+      "explain": "Networks drop, phones sleep, tabs get backgrounded. A sequenced, replayable event log lets the client resynchronize cheaply, which is also what makes multi-tab and multi-device viewing of the same run possible."
+    },
+    {
+      "q": "Why do artifacts deserve a separate rendering path?",
+      "options": [
+        "Because files cannot be sent over the same connection",
+        "Because a generated table, chart, diff, or file is not conversational text — flattening it into chat makes it unusable, unverifiable, and impossible to act on",
+        "Because artifacts require a different model",
+        "Because chat rendering is slower"
+      ],
+      "answer": 1,
+      "explain": "Much of an agent's value is in what it produces, not what it says. A diff should be reviewable, a table sortable, a file downloadable — which requires the protocol to carry them as artifacts with types rather than as pasted text."
+    },
+    {
+      "q": "What does a multi-agent run add to the streaming protocol?",
+      "options": [
+        "Attribution — each event carries which agent produced it, so the interface can show who is acting and who said what",
+        "Encryption of inter-agent messages",
+        "A separate connection per agent",
+        "Guaranteed ordering across agents"
+      ],
+      "answer": 0,
+      "explain": "Without attribution, several specialists blur into one inconsistent voice, and a user cannot interpret disagreement or judge which contribution to trust."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the client/server architecture for an application where users start long-running agent tasks, watch progress, answer occasional questions, and can leave and return.",
+      "points": [
+        "Server owns the run: a durable run record with state, a sequenced event log, and status, so nothing depends on a live connection.",
+        "Transport: streaming (SSE or WebSocket) for live events, with resume-from-sequence for reconnection and a polling fallback.",
+        "Typed events: run started, step started, tool called, tokens, artifact produced, input required, error, run finished — each with an agent attribution and sequence number.",
+        "Client renders a projection of the event log, so a refresh rebuilds the view from the server rather than losing it.",
+        "Pause/resume protocol for human input, with the run's state persisted while it waits and a timeout policy.",
+        "Cancellation endpoint that propagates a signal into the loop, the model call, and tool execution, with a defined state for a cancelled run.",
+        "Artifacts stored separately and referenced by id, with their own rendering and download paths.",
+        "Multi-tab and multi-device consistency, since the same run may be viewed from several places.",
+        "Authorization on every run and event access, since runs contain user data and may hold credentials-derived results.",
+        "Observability: the same event log powers the UI, the trace, and the debugging view."
+      ],
+      "answer": "The core decision is that the run is a server-side durable object, not a request. It has an id, persisted state, a status, and an append-only event log with sequence numbers; the browser is only ever rendering a projection of that log. Everything else follows. Live updates go over SSE or a WebSocket, but the connection is treated as disposable: on reconnect the client says 'I have seen up to event 412' and the server replays from there, so a phone that slept for two minutes catches up rather than restarting. A polling fallback reads the same log, which means degraded networks still work. The events themselves are typed and semantic — run started, step started, tool called with arguments, token delta, artifact produced, input required, error, run finished — each carrying a sequence number and, in the multi-agent case, the agent that produced it. That typing is what lets the interface render a tool call differently from prose, show a diff as a diff, and put a form on screen when the run needs an answer. Human input is a proper protocol rather than an out-of-band chat message: the run pauses, persists its state, emits an input-required event describing what it needs, and resumes on the answer with a defined timeout if nobody responds. Cancellation is an endpoint that sets a flag the loop checks and propagates a signal into the in-flight model call and tool execution, ending in an explicit cancelled state — because a closed tab does not stop a server loop, and an agent with write tools that keeps running after the user left is both a cost and a safety problem. Artifacts are stored separately and referenced by id, so files, tables, and charts have their own retrieval and rendering paths instead of being pasted into text. Every run and event access is authorized, since runs hold user data. And the same event log serves three consumers — the live interface, the resumed view, and the debugging trace — which keeps them from drifting apart.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "What makes agent applications feel unresponsive even when they are fast, and what would you change?",
+      "points": [
+        "No feedback during multi-second work: a spinner conveys nothing about progress or whether anything is happening.",
+        "Not streaming: waiting for the complete answer makes total time the perceived time instead of time to first token.",
+        "Progress reported at the wrong granularity — raw tokens of internal reasoning are noise, while step-level milestones are meaningful.",
+        "No early interpretation: users cannot tell whether the agent understood the request until it finishes.",
+        "No partial results: value arrives only at the end even when parts were ready earlier.",
+        "No ability to intervene, so a misunderstanding costs a full run.",
+        "Unexplained pauses when the agent is waiting on a slow tool, with no indication of what it is doing.",
+        "Fixes: stream, show the plan early, report step-level progress with names, deliver partial results, allow steering and cancellation, and make waiting states legible.",
+        "Measure perceived responsiveness with time-to-first-meaningful-output rather than total duration."
+      ],
+      "answer": "Usually it is not speed, it is silence. The pattern that makes an agent product feel broken is a spinner over a multi-second gap, during which the user cannot tell whether it is thinking, stuck, or crashed — and cannot tell whether it even understood the request. The fixes are mostly about what happens in the first two seconds. Stream, so perceived latency is governed by time to first output rather than total duration. Show the agent's interpretation early — the restated task, the plan, the sources it intends to use — because that both fills the gap and lets the user correct a misunderstanding before minutes are spent on the wrong thing. Report progress at a granularity that carries meaning: 'searching the policy corpus', 'checking order 4471', 'drafting'. Raw reasoning tokens are noise that makes the interface feel chaotic, while named steps make a long run feel purposeful. Deliver partial results as they stabilize instead of holding everything until the end, so value arrives progressively. Let the user intervene — narrow the scope, skip a step, cancel — since without that a misunderstanding always costs a full run and users learn to be cautious rather than fluent. And make waiting states legible: if the agent is blocked on a slow external tool, say so, because an explained wait is tolerable and an unexplained one is not. Finally I would change what we measure. Total duration is the wrong metric for perceived responsiveness; I would track time to first meaningful output, time to first correctable signal — the plan — and the rate at which users abandon mid-run, which is the honest measure of whether the waiting experience works."
+    }
+  ]
+}

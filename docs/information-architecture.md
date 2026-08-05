@@ -247,12 +247,12 @@ Each phase is independently shippable and leaves the app green.
 | Phase | Change | Unblocks |
 |---|---|---|
 | **1** ✅ | `parent` on every `js/routes.js` row + derive the breadcrumb. No visual change beyond the crumb. | everything |
-| **2** | Header: breadcrumb + scoped meter + due count. Delete `Plan` / `System Design` / the fossil menus. | — |
-| **3** | Progress leaves the rail → becomes the header panel. | rail drops to 4 |
-| **4** | Home's track cards merge into Library; delete *More*. | rail drops to 3 |
-| **5** | Practice sessions onto Home; drills stay a sheet; Practice leaves the rail. | — |
-| **6** | `pushState` discipline + overlay dismissal on nav. | back button works |
-| **7** | Mount the shell on `system-design.html` (§4.1 interim). | — |
+| **2** ✅ | Header: breadcrumb + scoped meter + due count. Delete `Plan` / `System Design` / the fossil menus. | — |
+| **3** ✅ | Progress leaves the rail → becomes the header panel. | rail drops to 4 |
+| **4** ◐ | Home's *More* deleted. The track-card ⇄ Library merge is still open. | rail drops to 3 |
+| **5** ✅ | Practice sessions onto Home; drills stay a sheet; Practice leaves the rail. | — |
+| **6** ✅ | `pushState` discipline + overlay dismissal on nav. | back button works |
+| **7** ✅ | Mount the shell on `system-design.html` (§4.1 interim). | — |
 | **later** | System Design becomes a Library track. | rail = 2 + aux |
 
 Phase 5 carries the real risk: Home is already dense, and PROFILE's user needs
@@ -275,12 +275,45 @@ Purely additive — no surface moved, nothing was deleted, and `ds-page-frame`
 (33), `home-nav` (32 + 7), `sd-tags-nav` (41) and the boot smoke all stayed
 green.
 
-**Left standing on purpose:** the bespoke up-affordances (`×` on a lesson,
-`Close` in a sheet, `‹ All topics` on a system-design topic) are still there, so
-a system-design unit currently shows both the derived trail and the old link.
-Retiring them is phase 6's "one up-affordance," not phase 1's — they are load-
-bearing for existing probes and removing them is a visual change this phase
-promised not to make.
+### Phases 2–7 — shipped
+
+`ds/shell.js` is the chrome for BOTH pages: a destination declares a route, the
+active highlight derives from the `parent` chain, and page-local behaviour is a
+capability the page passes in. The header carries the scoped meter and the due
+count; Progress left the rail; the rail closed to three; `index.html` lost the
+entire previous navigation (menubar, Dashboard/System Design links, Plan, the
+Problems⇄Reference toggle); Home lost *More* and gained the practice sessions;
+navigation pushes and overlays are dismissed on it.
+
+`system-design.html` went from 2,341 lines to ~520 — the 1,858 lines of
+application logic are `js/sd/01..15-*.js`, split along the code's own section
+banners with the concatenation asserted byte-identical.
+
+Gated by `tools/check-shell-contract.js` (26 checks), the slice-order `--check`,
+and `tools/cdp/nav-hierarchy.js` at 34 assertions.
+
+**Still open, precisely:**
+
+- **One taxonomy, two altitudes.** `TRACKS` in `js/app/01-state-content.js` is
+  now the single definition of what the corpus is made of, and Home's areas and
+  Browse's segments both derive from it, so they can no longer disagree about
+  what exists. They still *present* at different altitudes — Home groups into
+  areas (Coding = Patterns + Applied), Browse lists the three tracks. That is
+  defensible for a search-and-filter surface, but whether Home's cards should
+  exist at all once Library is the corpus is phase 4's remaining product call.
+- **Six legacy label tables.** `04-progress-sr.js`, `09-stats-cheatsheet-mock.js`
+  (×3), `10-render-sidebar-lesson.js` (×2), `14f-stats-dashboard.js` and
+  `20-progress.js` each restate the track list for their own display, with three
+  different labels for one track ("Syntax", "Syntax Fundamentals", "Track A —
+  Syntax Fundamentals"). Each is display copy inside one surface; migrating them
+  is mechanical but was not done blind at the end of a large change.
+- **§4.1's endgame.** System Design has the shell, the header and the
+  breadcrumb, but is still a separate page rather than a Library track.
+
+**Left standing on purpose:** the bespoke up-affordances (`×` on a lesson, `Close` in a
+sheet) are still there. System Design's five bespoke `‹ …` crumb buttons are
+NOT — they were removed when the derived trail landed there, because two
+up-affordances side by side is the duplication this document exists to end.
 
 ---
 

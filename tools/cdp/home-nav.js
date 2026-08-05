@@ -32,15 +32,28 @@ const ROOT = path.resolve(__dirname, '../..');
 // `_sdLoadIndex()` in js/app/22-home.js does at runtime. Now the assertion says
 // what it means — "the card totals the whole authored corpus" — and only fails
 // when the two disagree.
-function sdAuthoredQuestionTotal() {
+// Authored question totals PER SHELF. The concept-drill page carries two
+// shelves — the System Design topics and the AI books — and Home renders one
+// card per shelf, so a single grand total would pass while the two cards
+// silently shared a denominator (which is exactly the bug the split fixed).
+// A topic with no `shelf` counts as System Design, matching js/app/22-home.js.
+function sdAuthoredQuestionTotals() {
   const dir = path.join(ROOT, 'data', 'system-design');
   const reg = JSON.parse(fs.readFileSync(path.join(dir, 'topics.json'), 'utf8'));
-  return (reg.topics || []).reduce((total, t) => {
+  const byShelf = {};
+  for (const t of reg.topics || []) {
     const m = JSON.parse(fs.readFileSync(path.join(dir, t.id, 'manifest.json'), 'utf8'));
-    return total + (m.chapters || []).reduce((n, c) => n + (+c.questions || 0), 0);
-  }, 0);
+    const n = (m.chapters || []).reduce((sum, c) => sum + (+c.questions || 0), 0);
+    const shelf = t.shelf || 'system-design';
+    byShelf[shelf] = (byShelf[shelf] || 0) + n;
+  }
+  return byShelf;
 }
-const SD_TOTAL = sdAuthoredQuestionTotal();
+const SD_TOTALS = sdAuthoredQuestionTotals();
+const SD_TOTAL = SD_TOTALS['system-design'] || 0;
+const AI_TOTAL = SD_TOTALS.ai || 0;
+// One Home card per shelf, alongside the two in-app tracks (Coding, Syntax).
+const AREA_COUNT = 2 + Object.keys(SD_TOTALS).length;
 
 // A seeded store: two mastered lessons (one overdue → repair queue), one weak.
 const SEED = {
@@ -76,7 +89,8 @@ const SEED = {
     await s.waitFor(`!!document.querySelector('.home-page')`);
     s.assert(true, 'cold boot renders Home at the bare URL');
     s.assert(await s.eval(`location.hash === '#/m/home'`), 'cold boot normalizes the URL to #/m/home');
-    s.assert(await s.eval(`document.querySelectorAll('.home-area').length === 3`), 'three track cards render');
+    s.assert(await s.eval(`document.querySelectorAll('.home-area').length === ${AREA_COUNT}`),
+      `${AREA_COUNT} track cards render (Coding, Syntax, and one per concept-drill shelf)`);
     s.assert(await s.eval(`!!document.querySelector('[data-home-start]')`), 'cold boot still offers a hero start');
     await s.snap('01-home-cold');
 
@@ -245,7 +259,20 @@ const SEED = {
     const sdFrac = await s.eval(`document.querySelector('[data-home-area="sysdesign"] .home-area__frac')?.textContent || ''`);
     s.assert(
       new RegExp(`^\\d+/${SD_TOTAL}$`).test(sdFrac),
-      `System Design card totals all ${SD_TOTAL} authored questions (got "${sdFrac}")`
+      `System Design card totals the ${SD_TOTAL} authored System Design questions (got "${sdFrac}")`
+    );
+    // The AI books share the engine and the Leitner store but are a separate
+    // subject, so their card must carry its OWN denominator — a shared one
+    // would report AI progress as System Design progress and vice versa.
+    const aiFrac = await s.eval(`document.querySelector('[data-home-area="aibooks"] .home-area__frac')?.textContent || ''`);
+    s.assert(
+      new RegExp(`^\\d+/${AI_TOTAL}$`).test(aiFrac),
+      `AI Engineering card totals the ${AI_TOTAL} authored AI-book questions (got "${aiFrac}")`
+    );
+    s.assert(
+      await s.eval(`(document.querySelector('[data-home-area="aibooks"] [data-home-sd-continue]')?.getAttribute('href') || '')
+        .startsWith('system-design.html')`),
+      'AI Engineering Continue points at the drill page'
     );
     s.assert(
       await s.eval(`(document.querySelector('[data-home-sd-continue]')?.getAttribute('href') || '').startsWith('system-design.html')`),

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reflection — Agentic Design Patterns</title>
+<meta name="description" content="Have the system criticize and revise its own work before returning it: generate, critique against explicit criteria, revise, repeat until a stopping condition. The pattern works best when the critique is grounded in something external — test results, a compiler, retrieved sources, a checklist — and works worst when a model is asked to notice errors it was not able to avoid making.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Reflection — Agentic Design Patterns">
+<meta property="og:description" content="Have the system criticize and revise its own work before returning it: generate, critique against explicit criteria, revise, repeat until a stopping condition. The pattern works best when the critique is grounded in something external — test results, a compiler, retrieved sources, a checklist — and works worst when a model is asked to notice errors it was not able to avoid making.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Reflection","description":"Have the system criticize and revise its own work before returning it: generate, critique against explicit criteria, revise, repeat until a stopping condition. The pattern works best when the critique is grounded in something external — test results, a compiler, retrieved sources, a checklist — and works worst when a model is asked to notice errors it was not able to avoid making.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["Reflection separates two roles: a generator that produces a candidate and a critic that evaluates it against explicit criteria — separating them, even into two calls or two models, is what makes the critique useful.","Grounded critique beats introspective critique: failing tests, compiler errors, retrieved sources, and rule checklists give the critic something to check against, while pure self-review inherits the generator's blind spots.","The critique must be specific and actionable — naming what is wrong and where — or the revision step has nothing to act on and drifts.","Every reflection loop needs a stopping condition: a maximum number of iterations, a quality threshold, or 'no further issues found', otherwise it oscillates or edits indefinitely.","Returns diminish quickly; the first revision usually captures most of the gain, and later passes often rewrite rather than improve.","The cost is real — each iteration is at least two extra model calls plus latency — so reflection belongs on high-value outputs, not on every response."],"hasPart":[{"@type":"Question","position":1,"name":"What is the core structure of the reflection pattern?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q1","acceptedAnswer":{"@type":"Answer","text":"Generate a candidate, critique it against explicit criteria, revise, and repeat until a stopping condition is met"}},{"@type":"Question","position":2,"name":"Why does the pattern recommend separating the generator and the critic rather than asking one call to self-correct inline?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q2","acceptedAnswer":{"@type":"Answer","text":"Because a separate critique pass has a different objective and fresh attention on the produced artifact, and can use different criteria, a different prompt, or a different model"}},{"@type":"Question","position":3,"name":"What is the fundamental limitation of purely introspective self-critique?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q3","acceptedAnswer":{"@type":"Answer","text":"A model often cannot detect the errors it was not able to avoid — its critique shares the same knowledge and blind spots as its generation"}},{"@type":"Question","position":4,"name":"Which of these makes a reflection loop substantially more effective?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q4","acceptedAnswer":{"@type":"Answer","text":"Grounding the critique in external signal — unit test results, compiler or linter output, retrieved source documents, or an explicit rubric"}},{"@type":"Question","position":5,"name":"Why does every reflection loop need an explicit stopping condition?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q5","acceptedAnswer":{"@type":"Answer","text":"Because the critic will always find something to say, so without a bound the loop oscillates, rewrites indefinitely, and burns cost and latency"}},{"@type":"Question","position":6,"name":"What does 'diminishing returns' mean in the context of reflection?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q6","acceptedAnswer":{"@type":"Answer","text":"The first revision typically captures most of the improvement, while later passes tend to rewrite rather than improve — sometimes making the output worse"}},{"@type":"Question","position":7,"name":"On which kind of task is reflection most clearly worth its cost?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q7","acceptedAnswer":{"@type":"Answer","text":"High-stakes or high-value outputs with checkable criteria — code that must compile and pass tests, documents that must satisfy a rubric, claims that must be supported by sources"}},{"@type":"Question","position":8,"name":"Design a reflection loop for a code-generation feature. Specify the roles, the signals, and the termination policy.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q8","acceptedAnswer":{"@type":"Answer","text":"The generator writes the candidate from the requirement plus whatever repository context is relevant. The critique layer is where the design matters, and I would make it mostly non-model: run the code in a sandbox with a linter, a type checker, and the test suite, because a failing test with a stack trace is an infinitely better critique than a model's impression. Those results feed back verbatim. On top of that I add a model critic for the things execution cannot see — does the code actually satisfy the stated requirement, are the edge cases handled, are there obvious security problems, is it readable — and I give it an explicit checklist so its output is specific findings rather than general praise. The revision step gets the original requirement, the current code, and the concrete findi"}},{"@type":"Question","position":9,"name":"A teammate adds a self-critique step to every response in a chat product and reports no measurable quality gain, just higher cost. Diagnose the likely causes.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch04/#q9","acceptedAnswer":{"@type":"Answer","text":"The most likely cause is that the critique is ungrounded. Asking a model to review prose it just wrote, with no external criteria, mostly produces agreement and a few cosmetic word swaps — it cannot see the errors it was not capable of avoiding. If the critic has no rubric, no retrieved sources to check claims against, and no checklist, there is nothing for it to compare the output to except its own priors, which are the same priors that produced the output. The second suspect is the critique prompt itself: 'is this a good answer?' yields an opinion, while 'check each claim against the retrieved passages and list unsupported ones' yields findings a reviser can act on. Third, the roles may not be genuinely separate — if the critique happens in the same call or with the same context and fram"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Reflection</h1>
+    <p class="sharepage__lede">Have the system criticize and revise its own work before returning it: generate, critique against explicit criteria, revise, repeat until a stopping condition. The pattern works best when the critique is grounded in something external — test results, a compiler, retrieved sources, a checklist — and works worst when a model is asked to notice errors it was not able to avoid making.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Reflection separates two roles: a generator that produces a candidate and a critic that evaluates it against explicit criteria — separating them, even into two calls or two models, is what makes the critique useful.</li><li>Grounded critique beats introspective critique: failing tests, compiler errors, retrieved sources, and rule checklists give the critic something to check against, while pure self-review inherits the generator&#39;s blind spots.</li><li>The critique must be specific and actionable — naming what is wrong and where — or the revision step has nothing to act on and drifts.</li><li>Every reflection loop needs a stopping condition: a maximum number of iterations, a quality threshold, or &#39;no further issues found&#39;, otherwise it oscillates or edits indefinitely.</li><li>Returns diminish quickly; the first revision usually captures most of the gain, and later passes often rewrite rather than improve.</li><li>The cost is real — each iteration is at least two extra model calls plus latency — so reflection belongs on high-value outputs, not on every response.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the core structure of the reflection pattern?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Retrieve, then generate, then cache</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Generate a candidate, critique it against explicit criteria, revise, and repeat until a stopping condition is met <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Route the request to a specialist and return its answer</li>
+        <li><span class="sharepage__key">D</span> Run the same prompt several times and take a majority vote</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> It is an iterative improve loop with two distinct roles. The value comes from the critique being a separate act with its own criteria, rather than an instruction to &#39;do it well&#39; inside the original prompt.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does the pattern recommend separating the generator and the critic rather than asking one call to self-correct inline?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because providers bill critiques at a lower rate</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a separate critique pass has a different objective and fresh attention on the produced artifact, and can use different criteria, a different prompt, or a different model <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because inline self-correction is not supported by most APIs</li>
+        <li><span class="sharepage__key">D</span> Because the critic must always be a larger model</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Asking for output and self-assessment in one breath tends to produce output plus a rubber stamp. A separate pass evaluates the artifact as given, can be given a checklist the generator never saw, and can be a different model with different blind spots.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the fundamental limitation of purely introspective self-critique?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It cannot be implemented without fine-tuning</li>
+        <li><span class="sharepage__key">B</span> It uses too many tokens</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> A model often cannot detect the errors it was not able to avoid — its critique shares the same knowledge and blind spots as its generation <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It only works on code</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If the model believed a false fact while writing, it usually still believes it while reviewing. Self-critique catches format problems, omissions against a checklist, and inconsistencies — but not confident factual errors, which need an external source.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which of these makes a reflection loop substantially more effective?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Increasing temperature on each iteration</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Grounding the critique in external signal — unit test results, compiler or linter output, retrieved source documents, or an explicit rubric <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Hiding the original prompt from the critic</li>
+        <li><span class="sharepage__key">D</span> Running at least ten iterations</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> External signal converts opinion into evidence. &#39;Three tests fail with this error&#39; or &#39;this claim is not supported by any retrieved passage&#39; is a critique the reviser can act on precisely, which is why reflection shines in code and grounded writing.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does every reflection loop need an explicit stopping condition?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To satisfy provider rate limits</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because the critic will always find something to say, so without a bound the loop oscillates, rewrites indefinitely, and burns cost and latency <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because models refuse more than three consecutive requests</li>
+        <li><span class="sharepage__key">D</span> Because the context window resets after each iteration</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A critic asked for feedback will produce feedback. Bounds are typically a maximum iteration count plus a real completion signal — tests passing, no issues above a severity threshold, or a critique that explicitly reports nothing to fix.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does &#39;diminishing returns&#39; mean in the context of reflection?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The model becomes slower with each iteration</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The first revision typically captures most of the improvement, while later passes tend to rewrite rather than improve — sometimes making the output worse <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Token cost decreases per iteration</li>
+        <li><span class="sharepage__key">D</span> The critic becomes more accurate over time within a single loop</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Beyond a couple of passes, changes are increasingly stylistic churn, and a critic under pressure to find something can introduce regressions. Measuring quality per iteration on a sample is how you pick the bound rather than guessing.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>On which kind of task is reflection most clearly worth its cost?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> High-stakes or high-value outputs with checkable criteria — code that must compile and pass tests, documents that must satisfy a rubric, claims that must be supported by sources <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Every request in a high-volume chat product</li>
+        <li><span class="sharepage__key">C</span> Simple lookups and classifications</li>
+        <li><span class="sharepage__key">D</span> Tasks where latency is the primary metric</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Each iteration adds calls and seconds. That is a good trade for a generated migration script or a legal summary, and a bad one for an autocomplete suggestion — so reflection is usually applied selectively, triggered by risk or by a low confidence signal.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Design a reflection loop for a code-generation feature. Specify the roles, the signals, and the termination policy.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Generator produces the code from the requirement plus relevant context.</li><li>Ground the critique in execution: run a linter, a type checker, and the test suite in a sandbox, and feed concrete errors back rather than asking for an opinion.</li><li>Add a model critic for what execution cannot check — requirement coverage, edge cases, readability, security concerns — with an explicit checklist.</li><li>Revision step receives the original requirement, the current code, and the specific findings, and returns a full revised artifact plus a note of what changed.</li><li>Terminate on tests passing plus no high-severity critic findings, with a hard iteration cap and a cost/time budget.</li><li>Guard against regression: keep the best-scoring version, and never return a revision that fails a check the previous version passed.</li><li>Sandbox execution: untrusted generated code must not run with real credentials or network access.</li><li>Log the trajectory (versions, critiques, test results) for evaluation and debugging, and measure whether reflection actually improves the end metric.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The generator writes the candidate from the requirement plus whatever repository context is relevant. The critique layer is where the design matters, and I would make it mostly non-model: run the code in a sandbox with a linter, a type checker, and the test suite, because a failing test with a stack trace is an infinitely better critique than a model&#39;s impression. Those results feed back verbatim. On top of that I add a model critic for the things execution cannot see — does the code actually satisfy the stated requirement, are the edge cases handled, are there obvious security problems, is it readable — and I give it an explicit checklist so its output is specific findings rather than general praise. The revision step gets the original requirement, the current code, and the concrete findings, and returns a complete revised artifact plus a short note on what it changed, which makes the diff reviewable. Termination has three clauses: success (tests pass and no high-severity findings remain), a hard iteration cap of two or three, and a wall-clock and cost budget. I keep every version and its score, return the best one rather than the last one, and refuse any revision that breaks a check the previous version passed — reflection loops regress surprisingly often, and &#39;the last iteration&#39; is not the same as &#39;the best iteration&#39;. Execution happens in a sandbox with no credentials and no network, because I am running code a model wrote from input a user supplied. Finally I log the whole trajectory and evaluate whether the loop is actually earning its cost: on many tasks the first revision captures nearly all the gain, and knowing that lets me cap iterations at one for the cheap path and reserve the full loop for high-stakes changes.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A teammate adds a self-critique step to every response in a chat product and reports no measurable quality gain, just higher cost. Diagnose the likely causes.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>The critique may be ungrounded — asking a model to review its own prose without external criteria mostly returns approval or cosmetic edits.</li><li>The critique prompt may be vague (&#39;is this good?&#39;), producing non-actionable feedback the reviser cannot use.</li><li>Generator and critic may be the same call or share the same context and blind spots, so real errors survive review.</li><li>The task may be one where the model was already near its ceiling, leaving nothing for reflection to recover.</li><li>Applying it to every response wastes budget on requests that were already fine — reflection should be triggered selectively by risk or low confidence.</li><li>Measurement may be wrong: quality may be measured by a judge that shares the critic&#39;s biases, or on an aggregate that hides gains in a specific slice.</li><li>Regression risk: revisions may be improving some responses and degrading others, netting to zero.</li><li>Fix path: ground the critique, make criteria explicit and checkable, trigger selectively, keep the best version rather than the last, and measure per-slice with a cost budget.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The most likely cause is that the critique is ungrounded. Asking a model to review prose it just wrote, with no external criteria, mostly produces agreement and a few cosmetic word swaps — it cannot see the errors it was not capable of avoiding. If the critic has no rubric, no retrieved sources to check claims against, and no checklist, there is nothing for it to compare the output to except its own priors, which are the same priors that produced the output. The second suspect is the critique prompt itself: &#39;is this a good answer?&#39; yields an opinion, while &#39;check each claim against the retrieved passages and list unsupported ones&#39; yields findings a reviser can act on. Third, the roles may not be genuinely separate — if the critique happens in the same call or with the same context and framing, it is a rubber stamp with extra tokens. Fourth, application: running it on every response spends the budget on requests that were already fine. Reflection should be triggered — by risk, by a low confidence signal, by the presence of factual claims, by the response entering a high-stakes flow. Fifth, measurement. If quality is judged by a model that shares the critic&#39;s biases, a real gain can be invisible; if it is reported as one average, a gain on hard queries can be cancelled by regressions on easy ones where the reviser rewrote something that was already good. That last point is worth checking directly, because reflection loops do degrade outputs sometimes, and returning the last iteration rather than the best-scoring one bakes that in. My fix list would be: ground the critique in something external, make the criteria explicit and checkable, separate the roles, trigger selectively, keep the best version, and re-measure per slice with cost and latency in the same table.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch04","title":"Reflection","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"What is the core structure of the reflection pattern?","options":["Retrieve, then generate, then cache","Generate a candidate, critique it against explicit criteria, revise, and repeat until a stopping condition is met","Route the request to a specialist and return its answer","Run the same prompt several times and take a majority vote"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"Why does the pattern recommend separating the generator and the critic rather than asking one call to self-correct inline?","options":["Because providers bill critiques at a lower rate","Because a separate critique pass has a different objective and fresh attention on the produced artifact, and can use different criteria, a different prompt, or a different model","Because inline self-correction is not supported by most APIs","Because the critic must always be a larger model"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"What is the fundamental limitation of purely introspective self-critique?","options":["It cannot be implemented without fine-tuning","It uses too many tokens","A model often cannot detect the errors it was not able to avoid — its critique shares the same knowledge and blind spots as its generation","It only works on code"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"Which of these makes a reflection loop substantially more effective?","options":["Increasing temperature on each iteration","Grounding the critique in external signal — unit test results, compiler or linter output, retrieved source documents, or an explicit rubric","Hiding the original prompt from the critic","Running at least ten iterations"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"Why does every reflection loop need an explicit stopping condition?","options":["To satisfy provider rate limits","Because the critic will always find something to say, so without a bound the loop oscillates, rewrites indefinitely, and burns cost and latency","Because models refuse more than three consecutive requests","Because the context window resets after each iteration"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"What does 'diminishing returns' mean in the context of reflection?","options":["The model becomes slower with each iteration","The first revision typically captures most of the improvement, while later passes tend to rewrite rather than improve — sometimes making the output worse","Token cost decreases per iteration","The critic becomes more accurate over time within a single loop"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"On which kind of task is reflection most clearly worth its cost?","options":["High-stakes or high-value outputs with checkable criteria — code that must compile and pass tests, documents that must satisfy a rubric, claims that must be supported by sources","Every request in a high-volume chat product","Simple lookups and classifications","Tasks where latency is the primary metric"],"answer":0,"answerLetter":"A"},{"n":8,"type":"open","prompt":"Design a reflection loop for a code-generation feature. Specify the roles, the signals, and the termination policy.","points":["Generator produces the code from the requirement plus relevant context.","Ground the critique in execution: run a linter, a type checker, and the test suite in a sandbox, and feed concrete errors back rather than asking for an opinion.","Add a model critic for what execution cannot check — requirement coverage, edge cases, readability, security concerns — with an explicit checklist.","Revision step receives the original requirement, the current code, and the specific findings, and returns a full revised artifact plus a note of what changed.","Terminate on tests passing plus no high-severity critic findings, with a hard iteration cap and a cost/time budget.","Guard against regression: keep the best-scoring version, and never return a revision that fails a check the previous version passed.","Sandbox execution: untrusted generated code must not run with real credentials or network access.","Log the trajectory (versions, critiques, test results) for evaluation and debugging, and measure whether reflection actually improves the end metric."]},{"n":9,"type":"open","prompt":"A teammate adds a self-critique step to every response in a chat product and reports no measurable quality gain, just higher cost. Diagnose the likely causes.","points":["The critique may be ungrounded — asking a model to review its own prose without external criteria mostly returns approval or cosmetic edits.","The critique prompt may be vague ('is this good?'), producing non-actionable feedback the reviser cannot use.","Generator and critic may be the same call or share the same context and blind spots, so real errors survive review.","The task may be one where the model was already near its ceiling, leaving nothing for reflection to recover.","Applying it to every response wastes budget on requests that were already fine — reflection should be triggered selectively by risk or low confidence.","Measurement may be wrong: quality may be measured by a judge that shares the critic's biases, or on an aggregate that hides gains in a specific slice.","Regression risk: revisions may be improving some responses and degrading others, netting to zero.","Fix path: ground the critique, make criteria explicit and checkable, trigger selectively, keep the best version rather than the last, and measure per-slice with a cost budget."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch04">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

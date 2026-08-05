@@ -1,0 +1,125 @@
+{
+  "id": "ch04",
+  "num": 4,
+  "part": "Part I: Core Execution Patterns",
+  "title": "Reflection",
+  "summary": "Have the system criticize and revise its own work before returning it: generate, critique against explicit criteria, revise, repeat until a stopping condition. The pattern works best when the critique is grounded in something external — test results, a compiler, retrieved sources, a checklist — and works worst when a model is asked to notice errors it was not able to avoid making.",
+  "keyTakeaways": [
+    "Reflection separates two roles: a generator that produces a candidate and a critic that evaluates it against explicit criteria — separating them, even into two calls or two models, is what makes the critique useful.",
+    "Grounded critique beats introspective critique: failing tests, compiler errors, retrieved sources, and rule checklists give the critic something to check against, while pure self-review inherits the generator's blind spots.",
+    "The critique must be specific and actionable — naming what is wrong and where — or the revision step has nothing to act on and drifts.",
+    "Every reflection loop needs a stopping condition: a maximum number of iterations, a quality threshold, or 'no further issues found', otherwise it oscillates or edits indefinitely.",
+    "Returns diminish quickly; the first revision usually captures most of the gain, and later passes often rewrite rather than improve.",
+    "The cost is real — each iteration is at least two extra model calls plus latency — so reflection belongs on high-value outputs, not on every response."
+  ],
+  "questions": [
+    {
+      "q": "What is the core structure of the reflection pattern?",
+      "options": [
+        "Retrieve, then generate, then cache",
+        "Generate a candidate, critique it against explicit criteria, revise, and repeat until a stopping condition is met",
+        "Route the request to a specialist and return its answer",
+        "Run the same prompt several times and take a majority vote"
+      ],
+      "answer": 1,
+      "explain": "It is an iterative improve loop with two distinct roles. The value comes from the critique being a separate act with its own criteria, rather than an instruction to 'do it well' inside the original prompt."
+    },
+    {
+      "q": "Why does the pattern recommend separating the generator and the critic rather than asking one call to self-correct inline?",
+      "options": [
+        "Because providers bill critiques at a lower rate",
+        "Because a separate critique pass has a different objective and fresh attention on the produced artifact, and can use different criteria, a different prompt, or a different model",
+        "Because inline self-correction is not supported by most APIs",
+        "Because the critic must always be a larger model"
+      ],
+      "answer": 1,
+      "explain": "Asking for output and self-assessment in one breath tends to produce output plus a rubber stamp. A separate pass evaluates the artifact as given, can be given a checklist the generator never saw, and can be a different model with different blind spots."
+    },
+    {
+      "q": "What is the fundamental limitation of purely introspective self-critique?",
+      "options": [
+        "It cannot be implemented without fine-tuning",
+        "It uses too many tokens",
+        "A model often cannot detect the errors it was not able to avoid — its critique shares the same knowledge and blind spots as its generation",
+        "It only works on code"
+      ],
+      "answer": 2,
+      "explain": "If the model believed a false fact while writing, it usually still believes it while reviewing. Self-critique catches format problems, omissions against a checklist, and inconsistencies — but not confident factual errors, which need an external source."
+    },
+    {
+      "q": "Which of these makes a reflection loop substantially more effective?",
+      "options": [
+        "Increasing temperature on each iteration",
+        "Grounding the critique in external signal — unit test results, compiler or linter output, retrieved source documents, or an explicit rubric",
+        "Hiding the original prompt from the critic",
+        "Running at least ten iterations"
+      ],
+      "answer": 1,
+      "explain": "External signal converts opinion into evidence. 'Three tests fail with this error' or 'this claim is not supported by any retrieved passage' is a critique the reviser can act on precisely, which is why reflection shines in code and grounded writing."
+    },
+    {
+      "q": "Why does every reflection loop need an explicit stopping condition?",
+      "options": [
+        "To satisfy provider rate limits",
+        "Because the critic will always find something to say, so without a bound the loop oscillates, rewrites indefinitely, and burns cost and latency",
+        "Because models refuse more than three consecutive requests",
+        "Because the context window resets after each iteration"
+      ],
+      "answer": 1,
+      "explain": "A critic asked for feedback will produce feedback. Bounds are typically a maximum iteration count plus a real completion signal — tests passing, no issues above a severity threshold, or a critique that explicitly reports nothing to fix."
+    },
+    {
+      "q": "What does 'diminishing returns' mean in the context of reflection?",
+      "options": [
+        "The model becomes slower with each iteration",
+        "The first revision typically captures most of the improvement, while later passes tend to rewrite rather than improve — sometimes making the output worse",
+        "Token cost decreases per iteration",
+        "The critic becomes more accurate over time within a single loop"
+      ],
+      "answer": 1,
+      "explain": "Beyond a couple of passes, changes are increasingly stylistic churn, and a critic under pressure to find something can introduce regressions. Measuring quality per iteration on a sample is how you pick the bound rather than guessing."
+    },
+    {
+      "q": "On which kind of task is reflection most clearly worth its cost?",
+      "options": [
+        "High-stakes or high-value outputs with checkable criteria — code that must compile and pass tests, documents that must satisfy a rubric, claims that must be supported by sources",
+        "Every request in a high-volume chat product",
+        "Simple lookups and classifications",
+        "Tasks where latency is the primary metric"
+      ],
+      "answer": 0,
+      "explain": "Each iteration adds calls and seconds. That is a good trade for a generated migration script or a legal summary, and a bad one for an autocomplete suggestion — so reflection is usually applied selectively, triggered by risk or by a low confidence signal."
+    },
+    {
+      "type": "open",
+      "prompt": "Design a reflection loop for a code-generation feature. Specify the roles, the signals, and the termination policy.",
+      "points": [
+        "Generator produces the code from the requirement plus relevant context.",
+        "Ground the critique in execution: run a linter, a type checker, and the test suite in a sandbox, and feed concrete errors back rather than asking for an opinion.",
+        "Add a model critic for what execution cannot check — requirement coverage, edge cases, readability, security concerns — with an explicit checklist.",
+        "Revision step receives the original requirement, the current code, and the specific findings, and returns a full revised artifact plus a note of what changed.",
+        "Terminate on tests passing plus no high-severity critic findings, with a hard iteration cap and a cost/time budget.",
+        "Guard against regression: keep the best-scoring version, and never return a revision that fails a check the previous version passed.",
+        "Sandbox execution: untrusted generated code must not run with real credentials or network access.",
+        "Log the trajectory (versions, critiques, test results) for evaluation and debugging, and measure whether reflection actually improves the end metric."
+      ],
+      "answer": "The generator writes the candidate from the requirement plus whatever repository context is relevant. The critique layer is where the design matters, and I would make it mostly non-model: run the code in a sandbox with a linter, a type checker, and the test suite, because a failing test with a stack trace is an infinitely better critique than a model's impression. Those results feed back verbatim. On top of that I add a model critic for the things execution cannot see — does the code actually satisfy the stated requirement, are the edge cases handled, are there obvious security problems, is it readable — and I give it an explicit checklist so its output is specific findings rather than general praise. The revision step gets the original requirement, the current code, and the concrete findings, and returns a complete revised artifact plus a short note on what it changed, which makes the diff reviewable. Termination has three clauses: success (tests pass and no high-severity findings remain), a hard iteration cap of two or three, and a wall-clock and cost budget. I keep every version and its score, return the best one rather than the last one, and refuse any revision that breaks a check the previous version passed — reflection loops regress surprisingly often, and 'the last iteration' is not the same as 'the best iteration'. Execution happens in a sandbox with no credentials and no network, because I am running code a model wrote from input a user supplied. Finally I log the whole trajectory and evaluate whether the loop is actually earning its cost: on many tasks the first revision captures nearly all the gain, and knowing that lets me cap iterations at one for the cheap path and reserve the full loop for high-stakes changes.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "A teammate adds a self-critique step to every response in a chat product and reports no measurable quality gain, just higher cost. Diagnose the likely causes.",
+      "points": [
+        "The critique may be ungrounded — asking a model to review its own prose without external criteria mostly returns approval or cosmetic edits.",
+        "The critique prompt may be vague ('is this good?'), producing non-actionable feedback the reviser cannot use.",
+        "Generator and critic may be the same call or share the same context and blind spots, so real errors survive review.",
+        "The task may be one where the model was already near its ceiling, leaving nothing for reflection to recover.",
+        "Applying it to every response wastes budget on requests that were already fine — reflection should be triggered selectively by risk or low confidence.",
+        "Measurement may be wrong: quality may be measured by a judge that shares the critic's biases, or on an aggregate that hides gains in a specific slice.",
+        "Regression risk: revisions may be improving some responses and degrading others, netting to zero.",
+        "Fix path: ground the critique, make criteria explicit and checkable, trigger selectively, keep the best version rather than the last, and measure per-slice with a cost budget."
+      ],
+      "answer": "The most likely cause is that the critique is ungrounded. Asking a model to review prose it just wrote, with no external criteria, mostly produces agreement and a few cosmetic word swaps — it cannot see the errors it was not capable of avoiding. If the critic has no rubric, no retrieved sources to check claims against, and no checklist, there is nothing for it to compare the output to except its own priors, which are the same priors that produced the output. The second suspect is the critique prompt itself: 'is this a good answer?' yields an opinion, while 'check each claim against the retrieved passages and list unsupported ones' yields findings a reviser can act on. Third, the roles may not be genuinely separate — if the critique happens in the same call or with the same context and framing, it is a rubber stamp with extra tokens. Fourth, application: running it on every response spends the budget on requests that were already fine. Reflection should be triggered — by risk, by a low confidence signal, by the presence of factual claims, by the response entering a high-stakes flow. Fifth, measurement. If quality is judged by a model that shares the critic's biases, a real gain can be invisible; if it is reported as one average, a gain on hard queries can be cancelled by regressions on easy ones where the reviser rewrote something that was already good. That last point is worth checking directly, because reflection loops do degrade outputs sometimes, and returning the last iteration rather than the best-scoring one bakes that in. My fix list would be: ground the critique in something external, make the criteria explicit and checkable, separate the roles, trigger selectively, keep the best version, and re-measure per slice with cost and latency in the same table."
+    }
+  ]
+}

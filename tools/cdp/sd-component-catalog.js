@@ -69,6 +69,56 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   const rendered = await s.eval(`Array.from(document.querySelectorAll('.cmp-card')).map(e=>e.dataset.cmp)`);
   const missing = COMPONENTS.map(c => c.id).filter(id => !rendered.includes(id));
   s.assert(missing.length === 0, `every component renders (missing: ${missing.slice(0, 3).join(',')})`);
+  // Completeness: a component with no edges shows a "–" and teaches nothing
+  // about transfer. Derived, so this stays honest as the catalog grows.
+  const unmapped = COMPONENTS.filter(c => usesOf(c.id) === 0).map(c => c.id);
+  const placeholders = await s.eval(`document.querySelectorAll('.cmp-card__uses--none').length`);
+  s.assert(placeholders === unmapped.length,
+    `${unmapped.length} unmapped component(s) render as such, got ${placeholders}`);
+  // The graph is currently whole. Stated as its own assertion so that going
+  // BACKWARDS — adding a component and leaving it unmapped — is visible, rather
+  // than only being caught if someone reads the validator's note.
+  s.assert(unmapped.length === 0, `no orphan components (found ${unmapped.length}: ${unmapped.join(',')})`);
+
+  // ── Tagging is surfaced ──────────────────────────────────────────────────
+  // A component's tagging used to be invisible here: the card carried a usage
+  // count and nothing else, so "registered mechanism or supporting block?" —
+  // the distinction driving the signature marker on every problem page — could
+  // only be found by opening it.
+  const SIG = COMPONENTS.filter(c => c.mechanism);
+  const sigMarks = await s.eval(`document.querySelectorAll('.cmp-card .cmp-sig').length`);
+  s.assert(sigMarks === SIG.length, `${SIG.length} signature components marked on the cards, got ${sigMarks}`);
+
+  const roleBtns = await s.eval(`
+    Array.from(document.querySelectorAll('[data-role]')).map(e => ({
+      role: e.dataset.role, on: e.classList.contains('is-on'),
+      n: Number((e.querySelector('b')||{}).textContent)
+    }))`);
+  s.assert(roleBtns.length === 3, `role filter offers all/signature/supporting, got ${roleBtns.length}`);
+  const byRole = Object.fromEntries(roleBtns.map(r => [r.role, r]));
+  s.assert(byRole.all.n === COMPONENTS.length, `"All" counts ${COMPONENTS.length}, got ${byRole.all.n}`);
+  s.assert(byRole.signature.n === SIG.length, `"Signature" counts ${SIG.length}, got ${byRole.signature.n}`);
+  s.assert(byRole.supporting.n === COMPONENTS.length - SIG.length,
+    `"Supporting" counts ${COMPONENTS.length - SIG.length}, got ${byRole.supporting.n}`);
+
+  // Filtering actually narrows, and empties a category rather than leaving a
+  // heading over nothing.
+  await s.eval(`document.querySelector('[data-role="signature"]').click()`);
+  await s.sleep(500);
+  await s.snap('02b-catalog-signature-only');
+  const sigCards = await s.eval(`document.querySelectorAll('.cmp-card').length`);
+  s.assert(sigCards === SIG.length, `signature filter shows ${SIG.length} cards, got ${sigCards}`);
+  const sigCats = await s.eval(`document.querySelectorAll('.part-head').length`);
+  const expectSigCats = new Set(SIG.map(c => c.category)).size;
+  s.assert(sigCats === expectSigCats, `only categories with matches keep a heading (${expectSigCats}), got ${sigCats}`);
+  // The filter is persisted, so it survives leaving and coming back.
+  await s.eval(`location.hash = '#/components'`); await s.sleep(500);
+  await s.eval(`location.hash = '#/components/catalog'`); await s.sleep(700);
+  s.assert(await s.eval(`document.querySelector('[data-role="signature"]').classList.contains('is-on')`),
+    'the role filter survives navigating away and back');
+  await s.eval(`document.querySelector('[data-role="all"]').click()`);
+  await s.sleep(500);
+  s.assert(await s.eval(`document.querySelectorAll('.cmp-card').length`) === COMPONENTS.length, 'clearing restores every card');
 
   // 3. Ordering — most-used first inside a category. The asymmetry IS the
   //    curriculum signal, so a flat alphabetical list would be a regression.
@@ -103,6 +153,16 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   const altN = await s.eval(`document.querySelectorAll('.cmp-alts li').length`);
   s.assert(altN === CACHING.alternatives.length, `alternatives render (${altN}/${CACHING.alternatives.length})`);
 
+  // The detail page states its tagging as chips rather than burying the
+  // mechanism in a CTA button at the bottom of the page.
+  const chips = await s.eval(`
+    Array.from(document.querySelectorAll('.detail-tags .sd-chip')).map(e => e.textContent.trim())`);
+  s.assert(chips.some(x => /signature/i.test(x)), `a mechanism-backed component says so, got ${chips.join('|')}`);
+  s.assert(chips.some(x => x === `${usesOf('caching')} problems`),
+    `the chip row states the usage count, got ${chips.join('|')}`);
+  s.assert(await s.eval(`!!document.querySelector('.detail-tags a[href*="tag/mechanism/caching"]')`),
+    'the mechanism chip deep-links to its filtered problem list');
+
   // 5. The Used-in list matches the edge file exactly.
   const uses = await s.eval(`document.querySelectorAll('.cmp-use').length`);
   s.assert(uses === usesOf('caching'), `caching used in ${usesOf('caching')} problems, got ${uses}`);
@@ -129,12 +189,28 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   const inPlay = await s.eval(`
     Array.from(document.querySelectorAll('.cmp-inplay .cmp-use')).map(e => ({
       id: e.dataset.cmpLink,
-      title: (e.querySelector('.cmp-use__title')||{}).textContent.trim(),
+      sig: e.classList.contains('cmp-use--sig'),
       note: (e.querySelector('.cmp-use__note')||{}).textContent.trim()
     }))`);
-  const p02Mechs = (DP.chapters.find(c => c.id === 'p02').tags.mechanism) || [];
-  s.assert(inPlay.length === p02Mechs.length,
-    `p02 shows ${p02Mechs.length} components in play, got ${inPlay.length}`);
+  // Derived from the EDGE FILE, not from tags.mechanism. The facet carries only
+  // the 2-4 headline mechanisms and is deliberately not grown to match the
+  // catalog (60 filter chips would be unusable on a phone), so a problem leans
+  // on more components than it is tagged with. docs/component-catalog.md.
+  const p02Edges = COMPONENTS.filter(c => (EDGES[c.id] || {}).p02).map(c => c.id);
+  s.assert(inPlay.length === p02Edges.length,
+    `p02 shows every component with an edge to it (${p02Edges.length}), got ${inPlay.length}`);
+  s.assert(inPlay.length > (DP.chapters.find(c => c.id === 'p02').tags.mechanism || []).length,
+    'the parts list is richer than the headline facet — it is edge-derived, not tag-derived');
+
+  // Signature components (the tagged ones) sort first and are marked, so the
+  // priority signal survives the longer list.
+  const mechOwner = Object.fromEntries(COMPONENTS.filter(c => c.mechanism).map(c => [c.mechanism, c.id]));
+  const p02Sig = new Set(((DP.chapters.find(c => c.id === 'p02').tags.mechanism) || []).map(m => mechOwner[m]).filter(Boolean));
+  s.assert(inPlay.filter(x => x.sig).length === p02Sig.size,
+    `p02 marks its ${p02Sig.size} signature components, got ${inPlay.filter(x => x.sig).length}`);
+  const lastSig = inPlay.map(x => x.sig).lastIndexOf(true);
+  s.assert(inPlay.slice(0, lastSig + 1).every(x => x.sig), 'signature components sort ahead of supporting ones');
+
   const backEdge = inPlay.find(x => x.id === 'caching');
   s.assert(!!backEdge, 'the problem links back to the caching component');
   s.assert(backEdge.note === EDGES.caching.p02,

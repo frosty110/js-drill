@@ -1,0 +1,155 @@
+{
+  "id": "ch03",
+  "chapter": 3,
+  "part": "Part II: Evaluation",
+  "title": "Evaluation Methodology",
+  "summary": "The methods available for judging an open-ended model output, and what each one can and cannot tell you: language-modeling metrics (entropy, cross entropy, bits-per-character, perplexity), exact evaluation (functional correctness and similarity against reference data, including embedding-based semantic similarity), AI as a judge and its failure modes, and comparative evaluation that ranks models against each other rather than scoring them.",
+  "keyTakeaways": [
+    "Evaluation is the bottleneck of AI engineering: open-ended outputs have no single ground truth, capability outruns the benchmarks, and public benchmarks saturate and get contaminated — so investing in your own evaluation pipeline is the durable asset.",
+    "Perplexity measures how surprised a model is by text; lower means more predictable. It is useful for data inspection (spotting duplicates, contamination, or unusual text) but needs a model exposing logprobs and says nothing about whether an answer is correct.",
+    "Exact evaluation is the gold standard when it applies: functional correctness (does the generated code pass the tests, does the SQL return the right rows) gives an unambiguous verdict no judge can override.",
+    "Similarity against reference data ranges from exact match through lexical overlap (BLEU/ROUGE) to embedding-based semantic similarity — each looser and cheaper than the last, and each blind in a different way.",
+    "AI as a judge is fast, cheap, and flexible, which is why it dominates in practice — but it is a probabilistic evaluator with position bias, verbosity bias, self-preference, and no fixed standard, and changing the judge silently changes your metric.",
+    "Comparative evaluation ranks models by preference between pairs (the arena/Elo approach) rather than scoring them in isolation; it captures 'which is better' well but does not tell you whether either is good enough for your task."
+  ],
+  "questions": [
+    {
+      "q": "Why does Huyen call evaluation the hardest and most under-invested part of AI engineering?",
+      "options": [
+        "Because evaluation requires GPUs that most teams cannot access",
+        "Because open-ended outputs have no single correct answer, model capability outpaces the benchmarks, and public benchmarks saturate and leak into training data",
+        "Because evaluation frameworks are all proprietary",
+        "Because models refuse to be evaluated by other models"
+      ],
+      "answer": 1,
+      "explain": "Classification had accuracy; generation has no such number. Add benchmark saturation and contamination — a benchmark in public text ends up in the next model's training data — and the result is that off-the-shelf scores decay in usefulness, so the team's own evaluation pipeline is what actually holds up."
+    },
+    {
+      "q": "What does perplexity measure, and what is its most practical use for an AI engineer?",
+      "options": [
+        "How factually accurate a response is; used to detect hallucinations directly",
+        "How many tokens a model can process per second; used for capacity planning",
+        "How surprised a model is by a sequence (the exponential of cross entropy); used to inspect data — spotting duplicated, contaminated, or anomalous text",
+        "How many parameters are active per forward pass; used to compare model sizes"
+      ],
+      "answer": 2,
+      "explain": "Perplexity is an uncertainty measure over text, not a correctness measure. Unusually low perplexity on a benchmark hints the model has seen it (contamination); unusually high perplexity flags text unlike anything the model knows. It needs logprob access, so it is unavailable for many commercial APIs."
+    },
+    {
+      "q": "Why is bits-per-character or bits-per-byte sometimes preferred over perplexity when comparing models?",
+      "options": [
+        "They are faster to compute on CPU",
+        "They normalize away tokenizer differences, so models with different vocabularies become comparable",
+        "They work without any text data",
+        "They measure factual accuracy rather than uncertainty"
+      ],
+      "answer": 1,
+      "explain": "Perplexity is per token, and tokens differ between models — the same sentence may be 12 tokens for one and 20 for another, so per-token numbers are not comparable. Normalizing to characters or bytes gives a shared unit."
+    },
+    {
+      "q": "What is `functional correctness` evaluation and why is it the strongest signal when it is available?",
+      "options": [
+        "Checking that the model's response is grammatically well formed",
+        "Executing the output against a specification — run the generated code against unit tests, run the SQL and compare rows — so the verdict is objective rather than a judgment call",
+        "Measuring how close the output embedding is to a reference embedding",
+        "Asking a stronger model whether the answer is right"
+      ],
+      "answer": 1,
+      "explain": "When the task has an executable definition of success, you can test it rather than judge it. That is why code generation has relatively trustworthy benchmarks: pass@k is a measured fact. Most other generation tasks lack an executor, which is exactly why they are hard to evaluate."
+    },
+    {
+      "q": "What is the main weakness of lexical-similarity metrics like BLEU and ROUGE for evaluating generated text?",
+      "options": [
+        "They cannot be computed without a GPU",
+        "They only work on languages with spaces between words",
+        "They reward n-gram overlap with a reference, so a correct answer worded differently scores badly while a wrong answer that reuses the reference's words can score well",
+        "They require the model to expose logprobs"
+      ],
+      "answer": 2,
+      "explain": "Lexical overlap is a proxy for meaning, and a weak one for open-ended generation where many wordings are equally right. Semantic similarity via embeddings loosens that constraint, but it too can rate a fluent, on-topic, factually wrong answer as similar."
+    },
+    {
+      "q": "How does embedding-based semantic similarity work, and what does it still fail to capture?",
+      "options": [
+        "It compares token counts between response and reference; it fails on long responses",
+        "It maps both texts to vectors and compares them (typically cosine similarity), capturing meaning beyond wording — but it cannot tell you whether the response is factually correct, only whether it is close in meaning to the reference",
+        "It runs the response through a grammar checker; it fails on informal text",
+        "It hashes both texts and compares digests; it fails when whitespace differs"
+      ],
+      "answer": 1,
+      "explain": "Embeddings put semantically related texts near each other, so paraphrases score well where BLEU would not. But the score is only as good as the reference and the embedding model, and a subtly wrong answer usually sits very close to the right one in embedding space."
+    },
+    {
+      "q": "Why has AI as a judge become the default evaluation method for open-ended outputs?",
+      "options": [
+        "It is provably more accurate than human annotators",
+        "It is fast, cheap, and flexible — it can score any criterion you can describe in a prompt, with no reference answer required, and correlates reasonably with human judgment",
+        "It is the only method that produces a numeric score",
+        "It removes the need for an evaluation dataset"
+      ],
+      "answer": 1,
+      "explain": "The killer property is that it needs no ground truth: you describe the criterion, and the judge scores. That lets you evaluate production traffic continuously rather than only on a static labeled set — at the cost of the biases and instability that make it a noisy instrument."
+    },
+    {
+      "q": "Which of these is a documented bias of AI judges that you must design around?",
+      "options": [
+        "Judges score only the first sentence of a response",
+        "Judges cannot compare two responses at once",
+        "Judges refuse to score responses shorter than the prompt",
+        "Position bias in pairwise comparison, verbosity bias toward longer answers, and self-preference toward outputs from the same model family"
+      ],
+      "answer": 3,
+      "explain": "Order matters, length flatters, and a judge tends to like text that looks like its own. Mitigations: randomize or swap positions and average, control for length in the rubric, and avoid using a model to judge itself when the stakes are high."
+    },
+    {
+      "q": "Huyen warns that AI-judge metrics are not standardized. What is the operational consequence?",
+      "options": [
+        "Scores cannot be stored in a database",
+        "The judge cannot be run more than once per day",
+        "Judge scores are only valid for English",
+        "A score has meaning only relative to a fixed judge model, prompt, and rubric — change any of them and your metric changes underneath you, breaking comparisons over time"
+      ],
+      "answer": 3,
+      "explain": "There is no shared definition of a 'coherence 4/5'. Because the judge is itself a model that gets deprecated and updated, teams must version judge prompt and model alongside the metric and re-baseline when either changes — otherwise a quality 'regression' may just be a new judge."
+    },
+    {
+      "q": "What does comparative evaluation (as in an arena leaderboard) give you, and what does it not?",
+      "options": [
+        "It gives a ranking derived from pairwise preferences — good for 'which model is better' — but not an absolute answer to 'is this model good enough for my task'",
+        "It gives an absolute quality score on a fixed scale, valid across tasks",
+        "It gives the exact accuracy of each model on your production traffic",
+        "It gives latency and cost measurements alongside quality"
+      ],
+      "answer": 0,
+      "explain": "Preferences are collected between pairs and aggregated into a ranking. That reveals relative standing on the population's prompts, not whether either model clears your bar on your data — and pairwise comparison scales poorly as the number of models grows."
+    },
+    {
+      "type": "open",
+      "prompt": "You are evaluating a customer-support answer generator. Explain which evaluation methods you would combine and why no single one suffices.",
+      "points": [
+        "Start with exact/functional checks where they exist — did it call the right tool, produce a valid order ID, respect the required format — because those give unambiguous verdicts.",
+        "Use reference-based similarity only where a curated gold answer exists, acknowledging that many correct answers are worded differently.",
+        "Use an AI judge for the open-ended criteria (helpfulness, tone, factual consistency with the retrieved context), with a fixed judge model, versioned prompt, and an explicit rubric.",
+        "Calibrate the judge against a human-labeled sample and periodically re-check agreement, since the judge is itself a drifting model.",
+        "Slice results by segment (topic, language, customer tier, long vs short) rather than reporting one aggregate that hides failures.",
+        "Include cost and latency as first-class evaluation criteria, not afterthoughts.",
+        "Close the loop with production signals — escalation rate, thumbs-down, human edits — because offline evaluation is a proxy for the thing you actually care about."
+      ],
+      "answer": "I would layer them, because each method is blind somewhere different. First, anything that can be checked exactly gets checked exactly: did the response include a valid order ID, did it call the right tool with the right arguments, does it satisfy the required format. Those verdicts are facts and should never be delegated to a judge. Second, for the subset of questions where we maintain gold answers, I use similarity — but semantic rather than purely lexical, since correct answers vary in wording, and I treat a low score as a flag for review rather than proof of failure. Third, the open-ended criteria — helpfulness, tone, and above all factual consistency with the retrieved context — go to an AI judge with an explicit rubric, few-shot examples of each score, and a pinned judge model and prompt version. I calibrate that judge against a few hundred human-labeled examples to measure agreement, and re-check periodically, because the judge is a model that drifts and carries verbosity and position biases. Fourth, I never look only at the aggregate: I slice by topic, language, ticket type, and response length, because the mean hides the segment that is actually broken. Cost and latency sit in the same dashboard as quality, since a great answer that takes eleven seconds fails the product. Finally I close the loop with production signals — escalations, thumbs-down, agent edits — because offline evaluation is a proxy, and when the proxy and the outcome disagree, the outcome wins.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Explain perplexity from entropy, and describe two concrete ways an AI engineer can use it in practice.",
+      "points": [
+        "Entropy measures the average uncertainty (in bits) of the next token under a distribution; more predictable text has lower entropy.",
+        "Cross entropy measures how well the model's predicted distribution matches the true distribution of the text — it is the training loss for language models.",
+        "Perplexity is the exponentiated cross entropy, readable as the effective number of equally likely choices the model was picking between at each step.",
+        "Use 1: data inspection — anomalously low perplexity on a benchmark suggests contamination (the model has seen it), while very high perplexity flags text unlike the training distribution.",
+        "Use 2: deduplication and quality filtering of training or retrieval corpora, and detecting whether a domain is well covered by a base model before deciding to finetune.",
+        "Limitation: it requires logprob access, is not comparable across tokenizers without normalization, and measures predictability rather than correctness."
+      ],
+      "answer": "Entropy is the average uncertainty of the next token: if the text is highly predictable, entropy is low. Cross entropy adds the model into the picture — it measures how far the model's predicted distribution is from the actual distribution of the text, and it is precisely the loss language models are trained to minimize. Perplexity is just cross entropy exponentiated so it reads on a friendlier scale: roughly, the effective number of equally likely tokens the model was choosing among at each step. A perplexity of 3 means the model was about as uncertain as picking between three options. Practically, I use it in two places. One is contamination and data inspection: if a model's perplexity on a public benchmark is startlingly low compared with similar text, that benchmark probably leaked into training, and the reported score is inflated. The same trick finds duplicated documents and boilerplate in a corpus. Two is coverage: measuring a base model's perplexity on a sample of my domain's text tells me whether the domain is familiar territory or genuinely out of distribution, which informs whether retrieval will be enough or whether finetuning is warranted. The caveats matter: I need a model that exposes logprobs, I must normalize to characters or bytes before comparing models with different tokenizers, and I never confuse low perplexity with correctness — a confidently fluent falsehood has low perplexity too."
+    }
+  ]
+}

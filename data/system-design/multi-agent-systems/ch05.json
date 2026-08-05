@@ -1,0 +1,140 @@
+{
+  "id": "ch05",
+  "chapter": 5,
+  "part": "Part II: Building Multi-Agent Systems from Scratch",
+  "title": "Computer Use Agents",
+  "summary": "Agents that drive a browser or a desktop the way a person does: perceive the screen, decide, click and type, then perceive again. It is the most general integration method available — anything a human can operate, the agent can operate — and the most brittle, slowest, and riskiest, which is why it belongs where no API exists.",
+  "keyTakeaways": [
+    "Computer use closes the loop through a graphical interface: perception (screenshot, accessibility tree, or DOM), an action space (click, type, scroll, navigate), and verification that the action had the intended effect.",
+    "Perception mode is the central engineering choice: pixels are universal but require grounding coordinates and cost many tokens, while structured representations (DOM, accessibility tree) are cheaper and more precise where available.",
+    "Every action needs verification — the agent must confirm the page changed as expected rather than assuming the click landed, since a missed click silently derails everything after it.",
+    "It is slow and expensive by nature: each step is a screenshot plus a model call plus a UI round trip, so trajectories of dozens of steps are normal and costs accumulate quickly.",
+    "Brittleness is inherent — layouts change, modals appear, content loads late — so waiting strategies, retries, and recovery from unexpected states are the bulk of the work.",
+    "Prefer an API whenever one exists: computer use is the integration of last resort, justified when the system has no programmatic surface.",
+    "The safety surface is unusually large: the agent can click anything the logged-in session can reach, so sandboxing, scoped credentials, and approval for consequential actions are mandatory.",
+    "Web content is untrusted input — a page can contain instructions aimed at the agent — which makes injection a first-class concern for browsing agents."
+  ],
+  "questions": [
+    {
+      "q": "What is the perception/action loop of a computer use agent?",
+      "options": [
+        "Read the page's source code once, then execute a script",
+        "Observe the interface state, decide on an action, execute it (click, type, scroll, navigate), then observe again to verify the effect",
+        "Send the task to a browser automation service and wait for the result",
+        "Generate a test script and run it in CI"
+      ],
+      "answer": 1,
+      "explain": "It is the standard agent loop with the screen as the environment. The verification half is what distinguishes a working agent from one that fires a sequence of clicks and hopes."
+    },
+    {
+      "q": "What is the tradeoff between pixel-based and structured (DOM or accessibility tree) perception?",
+      "options": [
+        "Pixels are cheaper but less accurate",
+        "Structured perception only works on desktop applications",
+        "Pixels work on any interface but require the model to ground coordinates and cost many tokens per step; structured representations are cheaper and more precise but are unavailable or unreliable in some applications",
+        "They are equivalent; the choice is stylistic"
+      ],
+      "answer": 2,
+      "explain": "Screenshots are universal, which is the whole appeal — canvas apps, remote desktops, legacy software. But each one is a large multimodal payload, and clicking requires locating an element in pixel space, which is where much of the error comes from."
+    },
+    {
+      "q": "Why must every action be verified rather than assumed?",
+      "options": [
+        "Because providers require confirmation of side effects",
+        "Because a click can miss, a page can still be loading, or a modal can intercept it — and an unverified failure means every subsequent step operates on a false model of the screen",
+        "Because verification reduces token cost",
+        "Because verification is required for streaming"
+      ],
+      "answer": 1,
+      "explain": "Errors compound catastrophically here: if step three's click did not register, steps four through twelve are typing into the wrong place. Checking that the expected state change occurred is what keeps a trajectory recoverable."
+    },
+    {
+      "q": "Why are computer use agents inherently slow and expensive?",
+      "options": [
+        "Because browsers cannot be automated efficiently",
+        "Because each step costs a screenshot or page snapshot, a model call, and a UI round trip — and real tasks take dozens of steps",
+        "Because they require the largest available models",
+        "Because they cannot be run in parallel"
+      ],
+      "answer": 1,
+      "explain": "The per-step cost is dominated by perception payloads and by waiting for the interface. A task an API would complete in one call becomes a multi-minute trajectory, which is exactly why the API is preferred when it exists."
+    },
+    {
+      "q": "What dominates the engineering effort in a production computer use agent?",
+      "options": [
+        "Prompt wording",
+        "Choosing the right model",
+        "Handling brittleness — waiting for content, unexpected modals and consent banners, layout changes, and recovering from unexpected states",
+        "Optimizing screenshot compression"
+      ],
+      "answer": 2,
+      "explain": "The happy path is the easy part. Real interfaces load asynchronously, interrupt with dialogs, change between sessions, and behave differently when logged in — so recovery logic and robust waiting are most of the work."
+    },
+    {
+      "q": "When is computer use the right integration choice?",
+      "options": [
+        "Whenever an integration is needed, since it is the most general",
+        "When the target system has no usable API or programmatic interface, and the value justifies the cost and fragility",
+        "Whenever latency is not a concern",
+        "Only for testing purposes"
+      ],
+      "answer": 1,
+      "explain": "Generality is not free. An API call is faster, cheaper, deterministic, and testable. Computer use earns its place against legacy systems, third-party portals, and anything where no programmatic surface exists."
+    },
+    {
+      "q": "Why is the safety surface of a computer use agent unusually large?",
+      "options": [
+        "Because it can reach anything the authenticated session can reach — including destructive actions, unrelated applications, and stored credentials",
+        "Because screenshots may contain PII",
+        "Because browsers are inherently insecure",
+        "Because it requires elevated OS permissions"
+      ],
+      "answer": 0,
+      "explain": "Giving an agent a logged-in browser is giving it the user's authority across every site that session can touch. Isolation in a dedicated environment, scoped credentials, restricted destinations, and approval for consequential actions are the controls that bound it."
+    },
+    {
+      "q": "Why is prompt injection a first-class concern for browsing agents specifically?",
+      "options": [
+        "Because browsers execute JavaScript",
+        "Because page content is untrusted input that the agent reads and may follow — an attacker-controlled page can contain instructions aimed at the agent's next action",
+        "Because screenshots cannot be sanitized",
+        "Because HTTPS cannot be verified by agents"
+      ],
+      "answer": 1,
+      "explain": "The agent's perception channel is authored by whoever controls the page. Combined with an agent that can click, type, and submit, that is a direct path from a malicious page to an unwanted action — bounded by capability limits, not by instructions."
+    },
+    {
+      "type": "open",
+      "prompt": "You must automate a workflow in a legacy vendor portal that has no API. Design the computer use agent and its safeguards.",
+      "points": [
+        "Confirm no programmatic path exists — hidden endpoints, exports, or a partner API are cheaper than UI automation if they can be found.",
+        "Choose perception: prefer DOM/accessibility structure if the portal supports it, falling back to screenshots with coordinate grounding.",
+        "Define a narrow action space and, where the flow is stable, encode deterministic scripted steps with the agent handling only the variable parts.",
+        "Verify each step against an expected state, with explicit waits rather than fixed sleeps.",
+        "Build recovery for known interruptions: session expiry, consent banners, modals, pagination, and rate limiting.",
+        "Isolate: a dedicated browser profile in a sandboxed environment with only the credentials for this portal and no access to other sites or systems.",
+        "Gate consequential actions — submissions, payments, deletions — behind preview and approval, and make them idempotent where possible.",
+        "Treat page content as untrusted, and never let text on the page redirect the agent's task.",
+        "Instrument heavily: screenshots and DOM snapshots per step, action logs, and success verification at the end of the flow.",
+        "Plan for breakage: layout changes should fail loudly with a clear diagnostic rather than producing a wrong action, and there should be a manual fallback."
+      ],
+      "answer": "First I would try to avoid building it. Legacy portals often have an export, an undocumented endpoint the UI itself calls, or a partner API nobody remembered — any of those is faster, cheaper, and vastly more stable than driving the interface. If none exists, I design for the fact that this will be the most fragile component in the system. Perception: if the portal is a normal web application I use the DOM and accessibility tree, because element-level targeting is far more reliable and much cheaper than grounding clicks in pixel space; screenshots are the fallback for canvas or embedded content. I also resist making the whole flow agentic. Most of these workflows are stable — log in, navigate to a report, filter, export — so those steps get scripted deterministically, and the agent handles only the parts that genuinely vary, such as interpreting an unfamiliar result page. That hybrid is dramatically cheaper and more reliable than asking a model to click through twenty predictable screens. Every step verifies its effect against an expected state, using explicit waits on conditions rather than fixed sleeps, and there is recovery logic for the interruptions I know will happen: session expiry, consent banners, modals, pagination, and throttling. Safety comes from isolation and scope. The agent runs in a dedicated sandboxed environment with a browser profile that holds credentials for this portal only, so it cannot reach the user's mail, cloud console, or anything else — the standard failure here is handing an agent a fully logged-in personal browser. Submissions, payments, and deletions require a preview and approval, and are made idempotent where the portal allows it, since a retried submit is a real risk in UI automation. Page content is untrusted: if a page contains text instructing the agent to do something else, that is data, not a command. Instrumentation is heavy by necessity — a screenshot and DOM snapshot per step, the action taken, and the verification result — because when this breaks, the trace is the only way to see what the screen looked like. And I would make breakage loud: a layout change should stop the run with a clear diagnostic and a manual fallback path, never produce a plausible wrong click.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Compare computer use with API integration and with traditional scripted automation (such as recorded browser scripts). When does each win?",
+      "points": [
+        "API integration: fastest, cheapest, deterministic, testable, versioned — always preferred when available.",
+        "Scripted automation: deterministic and cheap, works without an API, but breaks on any layout change and cannot handle variation or unexpected states.",
+        "Computer use: handles variation and novel states, requires no selectors maintained in advance, but is slow, expensive, nondeterministic, and harder to test.",
+        "Maintenance profile differs: scripts fail loudly on selector changes; agents adapt but may adapt into a wrong action.",
+        "Risk profile: agents can do things a script never would, which is both the capability and the danger.",
+        "Hybrid is usually best: script the stable path, use the agent for the variable or recovery portions.",
+        "Cost per run matters at volume — a scripted flow at scale is orders of magnitude cheaper than a model-driven one.",
+        "Choose by stability of the target, frequency of the task, and cost of an incorrect action."
+      ],
+      "answer": "An API wins whenever it exists, and it is not close: one call instead of thirty steps, deterministic results, testable, versioned, with real error semantics. Every other option is a workaround for its absence. Between the two workarounds, scripted automation and computer use differ mainly in how they fail. A recorded script is deterministic and cheap — no model calls, milliseconds per action — but it is coupled to selectors and layout, so any redesign breaks it. The saving grace is that it breaks loudly: the selector is not found and the run stops. A computer use agent handles variation that would break a script, recovers from unexpected modals, and can work through a flow it has not seen before, but each step costs a perception payload and a model call, the trajectory varies between runs, and testing is much harder. Its failure mode is the concerning one: rather than stopping, it may adapt and click something plausible but wrong, which for a submit button is a real incident. That difference also frames the risk: an agent has the latitude to do things a script never would, which is exactly the capability you wanted and exactly the danger. So my rule is stability and volume. A stable, high-frequency flow should be scripted, because cost per run at scale is orders of magnitude lower and predictability is worth more than flexibility. A rare, variable, or exploratory task suits an agent, where the per-run cost is irrelevant against the engineering time a script would consume. And most real systems land in a hybrid: script the stable spine — login, navigation, extraction — and reserve the agent for the branches, the unfamiliar screens, and recovery when the script hits something it does not recognize. That combination gets the cost profile of automation with the robustness of an agent, which is usually the right answer when the API you actually want does not exist."
+    }
+  ]
+}

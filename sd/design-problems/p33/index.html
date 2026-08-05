@@ -31,6 +31,21 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">9</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/work-queue/">Work Queue</a> <span class="ds-chip">signature</span> — Alerts arrive as an overnight batch and each investigation runs for minutes, so the queue is what decouples a 4K-alert dump from a fixed pool of concurrent investigations.</li>
+      <li><a href="../../../sd/components/c/audit-trail/">Audit Log &amp; Provenance</a> <span class="ds-chip">signature</span> — An examiner can ask years later why one alert was cleared, so the trace pins prompt, model snapshot, policy version and evidence hashes — everything whose change would change the answer.</li>
+      <li><a href="../../../sd/components/c/agent-decision-record/">Agent Decision Record</a> <span class="ds-chip">signature</span> — Every auto-closed alert carries the reason code it closed under, the agent&#39;s confidence, the threshold in force that day, and whether a reviewer later disagreed.</li>
+      <li><a href="../../../sd/components/c/cost-metering/">Cost Metering</a> <span class="ds-chip">signature</span> — An agent choosing its own tools is spending money autonomously, so each case carries a hard budget and cost becomes an input to tool selection rather than a report afterwards.</li>
+      <li><a href="../../../sd/components/c/progressive-rollout/">Progressive Rollout</a> <span class="ds-chip">signature</span> — A new agent version is scored against decisions humans already made before it is trusted to dispose of alerts on its own.</li>
+      <li><a href="../../../sd/components/c/at-least-once/">At-Least-Once Delivery</a> — Alert delivery is retried by the bank and by the transport, so the pipeline assumes duplicates by default and makes the investigation step safe to repeat rather than trying to deduplicate at the edge.</li>
+      <li><a href="../../../sd/components/c/idempotency/">Idempotency</a> — A redelivered alert file must not re-investigate what was already decided, so the key is the source alert id and revision rather than anything the pipeline generates.</li>
+      <li><a href="../../../sd/components/c/backpressure/">Backpressure</a> — Per-tenant concurrency caps keep one bank&#39;s overnight backfill from consuming every worker slot, because the shared ceiling is model and vendor spend rather than CPU.</li>
+      <li><a href="../../../sd/components/c/tenant-isolation/">Tenant Isolation</a> — Each bank&#39;s policy, data and model configuration stay separate, because the same agents run against institutions that must never see each other&#39;s alerts.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Ingest alerts from the bank&#39;s monitoring system, investigate each one, and return a disposition plus a cited narrative a regulator can read.</li><li>Gather evidence from internal systems (transactions, KYC records) and external vendors (adverse media, corporate registries, identity data).</li><li>Apply the bank&#39;s own written policy, which is versioned tenant data rather than code.</li><li>Auto-close the clearly benign band, escalate the rest to a human queue, and preserve the analyst&#39;s override.</li><li>Out of scope: generating the alerts themselves (the bank&#39;s monitoring system does that), filing the report with the regulator, and the human review UI.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>A mid-size bank: ~2M customers, ~40M transactions/month, monitoring rules firing on ~0.3% of them = ~120K alerts/month, ~4K/day</li><li>Arrival is bursty and batch-shaped: most alerts land in an overnight file, so peak is a 4K-alert dump rather than 0.05/s smooth</li><li>Investigation is slow and expensive by nature: 10-30 external calls and several LLM turns, so 30s-3min of wall clock and $0.20-$2.00 per case</li><li>That makes the daily bill ~$800-8,000 in model and vendor spend, which is the real capacity constraint, not QPS</li><li>Retention is 5 years under the Bank Secrecy Act, so every trace and every evidence snapshot outlives the model that produced it</li></ul>

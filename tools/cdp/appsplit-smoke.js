@@ -22,7 +22,11 @@ const { ensureChrome, ensureServer, connect } = require('./lib');
   if (!curr) fails.push('CURRICULUM not loaded (' + curr + ')');
   const initType = await s.eval('typeof init');                 // from slice 14
   if (initType !== 'function') fails.push('init() missing (' + initType + ')');
-  const lastFn = await s.eval('typeof initTopbarDropdowns');     // from slice 15 (last)
+  // Canary for "the last slice evaluated". Was initTopbarDropdowns until the
+  // topbar menubar and its 377 lines of machinery were removed (D15 phase 2) —
+  // pick a function the slice still defines, or this asserts that dead code is
+  // still shipping.
+  const lastFn = await s.eval('typeof _topbarItemFromButton');    // from slice 15 (last)
   if (lastFn !== 'function') fails.push('last-slice fn missing (' + lastFn + ')');
   const btns = await s.eval('document.querySelectorAll("button").length');
   if (btns < 20) fails.push('too few buttons rendered: ' + btns);
@@ -40,7 +44,7 @@ const { ensureChrome, ensureServer, connect } = require('./lib');
 
   console.log('--- app.js split smoke ---');
   console.log('CURRICULUM size :', curr);
-  console.log('typeof init     :', initType, '| initTopbarDropdowns:', lastFn);
+  console.log('typeof init     :', initType, '| _topbarItemFromButton:', lastFn);
   console.log('buttons         :', btns);
   console.log('lesson-shell len :', shellBoot, '→ after lesson click:', shellAfter, sel ? `(sel ${sel})` : '(no lesson selector found)');
   console.log('console: errors', errs.length, '/ exceptions', exc.length, '/ net-errors', netErr.length);

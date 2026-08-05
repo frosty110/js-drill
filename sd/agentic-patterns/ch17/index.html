@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reasoning Techniques — Agentic Design Patterns</title>
+<meta name="description" content="Techniques that spend generation on thinking before answering: chain of thought, self-consistency, tree-of-thoughts search, step-back abstraction, least-to-most decomposition, ReAct&#39;s interleaving of reasoning with action, and program-aided reasoning that offloads computation to code. Reasoning models now do much of this internally, which changes when hand-built techniques still earn their cost.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Reasoning Techniques — Agentic Design Patterns">
+<meta property="og:description" content="Techniques that spend generation on thinking before answering: chain of thought, self-consistency, tree-of-thoughts search, step-back abstraction, least-to-most decomposition, ReAct&#39;s interleaving of reasoning with action, and program-aided reasoning that offloads computation to code. Reasoning models now do much of this internally, which changes when hand-built techniques still earn their cost.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Reasoning Techniques","description":"Techniques that spend generation on thinking before answering: chain of thought, self-consistency, tree-of-thoughts search, step-back abstraction, least-to-most decomposition, ReAct's interleaving of reasoning with action, and program-aided reasoning that offloads computation to code. Reasoning models now do much of this internally, which changes when hand-built techniques still earn their cost.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["Reasoning tokens are literal computation: letting the model work through intermediate steps before committing improves multi-step tasks, and costs tokens and latency to do it.","Self-consistency samples several reasoning paths and takes the consensus, exploiting the fact that wrong paths diverge while right ones converge — at a multiple of the cost.","Tree-of-thoughts explores and evaluates branches rather than committing to one path, which suits problems with search structure and is expensive enough to reserve for them.","Step-back prompting asks for the general principle before the specific answer; least-to-most solves easier sub-problems first and builds up — both are decomposition strategies expressed in the prompt.","ReAct interleaves reasoning with acting, so each thought is informed by a real observation instead of the model's assumptions.","Program-aided reasoning delegates the computation to code, converting an approximate token-by-token calculation into an exact one."],"hasPart":[{"@type":"Question","position":1,"name":"Why does asking a model to reason step by step improve multi-step tasks?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q1","acceptedAnswer":{"@type":"Answer","text":"Generated tokens are computation, so intermediate steps let the model spread work across many forward passes instead of forcing the answer into one"}},{"@type":"Question","position":2,"name":"How does self-consistency work?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q2","acceptedAnswer":{"@type":"Answer","text":"It samples several independent reasoning paths and takes the most common final answer, on the theory that errors diverge while correct reasoning converges"}},{"@type":"Question","position":3,"name":"What distinguishes tree-of-thoughts from chain-of-thought?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q3","acceptedAnswer":{"@type":"Answer","text":"It explores multiple candidate branches, evaluates them, and can backtrack — treating reasoning as search rather than as a single committed path"}},{"@type":"Question","position":4,"name":"What is step-back prompting?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q4","acceptedAnswer":{"@type":"Answer","text":"Asking the model to identify the general principle or higher-level question first, then apply it to the specific case"}},{"@type":"Question","position":5,"name":"What does ReAct add to pure chain-of-thought reasoning?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q5","acceptedAnswer":{"@type":"Answer","text":"It interleaves reasoning with actions, so each subsequent thought is conditioned on a real observation from the environment rather than on assumption"}},{"@type":"Question","position":6,"name":"What is the argument for program-aided reasoning?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q6","acceptedAnswer":{"@type":"Answer","text":"The model generates code that a runtime executes for the computation, replacing an approximate token-by-token calculation with an exact result"}},{"@type":"Question","position":7,"name":"Why should a reasoning trace not be treated as an explanation of the answer?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q7","acceptedAnswer":{"@type":"Answer","text":"Because the stated reasoning is generated text that may not reflect the computation that produced the answer — fluent, plausible reasoning can accompany a wrong conclusion"}},{"@type":"Question","position":8,"name":"Given modern reasoning models, when do hand-built reasoning techniques still earn their place?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q8","acceptedAnswer":{"@type":"Answer","text":"A lot of the classic prompt-level reasoning work has been absorbed into the models. Telling a reasoning model to think step by step is mostly redundant and occasionally counterproductive, since it already does, and a competing instruction can interfere with its own process. What has replaced that choice is a budget question: how much thinking does this task justify, given that reasoning tokens are billed and felt as latency. That is now a per-route decision — minimal for classification and lookup, generous for planning and analysis. Several techniques survive because they do something the model cannot do internally. Anything that interleaves with the world does: internal reasoning has no observations in it, so ReAct-style loops remain the backbone of tool-using agents, and no amount of int"}},{"@type":"Question","position":9,"name":"A team enables extensive chain-of-thought on every request in a high-volume classification service and sees cost triple with no accuracy gain. Explain what went wrong and what you would recommend.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch17/#q9","acceptedAnswer":{"@type":"Answer","text":"Reasoning buys computation for problems that need decomposition, and single-label classification usually is not one. There is no multi-step structure to unfold, so the model writes a paragraph justifying a judgment it had effectively already made in the first token, and the paragraph costs money and latency without changing the label. On short tasks it can actively hurt: an elaborate rationalization gives the model room to talk itself out of a correct immediate answer. So the first thing I would check is whether the aggregate is hiding a mixed result — it is common for reasoning to help a genuinely ambiguous slice while doing nothing for the easy majority. If that is the case, the answer is not to turn it off but to apply it selectively: trigger the reasoning path on difficulty signals — l"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Reasoning Techniques</h1>
+    <p class="sharepage__lede">Techniques that spend generation on thinking before answering: chain of thought, self-consistency, tree-of-thoughts search, step-back abstraction, least-to-most decomposition, ReAct&#39;s interleaving of reasoning with action, and program-aided reasoning that offloads computation to code. Reasoning models now do much of this internally, which changes when hand-built techniques still earn their cost.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Reasoning tokens are literal computation: letting the model work through intermediate steps before committing improves multi-step tasks, and costs tokens and latency to do it.</li><li>Self-consistency samples several reasoning paths and takes the consensus, exploiting the fact that wrong paths diverge while right ones converge — at a multiple of the cost.</li><li>Tree-of-thoughts explores and evaluates branches rather than committing to one path, which suits problems with search structure and is expensive enough to reserve for them.</li><li>Step-back prompting asks for the general principle before the specific answer; least-to-most solves easier sub-problems first and builds up — both are decomposition strategies expressed in the prompt.</li><li>ReAct interleaves reasoning with acting, so each thought is informed by a real observation instead of the model&#39;s assumptions.</li><li>Program-aided reasoning delegates the computation to code, converting an approximate token-by-token calculation into an exact one.</li><li>A reasoning trace is not a faithful explanation of how the model reached its answer — plausible reasoning can accompany a wrong result, so verify conclusions rather than trusting the narrative.</li><li>Reasoning models internalize much of this, so the engineering question has shifted from &#39;which prompting technique&#39; to &#39;how much thinking budget does this task justify&#39;.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does asking a model to reason step by step improve multi-step tasks?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It increases the model&#39;s parameter count for that request</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Generated tokens are computation, so intermediate steps let the model spread work across many forward passes instead of forcing the answer into one <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It lowers the temperature automatically</li>
+        <li><span class="sharepage__key">D</span> It causes the model to retrieve external documents</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Each generated token is another pass through the network conditioned on everything written so far. Writing the intermediate steps gives the model more computation and a scratchpad to condition on, which is why it helps on arithmetic, planning, and multi-hop questions.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does self-consistency work?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It asks the model to re-read its own answer and confirm it</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It samples several independent reasoning paths and takes the most common final answer, on the theory that errors diverge while correct reasoning converges <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It fixes the random seed so answers never vary</li>
+        <li><span class="sharepage__key">D</span> It compares answers from two providers</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> It is voting applied to reasoning. It raises accuracy on tasks with a comparable answer, costs a multiple of a single call, and has a blind spot: samples from the same model share correlated misunderstandings, so the majority can be confidently wrong.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What distinguishes tree-of-thoughts from chain-of-thought?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It uses a different tokenizer</li>
+        <li><span class="sharepage__key">B</span> It only applies to code generation</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It explores multiple candidate branches, evaluates them, and can backtrack — treating reasoning as search rather than as a single committed path <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It removes the need for a final answer step</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Chain of thought commits to one line of reasoning; if step two is wrong, everything after it is. Tree search generates alternatives, scores partial states, and abandons bad branches — powerful for puzzle-like problems and far too expensive for routine requests.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is step-back prompting?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Asking the model to identify the general principle or higher-level question first, then apply it to the specific case <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Removing the last step of a chain and retrying</li>
+        <li><span class="sharepage__key">C</span> Reducing the context window by one turn per iteration</li>
+        <li><span class="sharepage__key">D</span> Asking the model to answer in reverse order</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Abstraction before specifics helps because the general principle is easier to retrieve correctly than the specific inference, and grounding the answer in it reduces the chance of a locally plausible but wrong leap.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does ReAct add to pure chain-of-thought reasoning?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It compresses the reasoning trace</li>
+        <li><span class="sharepage__key">B</span> It runs the reasoning on a second model</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It interleaves reasoning with actions, so each subsequent thought is conditioned on a real observation from the environment rather than on assumption <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It removes hallucination entirely</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Pure reasoning about the world is only as good as the model&#39;s priors. Alternating thought and action means the model checks its assumptions against reality as it goes, which is why it underpins most tool-using agent loops.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the argument for program-aided reasoning?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Code is cheaper to generate than prose</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The model generates code that a runtime executes for the computation, replacing an approximate token-by-token calculation with an exact result <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It removes the need for a reasoning trace</li>
+        <li><span class="sharepage__key">D</span> Programs are easier for users to read</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Generation approximates arithmetic and data manipulation; execution does it exactly. Having the model express the computation as code and running it converts a probabilistic step into a deterministic one — the same reliability argument as tool use.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should a reasoning trace not be treated as an explanation of the answer?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because traces are always too long to read</li>
+        <li><span class="sharepage__key">B</span> Because providers redact them</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because the stated reasoning is generated text that may not reflect the computation that produced the answer — fluent, plausible reasoning can accompany a wrong conclusion <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because traces are written after the answer</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Faithfulness is not guaranteed: the narrative and the outcome are produced by the same process, and a convincing trace can rationalize an error. Verification of the conclusion — tests, checks, external evidence — is what establishes correctness.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Given modern reasoning models, when do hand-built reasoning techniques still earn their place?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Reasoning models internalize chain of thought, so explicitly prompting for step-by-step reasoning adds little on tasks they already handle — and can conflict with their internal process.</li><li>Budget control still matters: choosing how much thinking a task justifies is now a first-class parameter, since reasoning tokens cost money and latency.</li><li>Structure still matters when intermediate artifacts are needed by other systems — a plan, an extracted table, a set of candidate options.</li><li>Interleaving with the environment (ReAct-style) remains essential, because internal reasoning cannot observe the world.</li><li>Program-aided reasoning remains essential for exactness, since even strong reasoners approximate computation.</li><li>Voting and search remain useful for high-stakes decisions with comparable answers, though the cost multiple must be justified.</li><li>Verification remains necessary regardless of how good the reasoning looks, because traces are not proofs.</li><li>The choice should be made empirically per task, since the marginal value of each technique has shifted and continues to shift.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> A lot of the classic prompt-level reasoning work has been absorbed into the models. Telling a reasoning model to think step by step is mostly redundant and occasionally counterproductive, since it already does, and a competing instruction can interfere with its own process. What has replaced that choice is a budget question: how much thinking does this task justify, given that reasoning tokens are billed and felt as latency. That is now a per-route decision — minimal for classification and lookup, generous for planning and analysis. Several techniques survive because they do something the model cannot do internally. Anything that interleaves with the world does: internal reasoning has no observations in it, so ReAct-style loops remain the backbone of tool-using agents, and no amount of internal thinking substitutes for actually checking. Program-aided reasoning survives for the same reason — even a strong reasoner approximates arithmetic and data manipulation, while executing code is exact, so anything computable should be computed. Structural decomposition survives when other parts of the system need the intermediate artifacts: if I need a plan I can validate against my tool catalog, or an extracted table another service consumes, I want those as explicit outputs rather than buried in a thinking trace. Voting and search survive for high-stakes decisions with comparable answers, though the cost multiple has to be justified deliberately rather than adopted by default. And verification survives absolutely, because a reasoning trace is not a proof — it is generated text that can rationalize a wrong answer as fluently as a right one. My practical stance is to stop treating these as a technique menu and start treating them as a cost-and-verification question, decided per task on an evaluation set, and re-decided when the models change, because the marginal value of each of them has moved substantially and will move again.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>A team enables extensive chain-of-thought on every request in a high-volume classification service and sees cost triple with no accuracy gain. Explain what went wrong and what you would recommend.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Reasoning helps multi-step problems; single-step classification has little to decompose, so the extra tokens buy nothing.</li><li>Cost and latency scale with generated tokens, so verbose reasoning on high-volume simple traffic is the worst possible place to spend it.</li><li>Reasoning can even hurt short tasks by introducing rationalizations that drift from a correct immediate judgment.</li><li>The measurement may also be masking a mixed picture: reasoning may help a hard slice while hurting or not affecting the majority.</li><li>Recommendation: apply reasoning selectively — triggered by difficulty signals, ambiguity, or low confidence — rather than uniformly.</li><li>Use a small model for the routine path and escalate hard cases to a reasoning path.</li><li>Where reasoning is used, avoid returning it to the user and cap the thinking budget.</li><li>Consider structured alternatives: better labels and definitions in the prompt, few-shot examples from real data, or a finetuned classifier for high volume.</li><li>Re-measure per slice with cost and latency alongside accuracy.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Reasoning buys computation for problems that need decomposition, and single-label classification usually is not one. There is no multi-step structure to unfold, so the model writes a paragraph justifying a judgment it had effectively already made in the first token, and the paragraph costs money and latency without changing the label. On short tasks it can actively hurt: an elaborate rationalization gives the model room to talk itself out of a correct immediate answer. So the first thing I would check is whether the aggregate is hiding a mixed result — it is common for reasoning to help a genuinely ambiguous slice while doing nothing for the easy majority. If that is the case, the answer is not to turn it off but to apply it selectively: trigger the reasoning path on difficulty signals — low confidence, an input matching multiple categories, an unusual document type — and keep the fast path for everything else. That is the general recommendation. Uniform application of an expensive technique to a workload dominated by easy cases is the archetypal AI cost mistake. Beyond routing, for a high-volume classifier I would look at cheaper structural fixes first: sharper category definitions and edge-case rules in the prompt, few-shot examples drawn from real misclassifications, and — if volume justifies it — a small finetuned classifier or distilled model, which for a fixed label set will typically beat a large model with reasoning on accuracy, cost, and latency simultaneously. Wherever reasoning stays, I would cap the thinking budget explicitly and keep the trace out of the response. And I would re-measure per slice with accuracy, cost, and p95 latency in one table, because the decision that produced this outcome was made by looking at only one of those three.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch17","title":"Reasoning Techniques","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"Why does asking a model to reason step by step improve multi-step tasks?","options":["It increases the model's parameter count for that request","Generated tokens are computation, so intermediate steps let the model spread work across many forward passes instead of forcing the answer into one","It lowers the temperature automatically","It causes the model to retrieve external documents"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"How does self-consistency work?","options":["It asks the model to re-read its own answer and confirm it","It samples several independent reasoning paths and takes the most common final answer, on the theory that errors diverge while correct reasoning converges","It fixes the random seed so answers never vary","It compares answers from two providers"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"What distinguishes tree-of-thoughts from chain-of-thought?","options":["It uses a different tokenizer","It only applies to code generation","It explores multiple candidate branches, evaluates them, and can backtrack — treating reasoning as search rather than as a single committed path","It removes the need for a final answer step"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What is step-back prompting?","options":["Asking the model to identify the general principle or higher-level question first, then apply it to the specific case","Removing the last step of a chain and retrying","Reducing the context window by one turn per iteration","Asking the model to answer in reverse order"],"answer":0,"answerLetter":"A"},{"n":5,"type":"mc","prompt":"What does ReAct add to pure chain-of-thought reasoning?","options":["It compresses the reasoning trace","It runs the reasoning on a second model","It interleaves reasoning with actions, so each subsequent thought is conditioned on a real observation from the environment rather than on assumption","It removes hallucination entirely"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"What is the argument for program-aided reasoning?","options":["Code is cheaper to generate than prose","The model generates code that a runtime executes for the computation, replacing an approximate token-by-token calculation with an exact result","It removes the need for a reasoning trace","Programs are easier for users to read"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"Why should a reasoning trace not be treated as an explanation of the answer?","options":["Because traces are always too long to read","Because providers redact them","Because the stated reasoning is generated text that may not reflect the computation that produced the answer — fluent, plausible reasoning can accompany a wrong conclusion","Because traces are written after the answer"],"answer":2,"answerLetter":"C"},{"n":8,"type":"open","prompt":"Given modern reasoning models, when do hand-built reasoning techniques still earn their place?","points":["Reasoning models internalize chain of thought, so explicitly prompting for step-by-step reasoning adds little on tasks they already handle — and can conflict with their internal process.","Budget control still matters: choosing how much thinking a task justifies is now a first-class parameter, since reasoning tokens cost money and latency.","Structure still matters when intermediate artifacts are needed by other systems — a plan, an extracted table, a set of candidate options.","Interleaving with the environment (ReAct-style) remains essential, because internal reasoning cannot observe the world.","Program-aided reasoning remains essential for exactness, since even strong reasoners approximate computation.","Voting and search remain useful for high-stakes decisions with comparable answers, though the cost multiple must be justified.","Verification remains necessary regardless of how good the reasoning looks, because traces are not proofs.","The choice should be made empirically per task, since the marginal value of each technique has shifted and continues to shift."]},{"n":9,"type":"open","prompt":"A team enables extensive chain-of-thought on every request in a high-volume classification service and sees cost triple with no accuracy gain. Explain what went wrong and what you would recommend.","points":["Reasoning helps multi-step problems; single-step classification has little to decompose, so the extra tokens buy nothing.","Cost and latency scale with generated tokens, so verbose reasoning on high-volume simple traffic is the worst possible place to spend it.","Reasoning can even hurt short tasks by introducing rationalizations that drift from a correct immediate judgment.","The measurement may also be masking a mixed picture: reasoning may help a hard slice while hurting or not affecting the majority.","Recommendation: apply reasoning selectively — triggered by difficulty signals, ambiguity, or low confidence — rather than uniformly.","Use a small model for the routine path and escalate hard cases to a reasoning path.","Where reasoning is used, avoid returning it to the user and cap the thinking budget.","Consider structured alternatives: better labels and definitions in the prompt, few-shot examples from real data, or a finetuned classifier for high volume.","Re-measure per slice with cost and latency alongside accuracy."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch17">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

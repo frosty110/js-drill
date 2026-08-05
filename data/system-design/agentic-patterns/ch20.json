@@ -1,0 +1,126 @@
+{
+  "id": "ch20",
+  "num": 20,
+  "part": "Part III: Scale, Safety & Discovery",
+  "title": "Prioritization",
+  "summary": "When an agent has more to do than it can do at once, something has to decide the order. The prioritization pattern makes that decision explicit — ranking work by urgency, importance, dependency, cost, and deadline against stated criteria — and re-ranking as conditions change, rather than letting the model's implicit judgment silently determine what gets attention.",
+  "keyTakeaways": [
+    "Prioritization is a decision with criteria, and those criteria should be explicit and inspectable — an agent that ranks tasks by unstated intuition cannot be audited or corrected.",
+    "The usual dimensions are urgency (deadline pressure), importance (impact if done or not done), dependency (what unblocks other work), cost or effort, and confidence that the work will succeed.",
+    "Dependencies constrain ordering independently of value: a high-value task blocked by a low-value one must wait, so the dependency graph is checked before the ranking is applied.",
+    "Priorities are not set once — new information, failures, and deadline changes should trigger re-ranking, which means the queue is state the system maintains rather than a list computed at the start.",
+    "Starvation is the characteristic failure: without aging or a fairness rule, low-priority work never runs, and the backlog quietly becomes a graveyard.",
+    "Prioritization interacts with budget: when resources are short, the ranking determines what gets done and what is explicitly deferred, which is the deliberate form of degradation.",
+    "The ranking must be visible to the user for anything long-running, since a hidden ordering looks like an arbitrary system ignoring what they asked for first."
+  ],
+  "questions": [
+    {
+      "q": "Why should prioritization criteria be explicit rather than left to the model's judgment?",
+      "options": [
+        "Because models cannot compare two tasks",
+        "Because explicit criteria make the ordering inspectable, correctable, and consistent — an implicit ranking cannot be audited when it puts the wrong thing first",
+        "Because explicit criteria reduce token cost",
+        "Because implicit prioritization is not supported by most frameworks"
+      ],
+      "answer": 1,
+      "explain": "An agent will always order the work somehow. Stating the criteria makes that ordering a policy you can review and change, rather than an emergent behaviour that varies run to run."
+    },
+    {
+      "q": "Which dimensions typically feed a prioritization decision?",
+      "options": [
+        "Only deadline",
+        "Only the requesting user's seniority",
+        "Urgency, importance, dependencies, cost or effort, and confidence of success",
+        "Only estimated token cost"
+      ],
+      "answer": 2,
+      "explain": "Each dimension answers a different question: when it must be done, what it is worth, what it unblocks, what it costs, and how likely it is to succeed. A single-axis ranking — usually urgency alone — is what produces busy systems that never do anything important."
+    },
+    {
+      "q": "How do dependencies interact with a value-based ranking?",
+      "options": [
+        "Dependencies override value for ordering: a task cannot run before what it depends on, so the dependency graph constrains the schedule regardless of relative importance",
+        "Dependencies are irrelevant if the model is capable enough",
+        "Dependencies only matter in multi-agent systems",
+        "Dependencies should be resolved by running everything in parallel"
+      ],
+      "answer": 0,
+      "explain": "Value ranks what is worth doing; dependency determines what is possible to do now. A scheduler that ignores the graph will start high-value work that immediately blocks, and the blocking item may be a low-value prerequisite."
+    },
+    {
+      "q": "Why must priorities be revisited during execution?",
+      "options": [
+        "Because model outputs drift over time",
+        "Because the context window forces recomputation",
+        "Because conditions change — a deadline moves, a task fails, new work arrives, a dependency resolves — and a ranking computed once is stale the moment it is used",
+        "Because providers rate-limit long queues"
+      ],
+      "answer": 2,
+      "explain": "Prioritization is a standing decision, not a one-off sort. Treating the queue as maintained state, re-ranked on relevant events, is what keeps it aligned with reality rather than with the situation at start time."
+    },
+    {
+      "q": "What is starvation in this context and how is it usually prevented?",
+      "options": [
+        "The agent running out of context; prevented by summarization",
+        "Low-priority work never being executed because higher-priority work keeps arriving; prevented by aging, reserved capacity, or an explicit fairness rule",
+        "The model refusing tasks; prevented by prompt changes",
+        "The queue exceeding memory; prevented by pagination"
+      ],
+      "answer": 1,
+      "explain": "A pure priority queue under continuous load never reaches the bottom. Aging (raising priority with waiting time), reserving a share of capacity for low-priority work, or setting a maximum wait converts a graveyard backlog into a slow but moving one."
+    },
+    {
+      "q": "How does prioritization relate to resource budgets?",
+      "options": [
+        "They are independent concerns",
+        "Budgets remove the need for prioritization",
+        "When resources are short, the ranking decides what gets done and what is explicitly deferred — making degradation deliberate rather than arbitrary",
+        "Prioritization only applies when budgets are unlimited"
+      ],
+      "answer": 2,
+      "explain": "Scarcity is exactly when ordering matters. A system with a ranking degrades by dropping the least valuable work and saying so; a system without one degrades by whatever happened to be next in the loop."
+    },
+    {
+      "q": "Why should the ordering be visible to users for long-running work?",
+      "options": [
+        "Because visibility reduces cost",
+        "Because users need to see the model's reasoning tokens",
+        "Because a hidden ordering looks like the system ignoring their request — showing what is being done first and why lets them intervene or re-prioritize",
+        "Because visibility is required by most providers"
+      ],
+      "answer": 2,
+      "explain": "Transparency turns an opaque scheduler into a collaborator: the user learns their item is queued behind two urgent ones and can escalate it, rather than concluding the system is broken."
+    },
+    {
+      "type": "open",
+      "prompt": "An agent manages an inbox of incoming work items — support escalations, scheduled reports, and background cleanup. Design its prioritization.",
+      "points": [
+        "Define explicit criteria per work type: deadline, customer or business impact, blocking relationships, expected effort, and confidence of successful completion.",
+        "Score along those dimensions with a documented, adjustable formula or policy rather than an unstated model judgment.",
+        "Respect dependencies first: build the graph and schedule only what is unblocked.",
+        "Reserve capacity by class so interactive escalations cannot be crowded out and background work is not starved.",
+        "Apply aging so long-waiting low-priority items eventually rise, with a maximum wait per class.",
+        "Re-rank on events: new arrivals, failures, deadline changes, and completions — not on a fixed schedule alone.",
+        "Handle overload deliberately: shed or defer the lowest-value class, and report what was deferred rather than silently dropping it.",
+        "Expose the queue and the reason for the current ordering to human operators, with a manual override.",
+        "Measure the policy: time-to-completion per class, deadline misses, starvation incidents, and whether high-impact work actually finished first."
+      ],
+      "answer": "I would write the criteria down before writing any code, because the failure here is an agent that quietly optimizes for whatever the prompt happened to emphasize. For each work type I define the dimensions that apply: escalations carry customer impact and a response-time commitment, scheduled reports carry a hard deadline and a known effort, cleanup carries low urgency and low risk. Scoring is a documented policy — a weighted formula or a small rule set — so an operator can look at why something is first and change it, rather than arguing with a model's intuition. Dependencies are resolved before ranking: I build the graph, mark what is blocked, and schedule only from the unblocked set, since scheduling a high-value item that immediately stalls is worse than doing the small prerequisite first. Capacity is partitioned by class rather than being one global priority queue, because a pure queue under continuous escalation load means background work never runs at all. So interactive escalations get a reserved share that cannot be crowded out, scheduled work gets enough to hit its deadlines, and cleanup gets a floor. Aging sits on top: an item's priority rises with waiting time, with a maximum acceptable wait per class, which converts starvation into slowness. Re-ranking is event-driven — an arrival, a failure, a deadline change, a completed dependency — not a periodic re-sort that is stale between runs. Under overload the system degrades deliberately: it defers the lowest-value class and reports exactly what was deferred and why, because silent dropping is how a backlog becomes invisible. Operators can see the queue, the current ordering, and the reason for it, and can override manually. And I would measure the policy itself: time to completion per class, deadline miss rate, longest wait observed, and whether the work that mattered actually completed first — because a prioritization policy that has never been evaluated is just an opinion encoded in code."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain why an agent left to prioritize implicitly tends to produce bad orderings, using concrete failure examples.",
+      "points": [
+        "Recency bias: whatever appeared most recently in the context dominates attention, so the last-mentioned task gets done first regardless of importance.",
+        "Salience bias: vividly worded or emotionally charged items outrank quietly critical ones.",
+        "Ease bias: the model tends toward tasks it can complete confidently, leaving hard high-value work undone while reporting progress.",
+        "No memory of waiting: without explicit aging, an item deferred once is deferred forever since nothing tracks how long it has waited.",
+        "Inconsistency: the same queue can be ordered differently between runs, so behaviour is unpredictable and untestable.",
+        "Invisibility: nobody can see or contest the ranking, so a wrong ordering is discovered only through its consequences.",
+        "Dependency blindness: implicit ranking often ignores blocking relationships, producing stalled work.",
+        "Fix: externalize the criteria, keep the queue as durable state with wait times, and evaluate the ordering policy."
+      ],
+      "answer": "Because implicit prioritization inherits the model's attention biases rather than the business's priorities. The most common one is recency: whatever is latest in the context dominates, so the task the user mentioned most recently gets done first even if the first one was the urgent one. Salience is close behind — an item written in emphatic language outranks a quietly worded one describing a far more serious problem, because the model responds to the framing rather than the impact. There is also an ease bias: given a mixed list, agents gravitate toward the items they can complete confidently and report as done, which leaves the hard, high-value work perpetually at the bottom while progress reports look healthy. Then there are the structural gaps. Nothing tracks waiting time, so an item deferred in one run is deferred in every subsequent run — that is starvation with no mechanism that could ever notice it. Nothing enforces dependencies, so the agent starts work that immediately blocks on a prerequisite it deprioritized. And the ordering is not stable: run the same queue twice and you may get two different sequences, which makes the behaviour untestable and makes incident review impossible, because you cannot reproduce the decision. The final problem is invisibility. An implicit ranking cannot be shown to an operator, contested, or corrected — it is discovered only through its consequences, usually a missed deadline. The fix is to externalize it: explicit criteria with documented weights, the queue as durable state that records arrival time and wait duration, dependency resolution before ranking, and an evaluation of the ordering policy against outcomes. Once the ranking is data rather than an emergent behaviour, it can be argued about and improved, which is the whole point."
+    }
+  ]
+}

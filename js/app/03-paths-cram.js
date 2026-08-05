@@ -257,7 +257,6 @@ function renderCramHome(path) {
       if (cb.checked) state.cramTaskChecks[id] = true;
       else delete state.cramTaskChecks[id];
       saveProgress();
-      updateCramProgressStrip();
       rerender();
     });
   });
@@ -266,7 +265,6 @@ function renderCramHome(path) {
       const id = btn.getAttribute('data-cram-redo');
       delete state.cramTaskChecks[id];
       saveProgress();
-      updateCramProgressStrip();
       rerender();
     });
   });
@@ -279,7 +277,6 @@ function renderCramHome(path) {
         if (!t.lessonId) delete state.cramTaskChecks[t.id];
       }
       saveProgress();
-      updateCramProgressStrip();
       rerender();
     });
   });
@@ -946,29 +943,6 @@ function applySidebarCuration() {
   });
 }
 
-// Top-bar cram progress strip: "Day N · ▓▓▓░░ · X/Y". Visible only when the
-// subscribed path is kind:'cram' AND the cycle is still active. Tap routes
-// to the cram home view (Phase 2 takes over when subscribed; for now opens
-// the Today modal).
-function updateCramProgressStrip() {
-  const wrap = document.getElementById('topbar-cram-progress');
-  if (!wrap) return;
-  const path = getSubscribedPath();
-  if (!path || path.kind !== 'cram') { wrap.hidden = true; return; }
-  const dayIdx = getCramDayIndex(path);
-  if (dayIdx < 0) { wrap.hidden = true; return; }
-  const day = path.days[dayIdx];
-  let total = 0, done = 0;
-  for (const b of day.blocks) for (const t of b.tasks) { total++; if (isCramTaskDone(t)) done++; }
-  const pct = total ? Math.round(100 * done / total) : 0;
-  const dayEl = document.getElementById('topbar-cram-day');
-  const barEl = document.getElementById('topbar-cram-bar');
-  const countEl = document.getElementById('topbar-cram-count');
-  if (dayEl) dayEl.innerHTML = `${dsIcon('clock', 15)} Day ${dayIdx + 1}/${path.days.length}`;
-  if (barEl) barEl.style.width = pct + '%';
-  if (countEl) countEl.textContent = `${done}/${total}`;
-  wrap.hidden = false;
-}
 
 function openPathModal(opts = {}) {
   const modal = document.getElementById('path-modal');
@@ -1055,7 +1029,6 @@ function openPathModal(opts = {}) {
       saveProgress();
       updatePathChip();
       applySidebarCuration();
-      updateCramProgressStrip();
       if (typeof updateCramReviewCount === 'function') updateCramReviewCount();
       modal.style.display = 'none';
       if (typeof renderSidebar === 'function') renderSidebar();

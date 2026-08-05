@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Learning and Adaptation — Agentic Design Patterns</title>
+<meta name="description" content="Making an agent better over time rather than only at design time. The cheapest forms are in-context: remember what worked, retrieve past successes as examples, adjust the instructions. The heavier forms change artifacts — optimized prompts, learned skills, finetuned weights. All of them need an evaluation gate, because a system that changes itself without measurement drifts, and the drift is invisible until it is expensive.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Learning and Adaptation — Agentic Design Patterns">
+<meta property="og:description" content="Making an agent better over time rather than only at design time. The cheapest forms are in-context: remember what worked, retrieve past successes as examples, adjust the instructions. The heavier forms change artifacts — optimized prompts, learned skills, finetuned weights. All of them need an evaluation gate, because a system that changes itself without measurement drifts, and the drift is invisible until it is expensive.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Learning and Adaptation","description":"Making an agent better over time rather than only at design time. The cheapest forms are in-context: remember what worked, retrieve past successes as examples, adjust the instructions. The heavier forms change artifacts — optimized prompts, learned skills, finetuned weights. All of them need an evaluation gate, because a system that changes itself without measurement drifts, and the drift is invisible until it is expensive.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["Adaptation exists on a ladder of cost and permanence: in-context feedback within a session, memory of past outcomes across sessions, automatic prompt or example optimization, learned reusable skills, and finally weight updates.","Storing outcomes — which approach worked, which failed, and why — turns experience into retrievable few-shot examples, which is the highest-leverage cheap form of learning.","Automatic prompt optimization treats the prompt as a parameter tuned against a metric on a dataset, which requires an evaluation set to exist first; without it there is nothing to optimize against.","Procedural learning captures repeated successful sequences as reusable skills or tools, converting an expensive rediscovery each time into a cheap deterministic call.","Every learned change must pass an evaluation gate before promotion — offline evaluation on a held-out set, then a staged rollout — because self-modification without a gate is unbounded drift.","Feedback loops can degenerate: learning from signals the system itself produced, or from user approval alone, drives sycophancy and reinforces early mistakes."],"hasPart":[{"@type":"Question","position":1,"name":"Which forms of learning does the pattern cover, ordered from cheapest to most permanent?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q1","acceptedAnswer":{"@type":"Answer","text":"In-context feedback, memory of past outcomes, prompt/example optimization, learned skills, and weight updates"}},{"@type":"Question","position":2,"name":"What makes storing past outcomes such a high-leverage form of adaptation?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q2","acceptedAnswer":{"@type":"Answer","text":"Successful and failed trajectories become retrievable examples — the agent can be shown what worked for a similar case instead of re-deriving it, with no training run"}},{"@type":"Question","position":3,"name":"What is the prerequisite for automatic prompt optimization?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q3","acceptedAnswer":{"@type":"Answer","text":"A dataset with a metric — an evaluation set that scores candidate prompts, since optimization is search against an objective"}},{"@type":"Question","position":4,"name":"What is procedural learning in this context?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q4","acceptedAnswer":{"@type":"Answer","text":"Capturing a repeatedly successful sequence of actions as a reusable skill or tool, so future runs call it directly instead of rediscovering it"}},{"@type":"Question","position":5,"name":"Why must a learned change pass an evaluation gate before promotion?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q5","acceptedAnswer":{"@type":"Answer","text":"Because a self-modifying system without measurement drifts — changes that help the cases that triggered them can silently regress everything else"}},{"@type":"Question","position":6,"name":"What is the danger of learning primarily from user approval signals?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q6","acceptedAnswer":{"@type":"Answer","text":"Approval measures satisfaction rather than correctness, so optimizing it produces agreeable, flattering, engagement-seeking behaviour instead of accurate behaviour"}},{"@type":"Question","position":7,"name":"Which property must any adaptation mechanism have to be operable in production?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q7","acceptedAnswer":{"@type":"Answer","text":"It must be reversible and versioned — you can see what changed, attribute a regression to it, and roll it back"}},{"@type":"Question","position":8,"name":"Design a safe self-improvement loop for a support agent that should get better at handling recurring issues over time.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q8","acceptedAnswer":{"@type":"Answer","text":"I would build it as a data loop first and a learning loop second, because without the data nothing else is safe. Every interaction produces a structured record: the request, the retrieved context, the trajectory of tool calls, the answer, and an outcome — resolved, escalated, or corrected by a human agent. Human corrections are the gold signal here; raw thumbs are noisy and biased, and optimizing them produces an agreeable bot rather than a correct one. With that data, I start on the cheapest rung: retrieve similar resolved cases at inference time and include them as examples. This is immediately effective, entirely reversible, and inspectable — if it makes things worse, I stop retrieving. The next rung is procedural: when the traces show the agent rediscovering the same multi-step resolut"}},{"@type":"Question","position":9,"name":"When is finetuning the right form of adaptation for an agent, and when do the cheaper rungs of the ladder suffice?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch09/#q9","acceptedAnswer":{"@type":"Answer","text":"The cheap rungs handle most of what people reach for finetuning to fix. If the agent lacks facts, that is retrieval, and finetuning is a worse solution because the facts go stale and cannot be cited. If it handles a case badly that it has seen handled well before, that is memory plus few-shot retrieval. If the instructions are ambiguous, that is prompt work, and it can now be done semi-automatically against an evaluation set. All three are reversible in seconds and inspectable by a human, which matters enormously in production. Finetuning earns its place in two situations. The first is consistent behavioural change: the agent must always use our house format, follow our domain's conventions, apply our refusal policy, or speak in a specific register — and prompting has demonstrably plateaue"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Learning and Adaptation</h1>
+    <p class="sharepage__lede">Making an agent better over time rather than only at design time. The cheapest forms are in-context: remember what worked, retrieve past successes as examples, adjust the instructions. The heavier forms change artifacts — optimized prompts, learned skills, finetuned weights. All of them need an evaluation gate, because a system that changes itself without measurement drifts, and the drift is invisible until it is expensive.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Adaptation exists on a ladder of cost and permanence: in-context feedback within a session, memory of past outcomes across sessions, automatic prompt or example optimization, learned reusable skills, and finally weight updates.</li><li>Storing outcomes — which approach worked, which failed, and why — turns experience into retrievable few-shot examples, which is the highest-leverage cheap form of learning.</li><li>Automatic prompt optimization treats the prompt as a parameter tuned against a metric on a dataset, which requires an evaluation set to exist first; without it there is nothing to optimize against.</li><li>Procedural learning captures repeated successful sequences as reusable skills or tools, converting an expensive rediscovery each time into a cheap deterministic call.</li><li>Every learned change must pass an evaluation gate before promotion — offline evaluation on a held-out set, then a staged rollout — because self-modification without a gate is unbounded drift.</li><li>Feedback loops can degenerate: learning from signals the system itself produced, or from user approval alone, drives sycophancy and reinforces early mistakes.</li><li>Adaptation must be reversible: version learned artifacts, keep the ability to roll back, and log what changed and why — otherwise a regression cannot be attributed.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which forms of learning does the pattern cover, ordered from cheapest to most permanent?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> In-context feedback, memory of past outcomes, prompt/example optimization, learned skills, and weight updates <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Only finetuning, since prompts are not learning</li>
+        <li><span class="sharepage__key">C</span> Only in-context learning, since weights cannot be changed after deployment</li>
+        <li><span class="sharepage__key">D</span> Retrieval and caching</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The ladder matters because each rung costs more and is harder to undo. Most production &#39;learning&#39; should live on the cheap rungs, where a bad change is a config rollback rather than a retraining run.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What makes storing past outcomes such a high-leverage form of adaptation?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It reduces the model&#39;s parameter count</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Successful and failed trajectories become retrievable examples — the agent can be shown what worked for a similar case instead of re-deriving it, with no training run <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It eliminates the need for tools</li>
+        <li><span class="sharepage__key">D</span> It guarantees the same answer every time</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Experience becomes few-shot context, retrieved by similarity to the current task. It requires no training pipeline, is inspectable and editable, and can be rolled back by deleting a record — properties that weight updates do not have.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the prerequisite for automatic prompt optimization?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A model that exposes logprobs</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A dataset with a metric — an evaluation set that scores candidate prompts, since optimization is search against an objective <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Access to the model&#39;s training data</li>
+        <li><span class="sharepage__key">D</span> A multi-agent architecture</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Optimizers propose and score prompt variants. Without a labelled set and a metric there is no objective, and the process degenerates into rewriting text and hoping. This is why evaluation infrastructure precedes automation.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is procedural learning in this context?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Learning by reading documentation at runtime</li>
+        <li><span class="sharepage__key">B</span> Adjusting temperature based on task type</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Capturing a repeatedly successful sequence of actions as a reusable skill or tool, so future runs call it directly instead of rediscovering it <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Storing user preferences in a profile</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> If the agent works out the same six-step procedure every week, that procedure should become a named capability. This converts a costly and variable rediscovery into a cheap deterministic call — and makes the behaviour reviewable.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why must a learned change pass an evaluation gate before promotion?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because providers require approval for prompt changes</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a self-modifying system without measurement drifts — changes that help the cases that triggered them can silently regress everything else <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because evaluation reduces token cost</li>
+        <li><span class="sharepage__key">D</span> Because gates are needed only for weight updates</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Learning is optimization against whatever signal is available, which is rarely the full objective. A held-out evaluation set plus a staged rollout is what keeps a local improvement from becoming a global regression.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the danger of learning primarily from user approval signals?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Approval signals are too sparse to store</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Approval measures satisfaction rather than correctness, so optimizing it produces agreeable, flattering, engagement-seeking behaviour instead of accurate behaviour <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Approval signals cannot be attached to trajectories</li>
+        <li><span class="sharepage__key">D</span> Approval data violates provider terms</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> This is the sycophancy trap. Users approve answers that agree with them, and a system tuned on approval learns to agree. Approval should be one input balanced against objective correctness measures, never the sole objective.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which property must any adaptation mechanism have to be operable in production?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It must run continuously without human review</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It must be reversible and versioned — you can see what changed, attribute a regression to it, and roll it back <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It must update after every single interaction</li>
+        <li><span class="sharepage__key">D</span> It must be implemented in the same process as the model</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Learned artifacts — prompts, examples, skills, adapters — are deployable code. Versioning, changelogs, and rollback are what let you debug &#39;quality dropped on Tuesday&#39; instead of discovering that the system quietly rewrote itself.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Design a safe self-improvement loop for a support agent that should get better at handling recurring issues over time.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Capture outcomes as structured records: the request, the trajectory, the resolution, and an outcome signal (resolved, escalated, corrected by a human).</li><li>Prefer human-corrected outputs as the highest-quality learning signal, over raw user approval.</li><li>Cheap rung first: retrieve similar past cases as few-shot examples at inference time, which is immediately reversible.</li><li>Mine recurring successful sequences into named skills or tools, reviewed by a human before they become callable.</li><li>Use accumulating data to grow the evaluation set continuously — every failure becomes a permanent test case.</li><li>Gate promotions: any learned artifact (new example set, optimized prompt, new skill) must beat the incumbent on the held-out set before rollout.</li><li>Roll out in stages with monitoring, and keep one-switch rollback with versioned artifacts.</li><li>Guard against degenerate loops: do not train on the agent&#39;s own unverified outputs, and balance approval signals with objective checks.</li><li>Watch for drift in the input distribution and re-validate periodically rather than assuming a past gate still holds.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I would build it as a data loop first and a learning loop second, because without the data nothing else is safe. Every interaction produces a structured record: the request, the retrieved context, the trajectory of tool calls, the answer, and an outcome — resolved, escalated, or corrected by a human agent. Human corrections are the gold signal here; raw thumbs are noisy and biased, and optimizing them produces an agreeable bot rather than a correct one. With that data, I start on the cheapest rung: retrieve similar resolved cases at inference time and include them as examples. This is immediately effective, entirely reversible, and inspectable — if it makes things worse, I stop retrieving. The next rung is procedural: when the traces show the agent rediscovering the same multi-step resolution repeatedly, that sequence gets promoted into a named skill or tool, but only after a human reviews it, because promoting a wrong procedure into a callable capability makes an occasional error into a systematic one. In parallel, the accumulating failures grow the evaluation set — every escalation becomes a permanent test case, which means the bar rises as the system learns. Nothing gets promoted without passing that bar: a new example set, an optimized prompt, or a new skill must beat the incumbent on a held-out slice-by-slice comparison, then roll out to a fraction of traffic with monitoring before going wide, with versioned artifacts and one-switch rollback. The failure modes I would actively guard against are the loops: never train on the agent&#39;s own unverified outputs, since that amplifies its errors; never optimize approval alone; and periodically re-validate, because the ticket mix drifts and a gate passed three months ago says nothing about today&#39;s traffic.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>When is finetuning the right form of adaptation for an agent, and when do the cheaper rungs of the ladder suffice?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Cheaper rungs suffice when the gap is knowledge (retrieval), examples (few-shot from memory), or instruction clarity (prompt optimization).</li><li>Finetuning is warranted when behaviour must change consistently — format, style, domain conventions, refusal policy — and prompting has demonstrably plateaued.</li><li>Finetuning is also warranted for distillation: making a small cheap model reproduce a large model&#39;s behaviour at high volume.</li><li>Costs: dataset curation, training and evaluation infrastructure, hosting, and redoing the work when the base model is superseded.</li><li>Finetuning is less reversible and less inspectable than a prompt or an example set, and it cannot cite what it learned.</li><li>Agent-specific caution: tool-calling behaviour and reasoning quality can regress from a narrow finetune, so evaluation must cover the whole loop, not just the target task.</li><li>A prompting baseline and evaluation set must exist first, both to justify the finetune and to measure it.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The cheap rungs handle most of what people reach for finetuning to fix. If the agent lacks facts, that is retrieval, and finetuning is a worse solution because the facts go stale and cannot be cited. If it handles a case badly that it has seen handled well before, that is memory plus few-shot retrieval. If the instructions are ambiguous, that is prompt work, and it can now be done semi-automatically against an evaluation set. All three are reversible in seconds and inspectable by a human, which matters enormously in production. Finetuning earns its place in two situations. The first is consistent behavioural change: the agent must always use our house format, follow our domain&#39;s conventions, apply our refusal policy, or speak in a specific register — and prompting has demonstrably plateaued below the bar, measured on a real evaluation set rather than by impression. The second is economics: distilling the behaviour of an expensive model into a small one for high-volume traffic, which can cut cost and latency dramatically while holding quality on the narrow task. Against that, the costs are permanent. Dataset curation is the actual work, evaluation must exist either way, you now host and version a model artifact, and when the next base model lands you may repeat the whole exercise. A finetune is also the least inspectable rung: I cannot open it and read what it learned, and I cannot roll it back by deleting a row. There is an agent-specific caution too — narrow finetuning can degrade tool-calling and general reasoning even while improving the target task, so evaluation has to cover the whole agent loop, not the single behaviour I was aiming at. My rule is that a finetune needs a prompting baseline to beat and an evaluation set to prove it, and if either is missing, that is the work to do first.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch09","title":"Learning and Adaptation","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"Which forms of learning does the pattern cover, ordered from cheapest to most permanent?","options":["In-context feedback, memory of past outcomes, prompt/example optimization, learned skills, and weight updates","Only finetuning, since prompts are not learning","Only in-context learning, since weights cannot be changed after deployment","Retrieval and caching"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"What makes storing past outcomes such a high-leverage form of adaptation?","options":["It reduces the model's parameter count","Successful and failed trajectories become retrievable examples — the agent can be shown what worked for a similar case instead of re-deriving it, with no training run","It eliminates the need for tools","It guarantees the same answer every time"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"What is the prerequisite for automatic prompt optimization?","options":["A model that exposes logprobs","A dataset with a metric — an evaluation set that scores candidate prompts, since optimization is search against an objective","Access to the model's training data","A multi-agent architecture"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"What is procedural learning in this context?","options":["Learning by reading documentation at runtime","Adjusting temperature based on task type","Capturing a repeatedly successful sequence of actions as a reusable skill or tool, so future runs call it directly instead of rediscovering it","Storing user preferences in a profile"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"Why must a learned change pass an evaluation gate before promotion?","options":["Because providers require approval for prompt changes","Because a self-modifying system without measurement drifts — changes that help the cases that triggered them can silently regress everything else","Because evaluation reduces token cost","Because gates are needed only for weight updates"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"What is the danger of learning primarily from user approval signals?","options":["Approval signals are too sparse to store","Approval measures satisfaction rather than correctness, so optimizing it produces agreeable, flattering, engagement-seeking behaviour instead of accurate behaviour","Approval signals cannot be attached to trajectories","Approval data violates provider terms"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"Which property must any adaptation mechanism have to be operable in production?","options":["It must run continuously without human review","It must be reversible and versioned — you can see what changed, attribute a regression to it, and roll it back","It must update after every single interaction","It must be implemented in the same process as the model"],"answer":1,"answerLetter":"B"},{"n":8,"type":"open","prompt":"Design a safe self-improvement loop for a support agent that should get better at handling recurring issues over time.","points":["Capture outcomes as structured records: the request, the trajectory, the resolution, and an outcome signal (resolved, escalated, corrected by a human).","Prefer human-corrected outputs as the highest-quality learning signal, over raw user approval.","Cheap rung first: retrieve similar past cases as few-shot examples at inference time, which is immediately reversible.","Mine recurring successful sequences into named skills or tools, reviewed by a human before they become callable.","Use accumulating data to grow the evaluation set continuously — every failure becomes a permanent test case.","Gate promotions: any learned artifact (new example set, optimized prompt, new skill) must beat the incumbent on the held-out set before rollout.","Roll out in stages with monitoring, and keep one-switch rollback with versioned artifacts.","Guard against degenerate loops: do not train on the agent's own unverified outputs, and balance approval signals with objective checks.","Watch for drift in the input distribution and re-validate periodically rather than assuming a past gate still holds."]},{"n":9,"type":"open","prompt":"When is finetuning the right form of adaptation for an agent, and when do the cheaper rungs of the ladder suffice?","points":["Cheaper rungs suffice when the gap is knowledge (retrieval), examples (few-shot from memory), or instruction clarity (prompt optimization).","Finetuning is warranted when behaviour must change consistently — format, style, domain conventions, refusal policy — and prompting has demonstrably plateaued.","Finetuning is also warranted for distillation: making a small cheap model reproduce a large model's behaviour at high volume.","Costs: dataset curation, training and evaluation infrastructure, hosting, and redoing the work when the base model is superseded.","Finetuning is less reversible and less inspectable than a prompt or an example set, and it cannot cite what it learned.","Agent-specific caution: tool-calling behaviour and reasoning quality can regress from a narrow finetune, so evaluation must cover the whole loop, not just the target task.","A prompting baseline and evaluation set must exist first, both to justify the finetune and to measure it."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch09">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+{
+  "id": "ch07",
+  "num": 7,
+  "part": "Part I: Core Execution Patterns",
+  "title": "Multi-Agent Collaboration",
+  "summary": "Several specialized agents, each with its own role, prompt, tools, and context, working on one problem. The pattern buys specialization, separated context, and parallelism; it costs communication overhead, token spend, coordination failures, and a much harder debugging story. Choosing the topology — pipeline, manager/worker, group discussion, or handoff — is the main design decision.",
+  "keyTakeaways": [
+    "The unit of value is separation: each agent gets a focused role, its own instructions, its own tools, and its own context, instead of one agent juggling everything.",
+    "Topologies differ in control flow: sequential pipeline (each agent's output feeds the next), hierarchical manager/worker (a coordinator delegates and integrates), group discussion or debate (agents critique each other), and handoff (whoever is best suited takes over the conversation).",
+    "Communication is the cost centre: every message between agents is tokens, latency, and a chance to lose or distort information, so protocols should be explicit and messages structured.",
+    "Multi-agent systems fail in ways single agents do not — agents duplicating work, deferring to each other indefinitely, converging prematurely on a wrong answer, or looping without termination.",
+    "Start with one agent and good tools; add agents when a specific limitation demands it (conflicting instructions, context pressure, genuinely parallel work, or different permission boundaries).",
+    "Every collaboration needs a termination condition and a designated owner of the final answer, or the system talks until it hits a budget.",
+    "Separate permissions per agent — the researcher reads, only the executor writes — makes the topology a security boundary as well as an organizational one."
+  ],
+  "questions": [
+    {
+      "q": "What is the primary justification for splitting work across multiple agents rather than using one agent with many tools?",
+      "options": [
+        "Multiple agents always produce better answers",
+        "Specialization and context separation — each agent gets focused instructions, a small tool set, and its own context, avoiding one overloaded prompt with conflicting objectives",
+        "Multiple agents reduce total token cost",
+        "Providers rate-limit single agents more aggressively"
+      ],
+      "answer": 1,
+      "explain": "One agent with twenty tools and five competing objectives degrades on all of them. Splitting gives each role a manageable prompt and tool set — the same argument as routing and chaining, applied to autonomous units."
+    },
+    {
+      "q": "Which description matches the hierarchical (manager/worker) topology?",
+      "options": [
+        "Agents each take a turn in a fixed order, passing output forward",
+        "A coordinator decomposes the task, delegates subtasks to specialist agents, and integrates their results",
+        "All agents see all messages and respond when relevant",
+        "The conversation is transferred to whichever agent is best suited and stays there"
+      ],
+      "answer": 1,
+      "explain": "The manager owns decomposition and integration, workers own execution. It maps cleanly onto planning and gives one place to enforce budgets and quality, at the cost of the manager being a bottleneck and a single point of misjudgment."
+    },
+    {
+      "q": "What is the characteristic risk of a group-discussion or debate topology?",
+      "options": [
+        "Agents cannot use tools in a discussion",
+        "Discussions cannot be logged",
+        "The transcript grows with every turn, costs scale superlinearly, and agents may converge on a confident consensus that is wrong, or fail to converge at all",
+        "Only two agents can participate"
+      ],
+      "answer": 2,
+      "explain": "Everyone reading everyone means context and cost balloon. Debate can surface errors a single agent would miss, but agreement is not correctness — models influence each other, and a wrong early claim can be adopted by the group."
+    },
+    {
+      "q": "Why should inter-agent messages be structured rather than free-form chat?",
+      "options": [
+        "Because free-form text cannot be sent between processes",
+        "Because structured messages make the contract explicit and validatable, prevent quiet information loss between roles, and let the orchestrator route and log reliably",
+        "Because structured messages are cheaper per token in all cases",
+        "Because models cannot read prose written by other models"
+      ],
+      "answer": 1,
+      "explain": "The seams between agents are where multi-agent systems break, exactly as in prompt chaining. A schema for a handoff — task, inputs, constraints, expected output — makes the seam testable instead of relying on one agent's prose being interpreted correctly by another."
+    },
+    {
+      "q": "Which failure mode is specific to multi-agent systems?",
+      "options": [
+        "Hallucination",
+        "Context-window overflow",
+        "Agents duplicating each other's work, deferring responsibility back and forth, or looping without a termination condition",
+        "Tokenizer mismatch"
+      ],
+      "answer": 2,
+      "explain": "Coordination failures are the new category. Without clear ownership, termination rules, and a designated producer of the final answer, agents can politely hand a task around, redo each other's work, or continue conversing until a budget stops them."
+    },
+    {
+      "q": "What does the book recommend as the starting point before adopting a multi-agent architecture?",
+      "options": [
+        "A single agent with a well-designed tool set, escalating to multiple agents only when a concrete limitation forces it",
+        "A minimum of three agents to ensure debate",
+        "One agent per tool",
+        "A hierarchical topology by default"
+      ],
+      "answer": 0,
+      "explain": "Multi-agent designs multiply cost, latency, and failure surface. The upgrade should be triggered by something specific — irreconcilable instructions, context pressure, genuinely parallel workstreams, or the need for different permission scopes — not by the architecture being fashionable."
+    },
+    {
+      "q": "How can a multi-agent topology serve as a security boundary?",
+      "options": [
+        "By encrypting messages between agents",
+        "By running each agent on a different provider",
+        "By giving each agent only the credentials and tools its role requires — so the agent that reads untrusted content has no write access, and the agent that can write never ingests untrusted input directly",
+        "By hiding the system prompt from all but one agent"
+      ],
+      "answer": 2,
+      "explain": "Separating the role that consumes untrusted data from the role that can act is a real mitigation for prompt injection: an injected instruction reaching the researcher cannot execute a payment, because the researcher has no payment tool."
+    },
+    {
+      "type": "open",
+      "prompt": "You are asked to build a multi-agent system for producing market research reports. Choose a topology, define the roles, and describe how you would keep it from becoming an expensive chat room.",
+      "points": [
+        "Define roles by distinct skill, tools, or permissions — for example researcher (search and retrieval), analyst (synthesis and numbers), critic (verification against sources), and editor (final artifact).",
+        "Pick a topology that fits the flow: a manager coordinating a mostly pipeline-shaped process, with parallel researchers where sub-questions are independent.",
+        "Use structured handoffs — a defined schema for the research brief, the findings, the critique, and the final draft — rather than free-form conversation.",
+        "Parallelize independent research and keep discussion narrow: only the critic and analyst exchange messages, and only about specific claims.",
+        "Set explicit termination: a maximum number of critique rounds, a definition of done, and a designated owner of the final artifact.",
+        "Budget per agent and overall: token, step, and wall-clock ceilings, with escalation instead of silent continuation.",
+        "Preserve provenance: findings carry sources so the critic can verify and the report can cite.",
+        "Instrument the trace and evaluate per role, since aggregate output quality hides which role is failing.",
+        "Consider whether a single agent with the same tools would do — and justify the split by a concrete limitation."
+      ],
+      "answer": "I would define roles by what genuinely differs — tools, permissions, and skill — rather than by job titles that sound organizational. A researcher role that can search and retrieve, several instances of it running in parallel over independent sub-questions; an analyst that synthesizes findings and does the numeric work through deterministic tools; a critic whose only job is verifying claims against the cited sources; and an editor that owns the final artifact. The topology is a manager coordinating a mostly linear pipeline, with a fan-out at the research stage, because that is what the work actually looks like: research is parallel, synthesis is not. What keeps it from becoming a chat room is that agents do not converse freely. Every handoff has a schema — the brief that goes to researchers, the finding record with claim, evidence, and source, the critique with claim id and verdict, the draft. Discussion is scoped: the critic talks to the analyst about specific claim ids, not about the report in general, and the exchange is capped at a fixed number of rounds. There is one owner of the final answer, so nobody has to negotiate who finishes. Budgets are explicit at both levels: per-agent token and step ceilings, plus an overall wall-clock and cost ceiling, and hitting one escalates to a human rather than triggering another round. Provenance runs through everything — a finding without a source is not a finding — which is what makes the critic's job mechanical rather than another opinion. For observability I keep the full trace and evaluate each role separately, because 'the report was mediocre' does not tell me whether the research missed sources or the analyst misread them. And before building any of it I would check the honest question: would one agent with the same tools and a good plan produce this report? If yes, I build that, and split only when I can name the limitation — here it is genuine parallelism in research and a permission boundary around who is allowed to publish.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "A team reports that their five-agent system is slower, more expensive, and less accurate than the single agent it replaced. What would you investigate?",
+      "points": [
+        "Check whether the split was justified by a real limitation or was structural mimicry of a human org chart.",
+        "Look for communication overhead: how many messages, how much of each agent's context is other agents' chatter, and whether whole transcripts are being passed around.",
+        "Look for duplicated work and re-derivation of the same facts by multiple agents.",
+        "Check information loss at handoffs — unstructured prose summaries dropping details the next agent needed.",
+        "Check for error propagation and for consensus effects where agents adopt an early wrong claim.",
+        "Check termination and loop behaviour: rounds of discussion that add cost without changing the answer.",
+        "Check whether roles have the right tools and context; a specialist starved of context performs worse than the generalist did.",
+        "Measure per-role quality and per-role cost to find where the loss is, rather than comparing only end to end.",
+        "Consider collapsing back: keep the parallel research fan-out, drop the ceremonial roles, and re-measure."
+      ],
+      "answer": "My first question would be why it was split, because the most common cause of this exact outcome is a topology copied from a human org chart rather than derived from a limitation. Five agents that all call the same model with the same tools are five copies of one agent plus a messaging bill. Then I would look at the traces for the three usual culprits. Communication overhead: how many inter-agent messages there are, how much of each agent's context is other agents' conversation rather than task content, and whether entire transcripts are being forwarded when a structured summary would do. Duplication: multiple agents independently searching for and re-deriving the same facts, which is pure waste and also a source of inconsistency when they get slightly different answers. And information loss at the seams: a prose handoff that drops the constraint the next agent needed, which is why accuracy can drop below the single-agent baseline even when every individual agent performs well. After that I would look at dynamics. Are there discussion rounds that cost money and never change the answer? Does an early wrong claim get adopted by everyone downstream, so the system is confidently wrong in a way the single agent was not? Does the loop have a real termination condition, or does it run until a budget stops it? Then I would measure per role rather than end to end — quality and cost for each agent's output against its own inputs — because that localizes the loss. Usually the fix is not better prompts, it is collapsing the topology: keep the one place where the split earns its keep, typically a parallel fan-out over independent subtasks or a permission boundary, and fold the ceremonial roles back into a single agent. Then re-measure the same evaluation set for quality, cost, and p95 latency together."
+    }
+  ]
+}

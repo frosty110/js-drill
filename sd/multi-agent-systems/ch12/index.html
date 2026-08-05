@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deploying Multi-Agent Systems — Designing Multi-Agent Systems</title>
+<meta name="description" content="Running agents as real infrastructure. An agent run is long-lived, stateful, expensive, and dependent on third-party services with their own rate limits and outages — which makes deployment closer to job orchestration than to serving a stateless API. Covers execution model, durability, concurrency and rate limits, secrets and isolation, cost controls, observability, and safe rollout.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Deploying Multi-Agent Systems — Designing Multi-Agent Systems">
+<meta property="og:description" content="Running agents as real infrastructure. An agent run is long-lived, stateful, expensive, and dependent on third-party services with their own rate limits and outages — which makes deployment closer to job orchestration than to serving a stateless API. Covers execution model, durability, concurrency and rate limits, secrets and isolation, cost controls, observability, and safe rollout.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Deploying Multi-Agent Systems","description":"Running agents as real infrastructure. An agent run is long-lived, stateful, expensive, and dependent on third-party services with their own rate limits and outages — which makes deployment closer to job orchestration than to serving a stateless API. Covers execution model, durability, concurrency and rate limits, secrets and isolation, cost controls, observability, and safe rollout.","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Designing Multi-Agent Systems","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/"},"teaches":["Model agent runs as durable jobs rather than HTTP requests: a queue, workers, persisted state, and status — so a deploy or a crash does not lose work.","Statefulness is the defining deployment property; checkpointing after each step is what makes retries safe and resumption possible.","Concurrency must be bounded by provider rate limits and by cost, not just by CPU — an agent fleet can exhaust a token quota in minutes.","Isolation matters per tenant and per run: credentials scoped to the task, sandboxed execution for code and browsing, and no shared mutable state between runs.","Cost controls belong in the platform — per-run, per-user, and global budgets with enforcement, since a runaway loop is a spend incident, not just a bug.","Observability means traces first: every step, prompt, tool call, token count, and timing under one run id, retained long enough to debug and audit."],"hasPart":[{"@type":"Question","position":1,"name":"Why should agent runs be modelled as durable jobs rather than HTTP requests?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q1","acceptedAnswer":{"@type":"Answer","text":"Because runs are long-lived and stateful — a queue with workers and persisted state means a deploy, crash, or disconnect does not lose the work"}},{"@type":"Question","position":2,"name":"What makes checkpointing essential in production agent deployments?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q2","acceptedAnswer":{"@type":"Answer","text":"It lets a run resume from the last completed step so retries and restarts do not repeat work or duplicate side effects"}},{"@type":"Question","position":3,"name":"What should bound concurrency for an agent fleet?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q3","acceptedAnswer":{"@type":"Answer","text":"Provider rate limits and token quotas, plus cost budgets — an agent fleet can exhaust a quota or a budget long before it saturates hardware"}},{"@type":"Question","position":4,"name":"Which isolation properties matter for multi-tenant agent platforms?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q4","acceptedAnswer":{"@type":"Answer","text":"Credentials scoped per task and tenant, sandboxed execution for code and browsing, and no shared mutable state or caches between runs of different users"}},{"@type":"Question","position":5,"name":"Why do cost controls belong in the platform rather than in each application?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q5","acceptedAnswer":{"@type":"Answer","text":"Because a runaway agent is a spend incident that needs enforcement — per-run, per-user, and global budgets with hard stops — not a per-team convention"}},{"@type":"Question","position":6,"name":"What is the primary observability artifact for a deployed agent system?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q6","acceptedAnswer":{"@type":"Answer","text":"Traces — every step, prompt, tool call with arguments, result, token count, and timing, correlated under one run id"}},{"@type":"Question","position":7,"name":"Which practices address third-party dependency risk?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q7","acceptedAnswer":{"@type":"Answer","text":"Circuit breakers, fallbacks across providers or models, pinned model versions where available, and monitoring for silent behaviour changes"}},{"@type":"Question","position":8,"name":"How should a change to an agent system be rolled out?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q8","acceptedAnswer":{"@type":"Answer","text":"Like a model change — shadow traffic or staged exposure with live comparison against the incumbent, and instant rollback"}},{"@type":"Question","position":9,"name":"Design the deployment architecture for a platform that runs customer-facing agent tasks lasting up to ten minutes.","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q9","acceptedAnswer":{"@type":"Answer","text":"I would build it as a job platform rather than a request service. An API accepts a task, validates and enqueues it, and returns a run id immediately; workers pull from the queue and execute the agent loop against durable state, appending to a sequenced event log that serves streaming, replay, and tracing. Each step checkpoints, so a worker dying mid-run means another picks it up rather than the customer losing ten minutes of work, and every external write is idempotent because retries and resumptions are routine rather than exceptional. Concurrency is governed by the constraints that actually bind: provider requests and tokens per minute, plus cost. That means a scheduler with queueing, backpressure, and fairness across tenants so one customer's heavy batch cannot starve everyone else. On "}},{"@type":"Question","position":10,"name":"What breaks when a team deploys an agent system the way they would deploy a stateless web service?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch12/#q10","acceptedAnswer":{"@type":"Answer","text":"The mismatch shows up on the first deploy: workers are killed mid-run, and because there is no persisted state, ten minutes of work vanishes — sometimes after the agent has already sent an email or written a record, so the customer is left with a half-completed action and no way to resume. The same fragility appears on any crash, timeout, or rate-limit error: without checkpointing, recovery means starting over, paying the full cost again, and risking duplicate side effects on non-idempotent writes. Scaling misbehaves next. Autoscaling on CPU tells you nothing about agent load, since the workers are almost entirely waiting on external APIs; the real limits are requests and tokens per minute at the provider. So the fleet scales up under a burst, hits the provider's quota, and each worker beg"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/multi-agent-systems/">Designing Multi-Agent Systems</a></p>
+    <h1>Deploying Multi-Agent Systems</h1>
+    <p class="sharepage__lede">Running agents as real infrastructure. An agent run is long-lived, stateful, expensive, and dependent on third-party services with their own rate limits and outages — which makes deployment closer to job orchestration than to serving a stateless API. Covers execution model, durability, concurrency and rate limits, secrets and isolation, cost controls, observability, and safe rollout.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Multi-Agent Systems</span> <span class="ds-chip">10 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Model agent runs as durable jobs rather than HTTP requests: a queue, workers, persisted state, and status — so a deploy or a crash does not lose work.</li><li>Statefulness is the defining deployment property; checkpointing after each step is what makes retries safe and resumption possible.</li><li>Concurrency must be bounded by provider rate limits and by cost, not just by CPU — an agent fleet can exhaust a token quota in minutes.</li><li>Isolation matters per tenant and per run: credentials scoped to the task, sandboxed execution for code and browsing, and no shared mutable state between runs.</li><li>Cost controls belong in the platform — per-run, per-user, and global budgets with enforcement, since a runaway loop is a spend incident, not just a bug.</li><li>Observability means traces first: every step, prompt, tool call, token count, and timing under one run id, retained long enough to debug and audit.</li><li>Third-party dependencies fail and change: circuit breakers, fallbacks across providers, and pinned model versions where available are basic hygiene.</li><li>Roll out like a model change, not a code change — shadow traffic, staged exposure, and comparison against the incumbent on live data, with instant rollback.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">10</span></h2>
+    <p class="sharepage__note">Positions 1–10 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should agent runs be modelled as durable jobs rather than HTTP requests?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because HTTP cannot carry model responses</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because runs are long-lived and stateful — a queue with workers and persisted state means a deploy, crash, or disconnect does not lose the work <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because queues are cheaper than web servers</li>
+        <li><span class="sharepage__key">D</span> Because providers require asynchronous calls</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A request-scoped run dies with its process and cannot be resumed, monitored, or picked up by another worker. Treating it as a job makes restarts, retries, and status queries ordinary rather than exceptional.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What makes checkpointing essential in production agent deployments?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It reduces token usage</li>
+        <li><span class="sharepage__key">B</span> It guarantees deterministic outputs</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It lets a run resume from the last completed step so retries and restarts do not repeat work or duplicate side effects <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It is required for streaming</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Long runs get interrupted by deploys, timeouts, and rate limits. Without step-level state, recovery means starting over — which is expensive and, if earlier steps sent emails or wrote records, actively harmful.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What should bound concurrency for an agent fleet?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> CPU and memory only</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Provider rate limits and token quotas, plus cost budgets — an agent fleet can exhaust a quota or a budget long before it saturates hardware <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The number of available workers</li>
+        <li><span class="sharepage__key">D</span> Network bandwidth</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Agents are I/O-bound on external APIs, so the binding constraints are requests per minute, tokens per minute, and money. Concurrency limits and queueing must be expressed in those terms.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which isolation properties matter for multi-tenant agent platforms?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Only network isolation between workers</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Credentials scoped per task and tenant, sandboxed execution for code and browsing, and no shared mutable state or caches between runs of different users <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Separate model providers per tenant</li>
+        <li><span class="sharepage__key">D</span> Isolation is unnecessary if authentication is enforced at the API</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The classic leak is a shared cache or memory store keyed without the tenant, so one user&#39;s retrieved content serves another. Scoped credentials and sandboxes bound what a compromised or misbehaving run can reach.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do cost controls belong in the platform rather than in each application?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because providers require centralized billing</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a runaway agent is a spend incident that needs enforcement — per-run, per-user, and global budgets with hard stops — not a per-team convention <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because centralized controls are cheaper to implement</li>
+        <li><span class="sharepage__key">D</span> Because applications cannot measure their own cost</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Unbounded loops and retry storms are normal failure modes, and their cost is unbounded by default. Enforced budgets with kill behaviour convert an unbounded incident into a capped one.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the primary observability artifact for a deployed agent system?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Aggregate latency dashboards</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Traces — every step, prompt, tool call with arguments, result, token count, and timing, correlated under one run id <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Error logs from failed runs</li>
+        <li><span class="sharepage__key">D</span> The model provider&#39;s usage report</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Behaviour is emergent and varies per run, so aggregates cannot explain a bad outcome. Only a full trace reconstructs what happened, and it doubles as the audit record for consequential actions.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which practices address third-party dependency risk?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Circuit breakers, fallbacks across providers or models, pinned model versions where available, and monitoring for silent behaviour changes <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Increasing retry counts</li>
+        <li><span class="sharepage__key">C</span> Caching all provider responses indefinitely</li>
+        <li><span class="sharepage__key">D</span> Running all agents on a single provider for consistency</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Providers have outages, rate limits, deprecations, and silent updates. Failing fast when one is down, having a defined fallback, and detecting behaviour drift are what keep an agent platform operable.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How should a change to an agent system be rolled out?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Like a model change — shadow traffic or staged exposure with live comparison against the incumbent, and instant rollback <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> As a standard code deploy, since the code is what changed</li>
+        <li><span class="sharepage__key">C</span> Only during scheduled maintenance windows</li>
+        <li><span class="sharepage__key">D</span> All at once, to avoid inconsistent behaviour between users</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Prompt, tool, and model changes alter behaviour in ways unit tests do not catch. Staged rollout with a live comparison is how quality regressions are caught by measurement rather than by user complaints.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Design the deployment architecture for a platform that runs customer-facing agent tasks lasting up to ten minutes.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Runs as durable jobs: an API that enqueues, workers that execute, persisted run state and status, and an event log for streaming and replay.</li><li>Checkpoint after each step; make external writes idempotent so retries and resumptions are safe.</li><li>Concurrency limited by provider rate and token limits, with queueing, backpressure, and fair scheduling across tenants.</li><li>Per-run, per-tenant, and global cost budgets enforced in the platform, with hard stops and alerting.</li><li>Isolation: per-tenant credential scoping, sandboxed execution for code or browsing, and cache keys that include tenant and permission scope.</li><li>Secrets managed centrally, injected per run, never in prompts or logs.</li><li>Tracing under a run id, with retention that supports debugging and audit, plus metrics for step counts, tool errors, cost, and latency percentiles.</li><li>Resilience: circuit breakers per dependency, fallbacks across models or providers, timeouts at every layer, and cancellation propagation.</li><li>Deploy safely: workers drain rather than kill in-flight runs, state schema versioned, and staged rollout with live comparison and rollback.</li><li>Human-in-the-loop support: runs that pause for approval must persist and resume, with timeouts and escalation.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I would build it as a job platform rather than a request service. An API accepts a task, validates and enqueues it, and returns a run id immediately; workers pull from the queue and execute the agent loop against durable state, appending to a sequenced event log that serves streaming, replay, and tracing. Each step checkpoints, so a worker dying mid-run means another picks it up rather than the customer losing ten minutes of work, and every external write is idempotent because retries and resumptions are routine rather than exceptional. Concurrency is governed by the constraints that actually bind: provider requests and tokens per minute, plus cost. That means a scheduler with queueing, backpressure, and fairness across tenants so one customer&#39;s heavy batch cannot starve everyone else. On top of it, budgets are enforced by the platform at three levels — per run, per tenant, and global — with hard stops, because a looping agent is a spend incident and no application-level convention prevents it reliably. Isolation is per tenant and per run: credentials scoped to the specific task and injected at execution rather than living in prompts, sandboxed environments for any code execution or browsing, and every cache keyed by tenant and permission scope so a shared cache cannot leak one customer&#39;s data to another. Observability is trace-first: every step, prompt, tool call with arguments, result, token count, and timing under the run id, retained long enough to debug and to serve as an audit record for consequential actions, with metrics on step-count and cost distributions, tool error rates, and latency percentiles. For resilience, each external dependency gets a timeout and a circuit breaker, with defined fallbacks across models or providers, and cancellation propagates from the API through the worker into in-flight model and tool calls. Deploys drain rather than kill workers so in-flight runs finish or checkpoint cleanly, and the run-state schema is versioned so a rollback does not orphan runs. Finally, because these are customer-facing, runs that pause for human approval must persist across that wait with a timeout and escalation policy, and every behaviour change ships staged with live comparison against the incumbent and a one-switch rollback.</div>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>What breaks when a team deploys an agent system the way they would deploy a stateless web service?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>In-flight runs are killed on deploy, losing minutes of work and leaving partial side effects.</li><li>No resumption: a failure means restarting from scratch, repeating cost and potentially duplicating writes.</li><li>Autoscaling on CPU misreads the load, since agents are I/O-bound on external APIs and the real limits are rate and token quotas.</li><li>Provider rate limits are hit under bursty load, producing cascading retries and long tail latency.</li><li>No cost enforcement, so a runaway loop or a bug generates an unbounded bill.</li><li>Request-scoped timeouts cut off legitimate long runs.</li><li>Logs without traces make emergent behaviour impossible to debug.</li><li>Shared caches and connection reuse leak state between tenants.</li><li>Standard rollout practice misses behaviour regressions that only measurement against live traffic catches.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The mismatch shows up on the first deploy: workers are killed mid-run, and because there is no persisted state, ten minutes of work vanishes — sometimes after the agent has already sent an email or written a record, so the customer is left with a half-completed action and no way to resume. The same fragility appears on any crash, timeout, or rate-limit error: without checkpointing, recovery means starting over, paying the full cost again, and risking duplicate side effects on non-idempotent writes. Scaling misbehaves next. Autoscaling on CPU tells you nothing about agent load, since the workers are almost entirely waiting on external APIs; the real limits are requests and tokens per minute at the provider. So the fleet scales up under a burst, hits the provider&#39;s quota, and each worker begins retrying, which converts a capacity problem into a cascading one with terrible tail latency. Cost is the next surprise, because a stateless service has roughly fixed per-request cost and an agent does not. Without platform-enforced per-run and global budgets, one looping bug produces an unbounded bill that nobody notices until the invoice. Meanwhile request-scoped timeouts — a load balancer&#39;s sixty seconds, a gateway&#39;s thirty — silently cut off legitimate long runs, and the client sees a failure while the work may still be running server-side. Then debugging: with request logs but no run-correlated traces, emergent multi-step behaviour is unreconstructible, so incidents become archaeology. Multi-tenancy leaks appear through the conveniences a stateless service takes for granted — shared caches and reused clients keyed without a tenant, so one user&#39;s retrieved content is served to another. And finally rollout: shipping a prompt or model change like a code change skips the measurement that would have caught the behaviour regression, because unit tests pass and the quality drop is only visible against live traffic.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"multi-agent-systems","unit":"ch12","title":"Deploying Multi-Agent Systems","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"Why should agent runs be modelled as durable jobs rather than HTTP requests?","options":["Because HTTP cannot carry model responses","Because runs are long-lived and stateful — a queue with workers and persisted state means a deploy, crash, or disconnect does not lose the work","Because queues are cheaper than web servers","Because providers require asynchronous calls"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"What makes checkpointing essential in production agent deployments?","options":["It reduces token usage","It guarantees deterministic outputs","It lets a run resume from the last completed step so retries and restarts do not repeat work or duplicate side effects","It is required for streaming"],"answer":2,"answerLetter":"C"},{"n":3,"type":"mc","prompt":"What should bound concurrency for an agent fleet?","options":["CPU and memory only","Provider rate limits and token quotas, plus cost budgets — an agent fleet can exhaust a quota or a budget long before it saturates hardware","The number of available workers","Network bandwidth"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"Which isolation properties matter for multi-tenant agent platforms?","options":["Only network isolation between workers","Credentials scoped per task and tenant, sandboxed execution for code and browsing, and no shared mutable state or caches between runs of different users","Separate model providers per tenant","Isolation is unnecessary if authentication is enforced at the API"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"Why do cost controls belong in the platform rather than in each application?","options":["Because providers require centralized billing","Because a runaway agent is a spend incident that needs enforcement — per-run, per-user, and global budgets with hard stops — not a per-team convention","Because centralized controls are cheaper to implement","Because applications cannot measure their own cost"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"What is the primary observability artifact for a deployed agent system?","options":["Aggregate latency dashboards","Traces — every step, prompt, tool call with arguments, result, token count, and timing, correlated under one run id","Error logs from failed runs","The model provider's usage report"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"Which practices address third-party dependency risk?","options":["Circuit breakers, fallbacks across providers or models, pinned model versions where available, and monitoring for silent behaviour changes","Increasing retry counts","Caching all provider responses indefinitely","Running all agents on a single provider for consistency"],"answer":0,"answerLetter":"A"},{"n":8,"type":"mc","prompt":"How should a change to an agent system be rolled out?","options":["Like a model change — shadow traffic or staged exposure with live comparison against the incumbent, and instant rollback","As a standard code deploy, since the code is what changed","Only during scheduled maintenance windows","All at once, to avoid inconsistent behaviour between users"],"answer":0,"answerLetter":"A"},{"n":9,"type":"open","prompt":"Design the deployment architecture for a platform that runs customer-facing agent tasks lasting up to ten minutes.","points":["Runs as durable jobs: an API that enqueues, workers that execute, persisted run state and status, and an event log for streaming and replay.","Checkpoint after each step; make external writes idempotent so retries and resumptions are safe.","Concurrency limited by provider rate and token limits, with queueing, backpressure, and fair scheduling across tenants.","Per-run, per-tenant, and global cost budgets enforced in the platform, with hard stops and alerting.","Isolation: per-tenant credential scoping, sandboxed execution for code or browsing, and cache keys that include tenant and permission scope.","Secrets managed centrally, injected per run, never in prompts or logs.","Tracing under a run id, with retention that supports debugging and audit, plus metrics for step counts, tool errors, cost, and latency percentiles.","Resilience: circuit breakers per dependency, fallbacks across models or providers, timeouts at every layer, and cancellation propagation.","Deploy safely: workers drain rather than kill in-flight runs, state schema versioned, and staged rollout with live comparison and rollback.","Human-in-the-loop support: runs that pause for approval must persist and resume, with timeouts and escalation."]},{"n":10,"type":"open","prompt":"What breaks when a team deploys an agent system the way they would deploy a stateless web service?","points":["In-flight runs are killed on deploy, losing minutes of work and leaving partial side effects.","No resumption: a failure means restarting from scratch, repeating cost and potentially duplicating writes.","Autoscaling on CPU misreads the load, since agents are I/O-bound on external APIs and the real limits are rate and token quotas.","Provider rate limits are hit under bursty load, producing cascading retries and long tail latency.","No cost enforcement, so a runaway loop or a bug generates an unbounded bill.","Request-scoped timeouts cut off legitimate long runs.","Logs without traces make emergent behaviour impossible to debug.","Shared caches and connection reuse leak state between tenants.","Standard rollout practice misses behaviour regressions that only measurement against live traffic catches."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/multi-agent-systems/ch12">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

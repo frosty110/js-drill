@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parallelization — Agentic Design Patterns</title>
+<meta name="description" content="Run independent work concurrently instead of in sequence — fan out, then fan in. Two shapes dominate: sectioning, where a task is split into genuinely different subtasks that run at the same time, and voting, where the same task runs several times and the results are aggregated. Parallelization buys wall-clock latency and diversity of perspective; it costs tokens, an aggregation step, and a harder failure story.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Parallelization — Agentic Design Patterns">
+<meta property="og:description" content="Run independent work concurrently instead of in sequence — fan out, then fan in. Two shapes dominate: sectioning, where a task is split into genuinely different subtasks that run at the same time, and voting, where the same task runs several times and the results are aggregated. Parallelization buys wall-clock latency and diversity of perspective; it costs tokens, an aggregation step, and a harder failure story.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Parallelization","description":"Run independent work concurrently instead of in sequence — fan out, then fan in. Two shapes dominate: sectioning, where a task is split into genuinely different subtasks that run at the same time, and voting, where the same task runs several times and the results are aggregated. Parallelization buys wall-clock latency and diversity of perspective; it costs tokens, an aggregation step, and a harder failure story.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["Parallelization applies only to independent work — if step two needs step one's output, the dependency is real and no amount of concurrency removes it.","Sectioning splits a task into different subtasks run concurrently (summarize each document, check each rule); voting runs the same task multiple times and aggregates (self-consistency, majority vote, multi-perspective review).","The fan-in step is where the design lives: aggregation must define how conflicts are resolved, what happens when branches disagree, and how partial results are handled.","Wall-clock latency improves; total token cost usually rises, since you pay for every branch — so parallelization is a latency-for-money trade, not a free win.","Partial failure is the norm at scale: the pattern needs timeouts, per-branch error handling, and a decision about whether a missing branch degrades the result or fails it.","Provider rate limits and concurrency caps make unbounded fan-out fragile; bounded concurrency with queuing is the production form of the pattern."],"hasPart":[{"@type":"Question","position":1,"name":"What is the prerequisite for applying the parallelization pattern?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q1","acceptedAnswer":{"@type":"Answer","text":"The subtasks must be independent — none of them needs another's output"}},{"@type":"Question","position":2,"name":"How do sectioning and voting differ as forms of parallelization?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q2","acceptedAnswer":{"@type":"Answer","text":"Sectioning splits one task into different subtasks that run concurrently; voting runs the same task several times and aggregates the results"}},{"@type":"Question","position":3,"name":"Why is the aggregation (fan-in) step the hard part of the pattern?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q3","acceptedAnswer":{"@type":"Answer","text":"Because it must reconcile results that may overlap, conflict, or be missing — the policy for disagreement and partial results is a design decision, not a detail"}},{"@type":"Question","position":4,"name":"What is the cost profile of parallelization?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q4","acceptedAnswer":{"@type":"Answer","text":"It reduces wall-clock latency but usually increases total tokens and spend, since every branch is paid for"}},{"@type":"Question","position":5,"name":"Which failure consideration is specific to parallel fan-out at production scale?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q5","acceptedAnswer":{"@type":"Answer","text":"Partial failure and rate limiting — some branches time out or get throttled, so the system needs bounded concurrency, per-branch timeouts, and a policy for degraded results"}},{"@type":"Question","position":6,"name":"How does self-consistency use the voting form of parallelization?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q6","acceptedAnswer":{"@type":"Answer","text":"It runs the same reasoning task several times with sampling and takes the most common answer, on the theory that correct reasoning paths converge while errors scatter"}},{"@type":"Question","position":7,"name":"When is a diverse-perspective fan-out (several branches with different instructions) preferable to running the same prompt several times?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q7","acceptedAnswer":{"@type":"Answer","text":"When the goal is coverage of different failure modes — a security lens, a performance lens, a correctness lens each find things the others miss"}},{"@type":"Question","position":8,"name":"You must review a 200-page document for compliance issues within a tight latency budget. Design a parallelized approach and describe the aggregation.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q8","acceptedAnswer":{"@type":"Answer","text":"This is a sectioning problem with a two-stage cost structure. I split the document along its own structure — sections and clauses, not arbitrary token windows — because a compliance finding cited to 'chunk 47' is useless, and a clause split across a boundary produces both false negatives and false positives. Each chunk keeps its identifier and character span. The fan-out runs with bounded concurrency, sized to the provider's limits rather than the number of chunks, with a per-branch timeout so one slow call cannot own the response's latency. Each branch returns structured findings rather than prose: rule id, severity, the evidence span, and a confidence. That structure is what makes the fan-in mechanical instead of another act of interpretation. Aggregation then deduplicates findings that "}},{"@type":"Question","position":9,"name":"Explain the tradeoffs of running the same query five times and voting, versus running it once with a stronger model.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch03/#q9","acceptedAnswer":{"@type":"Answer","text":"Voting buys reliability from redundancy. If the task has a comparable answer — a classification, a number, a yes/no decision — sampling several times and taking the majority genuinely raises accuracy, because incorrect reasoning paths tend to diverge from one another while correct ones converge. Latency stays close to a single call if the samples truly run in parallel, which is why it is attractive for user-facing paths. The costs are the obvious one and a subtle one. The obvious one is that you pay five times. The subtle one is correlated error: five samples from the same model with the same prompt are not five independent opinions. When the model misunderstands the question, it misunderstands it consistently, and the majority is then confidently wrong — with the added harm that agreement"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Parallelization</h1>
+    <p class="sharepage__lede">Run independent work concurrently instead of in sequence — fan out, then fan in. Two shapes dominate: sectioning, where a task is split into genuinely different subtasks that run at the same time, and voting, where the same task runs several times and the results are aggregated. Parallelization buys wall-clock latency and diversity of perspective; it costs tokens, an aggregation step, and a harder failure story.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>Parallelization applies only to independent work — if step two needs step one&#39;s output, the dependency is real and no amount of concurrency removes it.</li><li>Sectioning splits a task into different subtasks run concurrently (summarize each document, check each rule); voting runs the same task multiple times and aggregates (self-consistency, majority vote, multi-perspective review).</li><li>The fan-in step is where the design lives: aggregation must define how conflicts are resolved, what happens when branches disagree, and how partial results are handled.</li><li>Wall-clock latency improves; total token cost usually rises, since you pay for every branch — so parallelization is a latency-for-money trade, not a free win.</li><li>Partial failure is the norm at scale: the pattern needs timeouts, per-branch error handling, and a decision about whether a missing branch degrades the result or fails it.</li><li>Provider rate limits and concurrency caps make unbounded fan-out fragile; bounded concurrency with queuing is the production form of the pattern.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the prerequisite for applying the parallelization pattern?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> The subtasks must be independent — none of them needs another&#39;s output <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> All subtasks must use the same model</li>
+        <li><span class="sharepage__key">C</span> The task must involve at least three model calls</li>
+        <li><span class="sharepage__key">D</span> The system must run on multiple GPUs</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Independence is the whole basis of the pattern. Where a genuine dependency exists, the work is a chain; trying to parallelize it just means one branch guesses at what the other would have produced.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How do sectioning and voting differ as forms of parallelization?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Sectioning uses cheap models and voting uses expensive ones</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Sectioning splits one task into different subtasks that run concurrently; voting runs the same task several times and aggregates the results <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Sectioning is synchronous and voting is asynchronous</li>
+        <li><span class="sharepage__key">D</span> Sectioning applies to text and voting to images</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sectioning attacks scope — each branch handles a different piece. Voting attacks uncertainty — several attempts at the same piece, combined by majority, by a judge, or by taking the union of findings.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is the aggregation (fan-in) step the hard part of the pattern?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because it must run on a larger model than the branches</li>
+        <li><span class="sharepage__key">B</span> Because it must re-run every branch to verify it</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because it must reconcile results that may overlap, conflict, or be missing — the policy for disagreement and partial results is a design decision, not a detail <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because it cannot be tested</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Fan-out is mechanical; fan-in encodes the semantics. Merging summaries, resolving contradictory findings, deduplicating overlapping results, and deciding whether three of five branches is enough are all choices that determine the system&#39;s behaviour.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the cost profile of parallelization?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It reduces both latency and total token cost</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> It reduces wall-clock latency but usually increases total tokens and spend, since every branch is paid for <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> It has no effect on cost</li>
+        <li><span class="sharepage__key">D</span> It increases latency and reduces cost</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> You are buying time with money. That is a good trade for user-facing latency and often a bad one for background batch work, where sequential processing at lower concurrency is cheaper and simpler.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which failure consideration is specific to parallel fan-out at production scale?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The tokenizer must be shared across branches</li>
+        <li><span class="sharepage__key">B</span> Branches cannot use tools</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Partial failure and rate limiting — some branches time out or get throttled, so the system needs bounded concurrency, per-branch timeouts, and a policy for degraded results <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Parallel branches cannot be logged</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Unbounded fan-out meets provider concurrency limits immediately, and one slow branch determines the whole response&#39;s latency. Bounded concurrency, timeouts, and an explicit rule for whether a missing branch degrades or fails the result are what make it production-safe.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How does self-consistency use the voting form of parallelization?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> It runs the same reasoning task several times with sampling and takes the most common answer, on the theory that correct reasoning paths converge while errors scatter <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> It runs the task once and asks the model to confirm its answer</li>
+        <li><span class="sharepage__key">C</span> It compares outputs from two different providers for billing purposes</li>
+        <li><span class="sharepage__key">D</span> It splits the prompt into sentences processed independently</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Sampling produces varied reasoning paths; wrong paths tend to disagree with each other while correct ones agree. Majority voting exploits that, at a multiple of the cost — which is why it is reserved for high-value or high-uncertainty steps.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>When is a diverse-perspective fan-out (several branches with different instructions) preferable to running the same prompt several times?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> When the goal is coverage of different failure modes — a security lens, a performance lens, a correctness lens each find things the others miss <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Never; identical prompts always produce better coverage</li>
+        <li><span class="sharepage__key">C</span> Only when using different providers</li>
+        <li><span class="sharepage__key">D</span> Only for image generation tasks</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Identical prompts give correlated results, so redundancy mostly buys confidence in what was already found. Deliberately different lenses give uncorrelated coverage, which is what you want when the goal is to find everything rather than to confirm one answer.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>You must review a 200-page document for compliance issues within a tight latency budget. Design a parallelized approach and describe the aggregation.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Section the document into chunks that respect structure (sections, clauses) rather than arbitrary token counts, keeping identifiers for provenance.</li><li>Fan out per chunk with bounded concurrency, applying the same compliance checks to each, with per-branch timeouts.</li><li>Consider a second dimension of fan-out: different rule sets or lenses per branch when checks are independent.</li><li>Return structured findings per branch — rule id, severity, evidence span, confidence — so aggregation is mechanical rather than prose merging.</li><li>Aggregate by deduplicating overlapping findings, resolving conflicts by rule or by a judging step, and ranking by severity.</li><li>Handle partial failure explicitly: report which sections could not be processed rather than silently producing a shorter list.</li><li>Add a final synthesis pass over the aggregated findings for the executive summary, which needs global context that per-chunk branches lack.</li><li>Control cost: use a small model for scanning and escalate only flagged chunks to a stronger model for judgment.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> This is a sectioning problem with a two-stage cost structure. I split the document along its own structure — sections and clauses, not arbitrary token windows — because a compliance finding cited to &#39;chunk 47&#39; is useless, and a clause split across a boundary produces both false negatives and false positives. Each chunk keeps its identifier and character span. The fan-out runs with bounded concurrency, sized to the provider&#39;s limits rather than the number of chunks, with a per-branch timeout so one slow call cannot own the response&#39;s latency. Each branch returns structured findings rather than prose: rule id, severity, the evidence span, and a confidence. That structure is what makes the fan-in mechanical instead of another act of interpretation. Aggregation then deduplicates findings that appear in overlapping chunks, resolves conflicting severities by rule precedence or by a small judging step for the contested ones, and ranks the result by severity and confidence. Partial failure gets reported, not hidden: if six chunks timed out, the output says so, because a compliance report that silently omits sections is worse than one that admits gaps. Cost control comes from a two-tier design — a cheap model scans every chunk and flags candidates, and only flagged chunks go to a stronger model for judgment, which typically cuts spend by an order of magnitude while keeping quality where it matters. Finally, one sequential step at the end: an executive summary written over the aggregated findings, because that requires global context no individual branch had.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Explain the tradeoffs of running the same query five times and voting, versus running it once with a stronger model.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Voting exploits the fact that independent errors scatter while correct answers agree, improving accuracy on tasks with a single verifiable answer.</li><li>It works best where answers are comparable — a number, a class, a decision — and poorly for open-ended prose that cannot be tallied.</li><li>Cost multiplies by the number of samples; latency stays close to a single call if the branches truly run in parallel.</li><li>A stronger model may fix the errors that voting only detects, especially where all samples share the same systematic misunderstanding.</li><li>Correlated errors are voting&#39;s blind spot: identical prompts to the same model produce correlated mistakes, so the majority can be confidently wrong.</li><li>Aggregation adds design cost: tie-breaking, comparing near-identical answers, and possibly a judge model.</li><li>The empirical answer depends on the task; measure both against an evaluation set including cost and p95 latency.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Voting buys reliability from redundancy. If the task has a comparable answer — a classification, a number, a yes/no decision — sampling several times and taking the majority genuinely raises accuracy, because incorrect reasoning paths tend to diverge from one another while correct ones converge. Latency stays close to a single call if the samples truly run in parallel, which is why it is attractive for user-facing paths. The costs are the obvious one and a subtle one. The obvious one is that you pay five times. The subtle one is correlated error: five samples from the same model with the same prompt are not five independent opinions. When the model misunderstands the question, it misunderstands it consistently, and the majority is then confidently wrong — with the added harm that agreement reads as confidence. Voting also degrades badly on open-ended output, where there is nothing to tally and you need a judge model to aggregate, which reintroduces the single point of failure you were trying to escape. A stronger model attacks a different part of the problem: it can fix errors rather than merely outvote them, and it handles the systematic misunderstanding that voting cannot. It is one call, one bill, usually higher per token, and often higher latency because of internal reasoning. My practical rule: use voting where the answer space is small and verifiable and the stakes justify the multiple, use the stronger model where the task is open-ended or where the failure is comprehension rather than variance, and get diversity into the ensemble — different prompts, different lenses, sometimes different models — if I am going to pay for redundancy at all. Then decide it on an evaluation set that reports quality, cost, and p95 latency together, because the intuition here is unreliable.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch03","title":"Parallelization","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"What is the prerequisite for applying the parallelization pattern?","options":["The subtasks must be independent — none of them needs another's output","All subtasks must use the same model","The task must involve at least three model calls","The system must run on multiple GPUs"],"answer":0,"answerLetter":"A"},{"n":2,"type":"mc","prompt":"How do sectioning and voting differ as forms of parallelization?","options":["Sectioning uses cheap models and voting uses expensive ones","Sectioning splits one task into different subtasks that run concurrently; voting runs the same task several times and aggregates the results","Sectioning is synchronous and voting is asynchronous","Sectioning applies to text and voting to images"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"Why is the aggregation (fan-in) step the hard part of the pattern?","options":["Because it must run on a larger model than the branches","Because it must re-run every branch to verify it","Because it must reconcile results that may overlap, conflict, or be missing — the policy for disagreement and partial results is a design decision, not a detail","Because it cannot be tested"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What is the cost profile of parallelization?","options":["It reduces both latency and total token cost","It reduces wall-clock latency but usually increases total tokens and spend, since every branch is paid for","It has no effect on cost","It increases latency and reduces cost"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"Which failure consideration is specific to parallel fan-out at production scale?","options":["The tokenizer must be shared across branches","Branches cannot use tools","Partial failure and rate limiting — some branches time out or get throttled, so the system needs bounded concurrency, per-branch timeouts, and a policy for degraded results","Parallel branches cannot be logged"],"answer":2,"answerLetter":"C"},{"n":6,"type":"mc","prompt":"How does self-consistency use the voting form of parallelization?","options":["It runs the same reasoning task several times with sampling and takes the most common answer, on the theory that correct reasoning paths converge while errors scatter","It runs the task once and asks the model to confirm its answer","It compares outputs from two different providers for billing purposes","It splits the prompt into sentences processed independently"],"answer":0,"answerLetter":"A"},{"n":7,"type":"mc","prompt":"When is a diverse-perspective fan-out (several branches with different instructions) preferable to running the same prompt several times?","options":["When the goal is coverage of different failure modes — a security lens, a performance lens, a correctness lens each find things the others miss","Never; identical prompts always produce better coverage","Only when using different providers","Only for image generation tasks"],"answer":0,"answerLetter":"A"},{"n":8,"type":"open","prompt":"You must review a 200-page document for compliance issues within a tight latency budget. Design a parallelized approach and describe the aggregation.","points":["Section the document into chunks that respect structure (sections, clauses) rather than arbitrary token counts, keeping identifiers for provenance.","Fan out per chunk with bounded concurrency, applying the same compliance checks to each, with per-branch timeouts.","Consider a second dimension of fan-out: different rule sets or lenses per branch when checks are independent.","Return structured findings per branch — rule id, severity, evidence span, confidence — so aggregation is mechanical rather than prose merging.","Aggregate by deduplicating overlapping findings, resolving conflicts by rule or by a judging step, and ranking by severity.","Handle partial failure explicitly: report which sections could not be processed rather than silently producing a shorter list.","Add a final synthesis pass over the aggregated findings for the executive summary, which needs global context that per-chunk branches lack.","Control cost: use a small model for scanning and escalate only flagged chunks to a stronger model for judgment."]},{"n":9,"type":"open","prompt":"Explain the tradeoffs of running the same query five times and voting, versus running it once with a stronger model.","points":["Voting exploits the fact that independent errors scatter while correct answers agree, improving accuracy on tasks with a single verifiable answer.","It works best where answers are comparable — a number, a class, a decision — and poorly for open-ended prose that cannot be tallied.","Cost multiplies by the number of samples; latency stays close to a single call if the branches truly run in parallel.","A stronger model may fix the errors that voting only detects, especially where all samples share the same systematic misunderstanding.","Correlated errors are voting's blind spot: identical prompts to the same model produce correlated mistakes, so the majority can be confidently wrong.","Aggregation adds design cost: tie-breaking, comparing near-identical answers, and possibly a judge model.","The empirical answer depends on the task; measure both against an evaluation set including cost and p95 latency."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch03">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

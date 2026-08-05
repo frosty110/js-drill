@@ -33,6 +33,22 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">10</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/sharding/">Sharding</a> <span class="ds-chip">signature</span> — Telemetry is partitioned by series or tenant, because ingest volume is the defining constraint and no single node absorbs a firehose.</li>
+      <li><a href="../../../sd/components/c/stream-processing/">Stream Processing</a> <span class="ds-chip">signature</span> — Telemetry is enriched, sampled and aggregated in flight, because storing everything raw and querying later meets neither the cost nor latency bar.</li>
+      <li><a href="../../../sd/components/c/aggregation/">Pre-Aggregation &amp; Rollups</a> <span class="ds-chip">signature</span> — Metrics are pre-rolled into time buckets at ingest, so a dashboard query reads summaries instead of scanning raw telemetry.</li>
+      <li><a href="../../../sd/components/c/backpressure/">Backpressure</a> <span class="ds-chip">signature</span> — Ingest pushes back on agents when the pipeline saturates — dropping telemetry is preferable to the observability platform collapsing under it.</li>
+      <li><a href="../../../sd/components/c/tenant-isolation/">Tenant Isolation</a> <span class="ds-chip">signature</span> — Per-tenant ingest partitions and query limits, so one customer instrumenting a hot loop cannot degrade everyone else&#39;s dashboards.</li>
+      <li><a href="../../../sd/components/c/wide-column-store/">Wide-Column Store</a> — Holds telemetry partitioned by series, chosen because ingest volume is the defining constraint and queries never span partitions.</li>
+      <li><a href="../../../sd/components/c/time-series-db/">Time-Series Store</a> — The natural home for metrics — downsampling and retention are built in, and label cardinality becomes the budget to manage.</li>
+      <li><a href="../../../sd/components/c/pubsub/">Pub/Sub</a> — Telemetry is published once and consumed by alerting, storage and dashboards separately, each at its own pace.</li>
+      <li><a href="../../../sd/components/c/load-shedding/">Load Shedding</a> — Drops or samples telemetry when ingest saturates, on the principle that partial observability beats none.</li>
+      <li><a href="../../../sd/components/c/bulkhead/">Bulkhead Isolation</a> — Per-tenant ingest partitions, so one customer instrumenting a hot loop cannot degrade everyone else&#39;s dashboards.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Ingest metrics, logs and traces from thousands of services; query them; alert on metric conditions; correlate across the three signals.</li><li>The product is the incident workflow — from an alert, to which service, to which request, in minutes.</li><li>Ingest must be highly available and must never block the applications it observes.</li><li>Retention differs per signal and per age: raw traces for days, metric rollups for a year.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>5,000 hosts · 10M active metric series · 5 TB logs/day</li><li>Metrics are smallest: a 15-second scrape is ~670K points/s, at ~2 B compressed ≈ 115 GB/day</li><li>Logs are 5 TB/day (~58 MB/s sustained) and dominate storage — object storage, not a hot index</li><li>Traces unsampled would be ~1 GB/s, simply unaffordable, so sampling is a requirement rather than an optimization</li><li>The dangerous number is CARDINALITY: one label with a million distinct values turns 100 series into 100M instantly, and the label index is in memory — an OOM kill, not a slowdown</li><li>Dashboards under ~1s over recent windows; metrics visible within seconds</li></ul>

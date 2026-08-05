@@ -204,6 +204,39 @@
         "Concurrent writes still need conflict resolution (version vectors), which linearizability would preclude."
       ],
       "answer": "Quorum reads/writes work because w + r > n forces the read set and write set to overlap on at least one node, so a read usually sees the newest write. For a read-heavy workload I'd bias toward cheap reads — say w=2, r=2 with n=3, or even w=3, r=1 if I can tolerate a write blocking when a node is down — as long as w + r > n. Read repair and background anti-entropy pull lagging replicas forward so unread data doesn't rot. But this still isn't linearizable: sloppy quorums, concurrent writes needing version-vector resolution, and partially-failed writes mean a quorum gives you a high probability of freshness, not a strict recency guarantee."
+    },
+    {
+      "q": "In a local-first architecture, where does the authoritative copy of a user's data live?",
+      "options": [
+        "On the server, with the device holding a read-through cache for offline viewing",
+        "On the device, with the server acting as a synchronization and backup peer rather than the source of truth",
+        "Split by field, with some columns authoritative on the device and others on the server",
+        "On whichever replica most recently accepted a write, determined by timestamp"
+      ],
+      "answer": 1,
+      "explain": "Local-first inverts the usual relationship — the local replica is primary, so the app is fully functional without a network and sync is reconciliation between peers. A read-through cache (the tempting distractor) still treats the server as authoritative, which is the conventional model local-first rejects."
+    },
+    {
+      "q": "Why is last-write-wins a poor conflict-resolution strategy for an offline-capable collaborative app?",
+      "options": [
+        "It requires synchronized clocks, which are unavailable on mobile devices",
+        "It cannot detect that a conflict occurred at all",
+        "Long offline periods make concurrent edits common, and LWW silently discards all but one of them",
+        "It forces every write to be routed through a single leader"
+      ],
+      "answer": 2,
+      "explain": "Offline work makes genuine concurrency the normal case rather than a rare race, so a policy that keeps one write and drops the rest loses real user work routinely. LWW does depend on timestamps, but the sharper objection is data loss — detection is what version vectors add, and LWW's failure is what it does *after* detection."
+    },
+    {
+      "q": "What does a CRDT provide that a version vector alone does not?",
+      "options": [
+        "Detection that two writes were concurrent rather than causally ordered",
+        "A guarantee that all replicas eventually receive every update",
+        "A total order over all writes in the system",
+        "A merge function guaranteeing that replicas applying the same set of updates converge to the same state, without coordination"
+      ],
+      "answer": 3,
+      "explain": "Version vectors detect concurrency but leave the merge to the application; a CRDT builds convergence into the data type itself so no coordination or manual resolution is needed. Total ordering is what CRDTs deliberately avoid needing, which makes that option the inversion of the point."
     }
   ]
 }

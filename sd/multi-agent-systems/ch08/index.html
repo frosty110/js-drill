@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Building Modern Agent UX Applications — Designing Multi-Agent Systems</title>
+<meta name="description" content="Wiring an agent system into a real application: a streaming transport between a long-running server-side agent and a browser, session and state management that survives reconnects, rendering intermediate steps and artifacts, requesting human input mid-run, and cancellation. The engineering problem is that an agent run is a long-lived stateful process and the web is built for short request/response cycles.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Building Modern Agent UX Applications — Designing Multi-Agent Systems">
+<meta property="og:description" content="Wiring an agent system into a real application: a streaming transport between a long-running server-side agent and a browser, session and state management that survives reconnects, rendering intermediate steps and artifacts, requesting human input mid-run, and cancellation. The engineering problem is that an agent run is a long-lived stateful process and the web is built for short request/response cycles.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Building Modern Agent UX Applications","description":"Wiring an agent system into a real application: a streaming transport between a long-running server-side agent and a browser, session and state management that survives reconnects, rendering intermediate steps and artifacts, requesting human input mid-run, and cancellation. The engineering problem is that an agent run is a long-lived stateful process and the web is built for short request/response cycles.","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Designing Multi-Agent Systems","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/"},"teaches":["An agent run is a long-lived process with intermediate events, which does not fit request/response — the transport (SSE, WebSocket, or polling with resumable state) is an architectural choice, not a detail.","Server-side state is authoritative: the client renders a projection of a run that must survive refreshes, reconnects, and multiple tabs.","Events should be typed and semantic — step started, tool called, artifact produced, input required, run finished — rather than a raw token stream the client has to parse.","Human input mid-run needs a first-class protocol: the run pauses, the interface renders a request, and the answer resumes the run without losing state.","Cancellation must propagate from the client through the server to in-flight model and tool calls, or abandoned runs keep spending.","Reconnection requires replayable event history: a client that drops for ten seconds should be able to catch up rather than restart."],"hasPart":[{"@type":"Question","position":1,"name":"Why does an agent run fit poorly into a standard request/response cycle?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q1","acceptedAnswer":{"@type":"Answer","text":"Because it is a long-lived process producing intermediate events over seconds or minutes, while HTTP request/response is built for a single short exchange"}},{"@type":"Question","position":2,"name":"Where should the authoritative state of a run live?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q2","acceptedAnswer":{"@type":"Answer","text":"On the server, with the client rendering a projection that can be rebuilt after a refresh or reconnect"}},{"@type":"Question","position":3,"name":"Why should the stream carry typed semantic events rather than raw tokens?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q3","acceptedAnswer":{"@type":"Answer","text":"Because the interface needs to distinguish a tool call from an artifact from a request for input in order to render each appropriately — parsing that out of a token stream is fragile"}},{"@type":"Question","position":4,"name":"What does a first-class mid-run human input protocol require?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q4","acceptedAnswer":{"@type":"Answer","text":"The run to pause with its state intact, an event that tells the interface what is being asked, and a resume path that continues from exactly where it stopped"}},{"@type":"Question","position":5,"name":"Why must cancellation propagate all the way through?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q5","acceptedAnswer":{"@type":"Answer","text":"Because a user closing the tab should stop in-flight model and tool calls — otherwise abandoned runs continue spending money and may still perform side effects"}},{"@type":"Question","position":6,"name":"What does reconnection require from the event protocol?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q6","acceptedAnswer":{"@type":"Answer","text":"Replayable history with sequence numbers, so a client that drops can request everything since its last seen event and catch up rather than restarting"}},{"@type":"Question","position":7,"name":"Why do artifacts deserve a separate rendering path?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q7","acceptedAnswer":{"@type":"Answer","text":"Because a generated table, chart, diff, or file is not conversational text — flattening it into chat makes it unusable, unverifiable, and impossible to act on"}},{"@type":"Question","position":8,"name":"What does a multi-agent run add to the streaming protocol?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q8","acceptedAnswer":{"@type":"Answer","text":"Attribution — each event carries which agent produced it, so the interface can show who is acting and who said what"}},{"@type":"Question","position":9,"name":"Design the client/server architecture for an application where users start long-running agent tasks, watch progress, answer occasional questions, and can leave and return.","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q9","acceptedAnswer":{"@type":"Answer","text":"The core decision is that the run is a server-side durable object, not a request. It has an id, persisted state, a status, and an append-only event log with sequence numbers; the browser is only ever rendering a projection of that log. Everything else follows. Live updates go over SSE or a WebSocket, but the connection is treated as disposable: on reconnect the client says 'I have seen up to event 412' and the server replays from there, so a phone that slept for two minutes catches up rather than restarting. A polling fallback reads the same log, which means degraded networks still work. The events themselves are typed and semantic — run started, step started, tool called with arguments, token delta, artifact produced, input required, error, run finished — each carrying a sequence number a"}},{"@type":"Question","position":10,"name":"What makes agent applications feel unresponsive even when they are fast, and what would you change?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch08/#q10","acceptedAnswer":{"@type":"Answer","text":"Usually it is not speed, it is silence. The pattern that makes an agent product feel broken is a spinner over a multi-second gap, during which the user cannot tell whether it is thinking, stuck, or crashed — and cannot tell whether it even understood the request. The fixes are mostly about what happens in the first two seconds. Stream, so perceived latency is governed by time to first output rather than total duration. Show the agent's interpretation early — the restated task, the plan, the sources it intends to use — because that both fills the gap and lets the user correct a misunderstanding before minutes are spent on the wrong thing. Report progress at a granularity that carries meaning: 'searching the policy corpus', 'checking order 4471', 'drafting'. Raw reasoning tokens are noise th"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/multi-agent-systems/">Designing Multi-Agent Systems</a></p>
+    <h1>Building Modern Agent UX Applications</h1>
+    <p class="sharepage__lede">Wiring an agent system into a real application: a streaming transport between a long-running server-side agent and a browser, session and state management that survives reconnects, rendering intermediate steps and artifacts, requesting human input mid-run, and cancellation. The engineering problem is that an agent run is a long-lived stateful process and the web is built for short request/response cycles.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Multi-Agent Systems</span> <span class="ds-chip">10 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>An agent run is a long-lived process with intermediate events, which does not fit request/response — the transport (SSE, WebSocket, or polling with resumable state) is an architectural choice, not a detail.</li><li>Server-side state is authoritative: the client renders a projection of a run that must survive refreshes, reconnects, and multiple tabs.</li><li>Events should be typed and semantic — step started, tool called, artifact produced, input required, run finished — rather than a raw token stream the client has to parse.</li><li>Human input mid-run needs a first-class protocol: the run pauses, the interface renders a request, and the answer resumes the run without losing state.</li><li>Cancellation must propagate from the client through the server to in-flight model and tool calls, or abandoned runs keep spending.</li><li>Reconnection requires replayable event history: a client that drops for ten seconds should be able to catch up rather than restart.</li><li>Artifacts — files, tables, charts, diffs — deserve their own rendering path rather than being flattened into chat text.</li><li>Multi-agent runs need attribution in the stream so the interface can show who did what.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">10</span></h2>
+    <p class="sharepage__note">Positions 1–10 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does an agent run fit poorly into a standard request/response cycle?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because models cannot be called from a server</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because it is a long-lived process producing intermediate events over seconds or minutes, while HTTP request/response is built for a single short exchange <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because agents require WebSockets by specification</li>
+        <li><span class="sharepage__key">D</span> Because browsers cannot hold connections open</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The mismatch drives the architecture: you need a way to push progress, survive disconnects, resume, and cancel — none of which a single blocking request provides.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Where should the authoritative state of a run live?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> On the server, with the client rendering a projection that can be rebuilt after a refresh or reconnect <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> In the browser, so the UI is always responsive</li>
+        <li><span class="sharepage__key">C</span> In the model&#39;s context window</li>
+        <li><span class="sharepage__key">D</span> Split evenly between client and server</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Client-held state disappears on refresh and cannot be shared across tabs or devices. Server-authoritative state with a replayable event log is what makes a run survivable and inspectable.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should the stream carry typed semantic events rather than raw tokens?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because raw tokens cannot be sent over SSE</li>
+        <li><span class="sharepage__key">B</span> Because typed events cost fewer bytes</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because the interface needs to distinguish a tool call from an artifact from a request for input in order to render each appropriately — parsing that out of a token stream is fragile <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because models emit typed events natively</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> A chat bubble is one rendering among many. Step boundaries, tool invocations, produced files, and input requests all need different treatment, which requires the protocol to name them rather than the client inferring them from text.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does a first-class mid-run human input protocol require?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The run to restart after the human answers</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The run to pause with its state intact, an event that tells the interface what is being asked, and a resume path that continues from exactly where it stopped <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A separate agent dedicated to human interaction</li>
+        <li><span class="sharepage__key">D</span> The human to edit the agent&#39;s prompt directly</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Pausing and resuming without losing state is the requirement. Restarting the run wastes everything done so far, and out-of-band question-asking leaves the interface with no idea what state the run is in.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why must cancellation propagate all the way through?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because model providers require an explicit cancel call</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a user closing the tab should stop in-flight model and tool calls — otherwise abandoned runs continue spending money and may still perform side effects <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because cancellation improves streaming performance</li>
+        <li><span class="sharepage__key">D</span> Because tools cannot time out on their own</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Disconnecting a browser does not stop a server-side loop. Without a cancellation signal threaded to the model call and the tool execution, abandoned work keeps running — and an agent with write tools may still act.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does reconnection require from the event protocol?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> That every event be idempotent</li>
+        <li><span class="sharepage__key">B</span> That the client store all events locally</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Replayable history with sequence numbers, so a client that drops can request everything since its last seen event and catch up rather than restarting <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> That the run pause whenever a client disconnects</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Networks drop, phones sleep, tabs get backgrounded. A sequenced, replayable event log lets the client resynchronize cheaply, which is also what makes multi-tab and multi-device viewing of the same run possible.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why do artifacts deserve a separate rendering path?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because files cannot be sent over the same connection</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a generated table, chart, diff, or file is not conversational text — flattening it into chat makes it unusable, unverifiable, and impossible to act on <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because artifacts require a different model</li>
+        <li><span class="sharepage__key">D</span> Because chat rendering is slower</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Much of an agent&#39;s value is in what it produces, not what it says. A diff should be reviewable, a table sortable, a file downloadable — which requires the protocol to carry them as artifacts with types rather than as pasted text.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does a multi-agent run add to the streaming protocol?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Attribution — each event carries which agent produced it, so the interface can show who is acting and who said what <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Encryption of inter-agent messages</li>
+        <li><span class="sharepage__key">C</span> A separate connection per agent</li>
+        <li><span class="sharepage__key">D</span> Guaranteed ordering across agents</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Without attribution, several specialists blur into one inconsistent voice, and a user cannot interpret disagreement or judge which contribution to trust.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>Design the client/server architecture for an application where users start long-running agent tasks, watch progress, answer occasional questions, and can leave and return.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Server owns the run: a durable run record with state, a sequenced event log, and status, so nothing depends on a live connection.</li><li>Transport: streaming (SSE or WebSocket) for live events, with resume-from-sequence for reconnection and a polling fallback.</li><li>Typed events: run started, step started, tool called, tokens, artifact produced, input required, error, run finished — each with an agent attribution and sequence number.</li><li>Client renders a projection of the event log, so a refresh rebuilds the view from the server rather than losing it.</li><li>Pause/resume protocol for human input, with the run&#39;s state persisted while it waits and a timeout policy.</li><li>Cancellation endpoint that propagates a signal into the loop, the model call, and tool execution, with a defined state for a cancelled run.</li><li>Artifacts stored separately and referenced by id, with their own rendering and download paths.</li><li>Multi-tab and multi-device consistency, since the same run may be viewed from several places.</li><li>Authorization on every run and event access, since runs contain user data and may hold credentials-derived results.</li><li>Observability: the same event log powers the UI, the trace, and the debugging view.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The core decision is that the run is a server-side durable object, not a request. It has an id, persisted state, a status, and an append-only event log with sequence numbers; the browser is only ever rendering a projection of that log. Everything else follows. Live updates go over SSE or a WebSocket, but the connection is treated as disposable: on reconnect the client says &#39;I have seen up to event 412&#39; and the server replays from there, so a phone that slept for two minutes catches up rather than restarting. A polling fallback reads the same log, which means degraded networks still work. The events themselves are typed and semantic — run started, step started, tool called with arguments, token delta, artifact produced, input required, error, run finished — each carrying a sequence number and, in the multi-agent case, the agent that produced it. That typing is what lets the interface render a tool call differently from prose, show a diff as a diff, and put a form on screen when the run needs an answer. Human input is a proper protocol rather than an out-of-band chat message: the run pauses, persists its state, emits an input-required event describing what it needs, and resumes on the answer with a defined timeout if nobody responds. Cancellation is an endpoint that sets a flag the loop checks and propagates a signal into the in-flight model call and tool execution, ending in an explicit cancelled state — because a closed tab does not stop a server loop, and an agent with write tools that keeps running after the user left is both a cost and a safety problem. Artifacts are stored separately and referenced by id, so files, tables, and charts have their own retrieval and rendering paths instead of being pasted into text. Every run and event access is authorized, since runs hold user data. And the same event log serves three consumers — the live interface, the resumed view, and the debugging trace — which keeps them from drifting apart.</div>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>What makes agent applications feel unresponsive even when they are fast, and what would you change?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>No feedback during multi-second work: a spinner conveys nothing about progress or whether anything is happening.</li><li>Not streaming: waiting for the complete answer makes total time the perceived time instead of time to first token.</li><li>Progress reported at the wrong granularity — raw tokens of internal reasoning are noise, while step-level milestones are meaningful.</li><li>No early interpretation: users cannot tell whether the agent understood the request until it finishes.</li><li>No partial results: value arrives only at the end even when parts were ready earlier.</li><li>No ability to intervene, so a misunderstanding costs a full run.</li><li>Unexplained pauses when the agent is waiting on a slow tool, with no indication of what it is doing.</li><li>Fixes: stream, show the plan early, report step-level progress with names, deliver partial results, allow steering and cancellation, and make waiting states legible.</li><li>Measure perceived responsiveness with time-to-first-meaningful-output rather than total duration.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> Usually it is not speed, it is silence. The pattern that makes an agent product feel broken is a spinner over a multi-second gap, during which the user cannot tell whether it is thinking, stuck, or crashed — and cannot tell whether it even understood the request. The fixes are mostly about what happens in the first two seconds. Stream, so perceived latency is governed by time to first output rather than total duration. Show the agent&#39;s interpretation early — the restated task, the plan, the sources it intends to use — because that both fills the gap and lets the user correct a misunderstanding before minutes are spent on the wrong thing. Report progress at a granularity that carries meaning: &#39;searching the policy corpus&#39;, &#39;checking order 4471&#39;, &#39;drafting&#39;. Raw reasoning tokens are noise that makes the interface feel chaotic, while named steps make a long run feel purposeful. Deliver partial results as they stabilize instead of holding everything until the end, so value arrives progressively. Let the user intervene — narrow the scope, skip a step, cancel — since without that a misunderstanding always costs a full run and users learn to be cautious rather than fluent. And make waiting states legible: if the agent is blocked on a slow external tool, say so, because an explained wait is tolerable and an unexplained one is not. Finally I would change what we measure. Total duration is the wrong metric for perceived responsiveness; I would track time to first meaningful output, time to first correctable signal — the plan — and the rate at which users abandon mid-run, which is the honest measure of whether the waiting experience works.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"multi-agent-systems","unit":"ch08","title":"Building Modern Agent UX Applications","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"Why does an agent run fit poorly into a standard request/response cycle?","options":["Because models cannot be called from a server","Because it is a long-lived process producing intermediate events over seconds or minutes, while HTTP request/response is built for a single short exchange","Because agents require WebSockets by specification","Because browsers cannot hold connections open"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"Where should the authoritative state of a run live?","options":["On the server, with the client rendering a projection that can be rebuilt after a refresh or reconnect","In the browser, so the UI is always responsive","In the model's context window","Split evenly between client and server"],"answer":0,"answerLetter":"A"},{"n":3,"type":"mc","prompt":"Why should the stream carry typed semantic events rather than raw tokens?","options":["Because raw tokens cannot be sent over SSE","Because typed events cost fewer bytes","Because the interface needs to distinguish a tool call from an artifact from a request for input in order to render each appropriately — parsing that out of a token stream is fragile","Because models emit typed events natively"],"answer":2,"answerLetter":"C"},{"n":4,"type":"mc","prompt":"What does a first-class mid-run human input protocol require?","options":["The run to restart after the human answers","The run to pause with its state intact, an event that tells the interface what is being asked, and a resume path that continues from exactly where it stopped","A separate agent dedicated to human interaction","The human to edit the agent's prompt directly"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"Why must cancellation propagate all the way through?","options":["Because model providers require an explicit cancel call","Because a user closing the tab should stop in-flight model and tool calls — otherwise abandoned runs continue spending money and may still perform side effects","Because cancellation improves streaming performance","Because tools cannot time out on their own"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"What does reconnection require from the event protocol?","options":["That every event be idempotent","That the client store all events locally","Replayable history with sequence numbers, so a client that drops can request everything since its last seen event and catch up rather than restarting","That the run pause whenever a client disconnects"],"answer":2,"answerLetter":"C"},{"n":7,"type":"mc","prompt":"Why do artifacts deserve a separate rendering path?","options":["Because files cannot be sent over the same connection","Because a generated table, chart, diff, or file is not conversational text — flattening it into chat makes it unusable, unverifiable, and impossible to act on","Because artifacts require a different model","Because chat rendering is slower"],"answer":1,"answerLetter":"B"},{"n":8,"type":"mc","prompt":"What does a multi-agent run add to the streaming protocol?","options":["Attribution — each event carries which agent produced it, so the interface can show who is acting and who said what","Encryption of inter-agent messages","A separate connection per agent","Guaranteed ordering across agents"],"answer":0,"answerLetter":"A"},{"n":9,"type":"open","prompt":"Design the client/server architecture for an application where users start long-running agent tasks, watch progress, answer occasional questions, and can leave and return.","points":["Server owns the run: a durable run record with state, a sequenced event log, and status, so nothing depends on a live connection.","Transport: streaming (SSE or WebSocket) for live events, with resume-from-sequence for reconnection and a polling fallback.","Typed events: run started, step started, tool called, tokens, artifact produced, input required, error, run finished — each with an agent attribution and sequence number.","Client renders a projection of the event log, so a refresh rebuilds the view from the server rather than losing it.","Pause/resume protocol for human input, with the run's state persisted while it waits and a timeout policy.","Cancellation endpoint that propagates a signal into the loop, the model call, and tool execution, with a defined state for a cancelled run.","Artifacts stored separately and referenced by id, with their own rendering and download paths.","Multi-tab and multi-device consistency, since the same run may be viewed from several places.","Authorization on every run and event access, since runs contain user data and may hold credentials-derived results.","Observability: the same event log powers the UI, the trace, and the debugging view."]},{"n":10,"type":"open","prompt":"What makes agent applications feel unresponsive even when they are fast, and what would you change?","points":["No feedback during multi-second work: a spinner conveys nothing about progress or whether anything is happening.","Not streaming: waiting for the complete answer makes total time the perceived time instead of time to first token.","Progress reported at the wrong granularity — raw tokens of internal reasoning are noise, while step-level milestones are meaningful.","No early interpretation: users cannot tell whether the agent understood the request until it finishes.","No partial results: value arrives only at the end even when parts were ready earlier.","No ability to intervene, so a misunderstanding costs a full run.","Unexplained pauses when the agent is waiting on a slow tool, with no indication of what it is doing.","Fixes: stream, show the plan early, report step-level progress with names, deliver partial results, allow steering and cancellation, and make waiting states legible.","Measure perceived responsiveness with time-to-first-meaningful-output rather than total duration."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/multi-agent-systems/ch08">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

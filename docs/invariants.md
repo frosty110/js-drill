@@ -280,8 +280,16 @@ component renders nowhere), a mechanism not in `tags.json` (the chip deep-links
 to an empty list), a dangling `alternatives` id, a "this problem uses…"
 preamble, and an annotation over 220 characters.
 
-Extra annotations beyond the tagged set are allowed: the facet indexes each
-problem's 2–4 *headline* mechanisms, and the catalog is free to be finer.
+Extra annotations beyond the tagged set are expected, not merely allowed. The
+facet indexes each problem's 2–4 *headline* mechanisms and stays that size on
+purpose — it is the filter index, and a 60-chip panel is unusable on a phone.
+The catalog is finer: 253 edges over 65 components, ~7 per problem. So the
+problem→component list is derived from the **edge file**, and the tagged ones
+are marked *signature* rather than being the only ones shown.
+
+A component with **no** edges is reported, not failed: that failure is visible
+on the page ("not yet mapped to a canonical design problem"), and invariants are
+for the ones you cannot see.
 
 **Escape hatch** — none needed. Removing the mechanism tag removes the
 requirement, which is the honest way to say "this isn't really used here."

@@ -1,0 +1,128 @@
+{
+  "id": "ch12",
+  "num": 12,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Exception Handling and Recovery",
+  "summary": "Agents fail constantly in small ways — a tool errors, an API rate-limits, output does not parse, a step returns nothing useful — and the difference between a demo and a system is what happens next. The pattern covers classifying failures, retrying only what is retryable, falling back, compensating for partial writes, degrading gracefully, and escalating to a human with enough context to act.",
+  "keyTakeaways": [
+    "Failures should be classified before they are handled: transient (retry), permanent (do not retry, change approach), and semantic (the call succeeded but the result is unusable).",
+    "Errors returned to the model as observations let it self-correct; errors swallowed by the runtime produce confident answers built on nothing.",
+    "Retries need backoff, a bounded budget, and idempotency — retrying a non-idempotent write is how agents double-charge, double-book, and double-send.",
+    "Fallbacks are a design decision: an alternative tool, a cheaper or different model, a cached result, or a reduced-scope answer — each with an explicit quality implication.",
+    "Multi-step agents can fail after partial side effects, so recovery includes compensating actions or a documented inconsistent state, not just an error message.",
+    "Circuit breakers and budgets stop cascading failure: when a dependency is down, failing fast is better than every request burning its full retry allowance.",
+    "Escalation is a real outcome, not a defeat — a human handed the goal, the trace, the partial results, and a specific question is far better served than one handed a generic failure."
+  ],
+  "questions": [
+    {
+      "q": "Why should failures be classified before being handled?",
+      "options": [
+        "Because classification is required for logging",
+        "Because transient failures deserve a retry, permanent ones deserve a different approach, and semantic failures — a successful call with a useless result — need the agent to reconsider rather than retry",
+        "Because providers charge differently by error type",
+        "Because only transient failures can be logged"
+      ],
+      "answer": 1,
+      "explain": "Retrying a 400 validation error forever is as wrong as giving up on a 503. And the sneakiest category is the call that returns HTTP 200 with an empty or irrelevant result — no error is raised, but continuing is a mistake."
+    },
+    {
+      "q": "What is the right way to surface a tool error to an agent?",
+      "options": [
+        "Return it as an observation with a specific, actionable message so the agent can correct its arguments or change approach",
+        "Return an empty result so the agent continues smoothly",
+        "Raise it to the user immediately in all cases",
+        "Retry silently until it succeeds"
+      ],
+      "answer": 0,
+      "explain": "The agent can only respond to what it can see. 'start_date must be before end_date' produces a corrected call; a silent empty result produces a fabricated answer about data that was never fetched."
+    },
+    {
+      "q": "Which precondition makes retrying a write action safe?",
+      "options": [
+        "A longer timeout",
+        "Exponential backoff",
+        "Idempotency — the operation carries a key or is otherwise defined so that repeating it has the same effect as performing it once",
+        "A larger model"
+      ],
+      "answer": 2,
+      "explain": "Backoff spaces retries out; it does not make them safe. Without idempotency, a timeout that actually succeeded server-side plus a retry equals two payments or two bookings — the most common real-world agent incident."
+    },
+    {
+      "q": "Why do retries need a bounded budget in agentic systems specifically?",
+      "options": [
+        "Because agents retry at multiple levels — the tool, the step, the plan — and unbounded retries at each level multiply into enormous cost and latency",
+        "Because providers ban retries",
+        "Because retries invalidate the context window",
+        "Because bounded retries improve model accuracy"
+      ],
+      "answer": 0,
+      "explain": "Nested retry loops compound: three retries per tool, three per step, three replans is twenty-seven attempts. Budgets have to be global as well as local, expressed in cost and wall-clock, not just attempt counts."
+    },
+    {
+      "q": "What is the purpose of a compensating action?",
+      "options": [
+        "To pay the user for a failed request",
+        "To undo or offset side effects already committed when a later step fails, since a multi-step agent cannot roll back an external write the way a database transaction can",
+        "To retry the failed step with a different model",
+        "To compress the context after an error"
+      ],
+      "answer": 1,
+      "explain": "If step two sent an email and step four failed, there is no rollback. The options are a compensating action (send a correction, cancel the booking) or reporting the inconsistent state explicitly — never pretending nothing happened."
+    },
+    {
+      "q": "What does a circuit breaker prevent in an agent system?",
+      "options": [
+        "The model exceeding its context window",
+        "Users sending too many requests",
+        "Every request wasting its full retry budget on a dependency that is known to be down, converting one outage into system-wide latency and cost blowup",
+        "Tool descriptions being misread"
+      ],
+      "answer": 2,
+      "explain": "Once a dependency has failed repeatedly, failing fast and switching to a fallback or a clear error is better for everyone than a hundred concurrent agents each patiently retrying with backoff."
+    },
+    {
+      "q": "What makes an escalation to a human useful rather than an admission of defeat?",
+      "options": [
+        "Escalating as early as possible in every case",
+        "Handing over the goal, the trace of what was attempted, the partial results, and a specific question — so the human resumes rather than restarts",
+        "Escalating with a generic error message to avoid biasing the human",
+        "Only escalating after the entire budget is exhausted"
+      ],
+      "answer": 1,
+      "explain": "The value of the agent's work is in what it already did. An escalation carrying the trace and a precise question — 'two records match this customer, which is correct?' — is a handoff; a bare failure notice throws the work away."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the failure-handling strategy for an agent that books travel: it searches, holds, and confirms reservations through third-party APIs.",
+      "points": [
+        "Classify failures per call: transient (timeouts, 5xx, rate limits) retry with backoff; permanent (validation, not found, no availability) change approach; semantic (empty or implausible results) reconsider.",
+        "Make every write idempotent with a client-supplied key so a retry after a timeout cannot double-book.",
+        "Handle the ambiguous timeout explicitly: query before retrying to determine whether the booking actually succeeded.",
+        "Design the flow to defer irreversible commitment — search and hold are cheap and reversible, confirmation is the point of no return and needs user approval.",
+        "Compensating actions for partial completion: release holds, cancel a booked leg when a dependent leg fails, and notify the user of exactly what state things are in.",
+        "Circuit-break failing providers and fall back to alternatives, with the quality implication stated (different airline, different price).",
+        "Bound retries globally in attempts, wall-clock, and cost, since nested retries compound.",
+        "Never fabricate: if the state is unknown, say so and escalate with the reference numbers rather than guessing.",
+        "Log every call with its idempotency key and outcome, and alert on partial-failure states that require human cleanup."
+      ],
+      "answer": "Travel booking is the case where careless retries create real financial damage, so I would build the flow around reversibility. Search and availability checks are free and idempotent, so those retry freely with backoff and jitter on transient errors, and stop immediately on validation errors, which need a corrected call rather than another attempt. Holds are cheap and reversible, so the agent gets those autonomously. Confirmation is the point of no return, and it requires explicit user approval with a full preview — price, times, cancellation terms — because no confidence score justifies committing someone's money silently. Every write carries a client-generated idempotency key so that a retry after a timeout cannot produce a second booking. And the ambiguous timeout gets an explicit protocol rather than a retry: when a confirmation call times out, the agent queries the provider for the reference before doing anything else, because 'no response' and 'not booked' are different states and conflating them is how people end up with two flights. Partial failure is the interesting case. If the outbound leg confirms and the return leg has no availability, there is no rollback — there are only compensating actions. So the design has a defined response: attempt to cancel the confirmed leg within the free window, or if that is not possible, stop, tell the user exactly what exists and what does not, and hand them the reference numbers. What it never does is continue as though the state were clean. Dependency-level protection sits underneath: circuit breakers on providers that are erroring, so a hundred concurrent agents do not each burn a full retry budget against a dead API, with fallback to an alternative provider where the quality implication is stated to the user rather than silently substituted. Retry budgets are global — total attempts, wall-clock, and cost — because tool-level, step-level, and replan-level retries multiply. Every call is logged with its idempotency key and outcome, and any run that ends in a partial-commit state raises an alert for human cleanup rather than being buried in the trace.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Explain why 'swallow the error and let the agent continue' is one of the most damaging patterns in agentic systems, and what to do instead.",
+      "points": [
+        "The agent cannot distinguish an empty result from a failed call, so it proceeds as if the data were absent rather than unavailable.",
+        "Downstream steps treat the missing information as established fact, producing a confident and wrong final answer.",
+        "The failure becomes unattributable: the trace shows a successful run with a bad outcome, so debugging looks for a reasoning error that does not exist.",
+        "Silent failures also hide dependency problems from monitoring, so systemic outages appear as a gradual quality decline.",
+        "Instead: return specific errors as observations so the agent can retry, correct arguments, or change approach.",
+        "Distinguish 'no results' from 'could not check' explicitly in the tool contract, since they warrant different behaviour.",
+        "Give the agent permission and instruction to report inability rather than to answer anyway.",
+        "Log the failure separately from the trace and alert on rates, so quality regressions can be traced to dependency health.",
+        "Verify at the end: the final answer's claims should be traceable to observations that actually returned data."
+      ],
+      "answer": "Because it converts an honest failure into a dishonest success. When a tool call fails and the runtime returns an empty result, the agent has no way to distinguish 'there is no such customer' from 'the customer service was down'. It reasons from the first interpretation, and every subsequent step treats that absence as established fact. The output is fluent, confident, and wrong — the worst possible failure mode, because nothing in the system signals a problem. The damage compounds in three directions. For the user, a wrong answer delivered confidently is worse than an error, because they act on it. For the engineer debugging it later, the trace shows a clean run, so the investigation hunts for a reasoning flaw that never existed while the actual cause — a 500 from a dependency — is invisible. And for operations, silent failures never show up as errors, so a partial outage looks like a gradual quality decline that nobody can localize. What to do instead starts with the tool contract: 'no results' and 'could not check' must be different return values, because they warrant different agent behaviour. Errors come back as observations with a specific, actionable message, so the agent can correct its arguments, try another approach, or conclude that it cannot answer. The agent must have explicit permission to say it does not know and to report the reason — an agent instructed only to be helpful will fabricate rather than admit a gap. Failures are logged and counted separately from the reasoning trace, with alerting on rates, so dependency health is a first-class signal rather than something inferred from user complaints. And at the end, I would verify that the claims in the final answer trace back to observations that actually returned data, because that check catches exactly this failure class in evaluation before users find it."
+    }
+  ]
+}

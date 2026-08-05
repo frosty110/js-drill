@@ -43,7 +43,11 @@ const GATES = [
   { name: 'lesson exercises',    cmd: ['tools/validate-data.js'] },
   { name: 'system design',       cmd: ['tools/validate-system-design.js'] },
   { name: 'crawlable pages',     cmd: ['tools/build-share-pages.js', '--check'], fix: ['tools/build-share-pages.js'] },
-  { name: 'URL contract',        cmd: ['tools/check-url-contract.js'] }
+  { name: 'URL contract',        cmd: ['tools/check-url-contract.js'] },
+  { name: 'shell contract',      cmd: ['tools/check-shell-contract.js'] },
+  { name: 'dom references',      cmd: ['tools/check-dom-refs.js'] },
+  { name: 'sd slice order',      cmd: ['tools/split-system-design.py', '--check'], bin: 'python3' },
+  { name: 'init slice order',    cmd: ['tools/split-init-core.py', '--check'], bin: 'python3' }
 ];
 
 // The durable browser probes — the ones that are the standing regression net
@@ -62,7 +66,9 @@ const PROBE_SUITE = [
   { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
   { name: 'sd mixed context',    cmd: ['tools/cdp/sd-mixed-context.js'] },
   { name: 'sd component catalog',cmd: ['tools/cdp/sd-component-catalog.js'] },
+  { name: 'sd component return', cmd: ['tools/cdp/sd-component-return.js'] },
   { name: 'sd + app icons',      cmd: ['tools/cdp/sd-icons.js'] },
+  { name: 'ai book shelf',       cmd: ['tools/cdp/ai-shelf.js'] },
   { name: 'agent bridge',        cmd: ['tools/cdp/agent-bridge.js'] },
   { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
 ];
@@ -77,7 +83,10 @@ let failed = 0;
 
 for (const gate of GATES) {
   const cmd = FIX && gate.fix ? gate.fix : gate.cmd;
-  const r = spawnSync(process.execPath, cmd, { cwd: ROOT, encoding: 'utf8' });
+  // Most gates are node scripts; a gate may name its own interpreter (the
+  // js/sd slice-order check is the Python splitter's own --check, so the tool
+  // that knows the contract is the tool that enforces it).
+  const r = spawnSync(gate.bin || process.execPath, cmd, { cwd: ROOT, encoding: 'utf8' });
   const ok = r.status === 0;
   if (!ok) failed++;
   results.push({ name: gate.name, ok, out: `${r.stdout || ''}${r.stderr || ''}`.trim() });

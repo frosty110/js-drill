@@ -33,6 +33,18 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">6</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/reservation/">Reservation / Hold</a> <span class="ds-chip">signature</span> — A driver is held for a rider while the offer is outstanding, so two riders cannot be matched to the same car.</li>
+      <li><a href="../../../sd/components/c/geo-index/">Geospatial Index</a> <span class="ds-chip">signature</span> — Indexes driver locations by cell, so &#39;nearby available drivers&#39; is a range scan rather than a distance calculation across the fleet.</li>
+      <li><a href="../../../sd/components/c/websockets/">WebSockets / Persistent Connections</a> <span class="ds-chip">signature</span> — Carries continuous driver location updates and ride-match offers — both server-initiated and both latency-critical.</li>
+      <li><a href="../../../sd/components/c/load-balancer/">Load Balancer</a> — Distributes driver and rider connections across the matching fleet, rebalancing only on reconnect since an open socket cannot be moved.</li>
+      <li><a href="../../../sd/components/c/distributed-lock/">Distributed Lock</a> — Serialises assignment of one driver, so two concurrent matches cannot both claim the same car.</li>
+      <li><a href="../../../sd/components/c/grpc/">gRPC</a> — Internal calls between matching, pricing and trip services, where per-call overhead matters at ride-request volume.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Rider requests a ride; match a nearby available driver; live tracking both ways; trip lifecycle (accept/arrive/start/complete); fare, ETA, surge pricing.</li><li>Two client types: drivers (frequent location pings, receive offers) and riders (request, track, pay).</li><li>A driver may be offered to only one rider at a time — the assignment must be atomic.</li><li>Payments, maps and routing are treated as services we call.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>1M active drivers pinging every 4s → 250K location writes/s sustained</li><li>Keep only the latest position per driver — persisting every ping would be ~2 TB/day of near-useless data</li><li>Tens of millions of trips/day is only hundreds-to-low-thousands QPS by comparison</li><li>The live geo index is ~1M entries — small. The challenge is update throughput, not storage size.</li><li>Load concentrates in dense cities at rush hour, so per-shard peaks dwarf the global average</li></ul>

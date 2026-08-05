@@ -23,6 +23,45 @@ Reversible? <yes/no + how>
 
 ## RESOLVED
 
+## D15 · IA reconciled: three destinations, progress moves to the header, hierarchy via `parent`  (2026-08-04 · user decision)
+Decision: adopt [`docs/information-architecture.md`](../../docs/information-architecture.md)
+as the app's IA. In short: (a) the app answers four questions — what now /
+show me everything / how am I doing / change how it works; (b) the primary nav
+closes at **three** destinations — **Home · Library · Design** — plus the two
+aux items, **superseding D01's five**; (c) **Progress leaves the rail and
+becomes the header**, scoped to wherever the user currently is, with the full
+dashboard behind a click on the meter (narrows D09: the surface survives, its
+rail rung does not); (d) **Practice is a verb** — its sessions promote onto
+Home, its ~17 drills stay a launcher sheet, and it stops being a nav rung; (e)
+Home's track cards and Browse are one surface, **Library**; Home's *More* list
+is deleted as four duplicate rows; (f) the mechanism under all of it is a
+**`parent` field on every `js/routes.js` row**, from which breadcrumbs,
+up-navigation, truthful `aria-current` and the header's scoped meter all derive.
+System Design keeps its rail rung for now but gains the app shell (§4.1); it
+becomes a Library track in a later slice.
+Rationale: a scripted 15-step walk of the live app at 390px + 1280px measured
+0/15 surfaces with a breadcrumb, no `aria-current` anywhere inside a lesson, a
+rail destination (Practice) that never changes the URL, an overlay surviving a
+navigation, `history.back()` collapsing a whole system-design excursion into one
+entry, and the rail absent entirely on `system-design.html`. Every one traces to
+the same gap: `js/routes.js` knows what a URL *is* and never what it is *inside
+of*. Three surfaces answered "what needs repair" and two rendered the same
+29-section taxonomy — the duplication PROFILE's one-decision, phone-first,
+ADHD-prone user pays for on every screen. No capability retires (D05's
+principle): every mode stays reachable via the palette and `#/m/<slug>`.
+Alternatives considered: **adopt a framework** (React/Astro) for nested routing
+— rejected: it would have made three of the defects structurally impossible, but
+none of them is *caused* by the absence of one, and the cost is the no-build-step
+property, the 412 committed static share pages, and most of the 181 DOM-coupled
+probes; the `parent` field buys the same property for one field. **Keep Progress
+in the rail AND add header stats** (the "or maybe both" option) — rejected: two
+homes for one concept is precisely how this drift accumulated. **Retire the
+low-value drills** — rejected again, same reason as D05: no usage data.
+Reversible? Yes, and phase-by-phase — the migration in §7 is seven independently
+shippable slices, each green on its own; phase 1 (`parent` + breadcrumb) is
+purely additive, and the risky one (phase 5, Practice sessions onto Home) ships
+behind the `feature-scaffold`/`wire`/`ship` flag sequence.
+
 ## D14 · Deferred-backlog disposition (each item cleared / accepted / deferred-with-reason)  (2026-07-11 · iter 18)
 Decision: an explicit accounting of every deferred item from the nav + supabase
 audits and the design-loop STATE deferrals, so the backlog is auditable rather

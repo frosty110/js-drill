@@ -38,6 +38,7 @@ const GATES = [
   { name: 'content-order gate',  cmd: ['tools/test-content-order.js'] },
   { name: 'offline app shell',   cmd: ['tools/check-sw-shell.js'] },
   { name: 'sync key coverage',   cmd: ['tools/check-sync-coverage.js'] },
+  { name: 'icon consistency',    cmd: ['tools/check-icons.js'] },
   { name: 'content order lock',  cmd: ['tools/check-content-order.js', '--check'], fix: ['tools/check-content-order.js'] },
   { name: 'lesson exercises',    cmd: ['tools/validate-data.js'] },
   { name: 'system design',       cmd: ['tools/validate-system-design.js'] },
@@ -55,11 +56,13 @@ const PROBE_SUITE = [
   { name: 'ds page frame',       cmd: ['tools/cdp/ds-page-frame.js'] },
   { name: 'ds drag-scroll',      cmd: ['tools/cdp/ds-dragscroll.js'] },
   { name: 'home + review nav',   cmd: ['tools/cdp/home-nav.js'] },
+  { name: 'nav hierarchy',       cmd: ['tools/cdp/nav-hierarchy.js'] },
   { name: 'share URLs',          cmd: ['tools/cdp/share-urls.js'] },
   { name: 'sd study plans',      cmd: ['tools/cdp/sd-plans.js'] },
   { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
   { name: 'sd mixed context',    cmd: ['tools/cdp/sd-mixed-context.js'] },
   { name: 'sd component catalog',cmd: ['tools/cdp/sd-component-catalog.js'] },
+  { name: 'sd + app icons',      cmd: ['tools/cdp/sd-icons.js'] },
   { name: 'agent bridge',        cmd: ['tools/cdp/agent-bridge.js'] },
   { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
 ];

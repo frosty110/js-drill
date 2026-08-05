@@ -36,7 +36,7 @@ const MOCK_HISTORY_MAX = 5;
 // the 30-day window the sparkline targets per roadmap entry iter-31 #6.
 const HISTORY_MAX = 50;
 
-// iter 123: 🎹 L3 keyboard chips — one-tap insertion for high-cost JS tokens.
+// iter 123: L3 keyboard chips — one-tap insertion for high-cost JS tokens.
 // Selection criteria: tokens where (typing cost on phone keyboard) × (frequency
 // in canonical solutions) is high — paren/symbol/modifier-heavy beats short
 // keywords. Order groups related chips: declarations, control flow, operators,
@@ -69,7 +69,7 @@ function appendHistory(lessonId, event) {
   // iter 107: keep the Session Heatstrip live. Cheap (30-cell DOM rebuild
   // + ~50-event walk) and event-driven — no polling.
   if (typeof renderHeatstrip === 'function') renderHeatstrip();
-  // iter 141: 📳 Haptic Tap-Pulse — fire tactile feedback in tandem with the
+  // iter 141: Haptic Tap-Pulse — fire tactile feedback in tandem with the
   // event-stream write. Choke-point design means every L1-pass / L1-miss /
   // L3-pass call site (main L1 quiz, Gauntlet, What-If, Recognize, Bug-Hunt,
   // Match, etc.) gets haptic for free. L3-enter (iter 140) deliberately
@@ -80,7 +80,7 @@ function appendHistory(lessonId, event) {
   _hapticPulse(event);
 }
 
-// iter 141: 📳 Haptic Tap-Pulse — single dispatch helper. All pulse patterns
+// iter 141: Haptic Tap-Pulse — single dispatch helper. All pulse patterns
 // live in one place so future tweaks don't require touching call sites.
 // Capability-guarded with try/catch so a partial-vibrate-implementation
 // browser (e.g. one that defines navigator.vibrate but throws on unusual
@@ -221,7 +221,7 @@ function _countHintAttempts(lessonId, lookbackAttempts = 5) {
   return { hinted, total: recent.length };
 }
 
-// iter 101: 📐 Per-attempt hint-cost ribbon helper. Walks `state.history` for
+// iter 101: Per-attempt hint-cost ribbon helper. Walks `state.history` for
 // one lesson and returns per-attempt buckets (most recent last). Each item:
 // `{ hintCount, passed }`. `hintCount` is the unique-tier count of `hint-tier-*`
 // + `critical-lines-used` events within an attempt window (bounded by L3-pass).
@@ -245,7 +245,7 @@ function _perAttemptHintCounts(lessonId, lookbackAttempts = 5) {
   return attempts.slice(-lookbackAttempts);
 }
 
-// iter 101: 🎯 Self-rescue rate — global aggregator across ALL lessons in
+// iter 101: Self-rescue rate — global aggregator across ALL lessons in
 // `state.history`. Walks every lesson, groups events into L3-pass-bounded
 // attempts, counts attempts that completed with ZERO hints (i.e., the user
 // self-rescued through the L3 drill without leaning on a scaffold). Returns
@@ -279,7 +279,7 @@ function _selfRescueRateGlobal() {
   };
 }
 
-// iter 106: 📈 Mastery Half-Life — per-lesson longitudinal SR signal.
+// iter 106: Mastery Half-Life — per-lesson longitudinal SR signal.
 // Walks `state.history` for each lesson, extracts L3-pass timestamps, and
 // computes the median gap between consecutive passes (= cycle interval the
 // user has been holding the lesson at). Buckets each lesson by half-life:
@@ -329,9 +329,9 @@ function _masteryHalfLife(slipperyTopN = 5) {
 // iter 140: ⏲ Pace-Bar — per-lesson rolling median time-to-solve for the
 // peripheral-vision tempo bar above L3. Returns ms median or null when not
 // enough data. Two data sources, in priority order:
-//   1. state.mockHistory[lessonId] (≥2 entries) — clean ms durations from
+// 1. state.mockHistory[lessonId] (≥2 entries) — clean ms durations from
 //      timed mock-interview attempts.
-//   2. Derived from state.history L3-enter → L3-pass deltas (≥2 deltas).
+// 2. Derived from state.history L3-enter → L3-pass deltas (≥2 deltas).
 //      Each delta is capped at PACE_BAR_ATTEMPT_CAP_MS (60 min) so an
 //      "I left the tab open overnight" outlier doesn't poison the median.
 // If neither source yields ≥2 samples, returns null and the bar auto-hides.
@@ -376,11 +376,11 @@ const TRACK_PILLS = {
 // Study-plan registry. The user subscribes to exactly one (state.subscribedPathId).
 // Populated from data/paths.json on boot via loadPaths(). Each entry:
 //   { id, label, icon, kind, blurb, lessons: [lessonId, ...], [url] }
-// The 📅 Today's Plan button routes by the subscribed path's `kind`:
-//   - 'lessons' → opens the in-app Today's Plan modal (curated due/path/weak session)
-//   - 'prep'    → navigates to a standalone dashboard page (e.g. prep.html)
-// The 🧭 Plan View sidebar filter scopes the sidebar to the path's drill-lesson
-// sequence (path.lessons). A path with empty lessons[] disables the 🧭 button.
+// The Today's Plan button routes by the subscribed path's `kind`:
+// - 'lessons' → opens the in-app Today's Plan modal (curated due/path/weak session)
+// - 'prep'    → navigates to a standalone dashboard page (e.g. prep.html)
+// The Plan View sidebar filter scopes the sidebar to the path's drill-lesson
+// sequence (path.lessons). A path with empty lessons[] disables the button.
 // Progress is keyed by lesson id, NOT by path, so switching plans never resets
 // mastery — two-sum stays mastered whether you reach it via Starter or Prep.
 // Adding a new path is now a pure-data change: append an entry to data/paths.json.
@@ -388,14 +388,14 @@ let PATHS = []; // populated by loadPaths() on boot
 
 // ──────────────────────────────────────────────────────────────────────────
 //  DIAGNOSTIC SIGNAL (audit F2)
-//  The 43-question diagnostic (diagnostic.html → localStorage
+// The 43-question diagnostic (diagnostic.html → localStorage
 //  `jsdrill.diagnostic.v1`) was a WRITE-ONLY SINK: asked, stored, synced to
 //  Supabase and exported for grading, but `grep -rn loadDiagnostic js/` hit
 //  only its definition in js/storage.js and the upload in js/sync.js. Nothing
 //  in js/app/* ever read it — while PROFILE.md § "Study intent — autopilot"
 //  makes the last diagnostic the thing that steers the pick ("if the last one
 //  showed complexity-pricing weak …, today's autopilot weights complexity-heavy
-//  lessons + the 🧮 Big-O drill higher"). `diagnosticSignal()` is the one
+//  lessons + the Big-O drill higher"). `diagnosticSignal()` is the one
 //  reader; Home (js/app/22-home.js) and `_pickMockLessonId` are its consumers.
 //
 //  WHY A TABLE AND NOT A FUZZY MATCH: the diagnostic's taxonomy is its own —

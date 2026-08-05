@@ -10,7 +10,7 @@ function updateOfflinePackChip() {
   btn.classList.toggle('hidden', n === 0);
   cnt.textContent = String(n);
 }
-// iter 114: ☁️ Sync Onboarding — one-time hint banner promoting the existing
+// iter 114: ☁Sync Onboarding — one-time hint banner promoting the existing
 // `js/sync.js` top-right chip. Fires only when ALL conditions met:
 //   - banner has never been shown/dismissed (state.syncHintShown === false)
 //   - the user just passed L3 (commitment moment, not mid-drill — minimizes
@@ -51,7 +51,7 @@ function _showSyncHintBanner() {
   banner.id = 'sync-hint-banner';
   banner.innerHTML = `
     <div class="sync-hint-body">
-      <span class="sync-hint-icon">☁️</span>
+      <span class="sync-hint-icon">${dsIcon('cloud', 16)}</span>
       <div class="sync-hint-text">
         <div class="sync-hint-title">Drilling on multiple devices?</div>
         <div class="sync-hint-sub">Your phone progress and laptop progress are separate today. Tap Sync to merge them across devices.</div>
@@ -78,7 +78,7 @@ function _showSyncHintBanner() {
   banner.querySelector('[data-action="tap-sync"]').addEventListener('click', () => close(true));
   banner.querySelector('[data-action="dismiss"]').addEventListener('click', () => close(false));
 }
-// iter 117: 🎤 Clarify-First Ritual — opt-in pre-L3 tap-gate. When the user
+// iter 117: Clarify-First Ritual — opt-in pre-L3 tap-gate. When the user
 // flips `state.clarifyRitualOn` on, every Patterns/Applied L3 visit shows a
 // clarifier-chip card BEFORE the editor unlocks. Correct chips are mined from
 // the lesson's `conversation.sections[0].say` bullet list (the existing
@@ -146,7 +146,7 @@ function _renderClarifyRitual(body, lesson, content) {
   wrap.className = 'clarify-shell';
   wrap.innerHTML = `
     <div class="clarify-header">
-      <span class="clarify-tag">🎤 Clarify-First · before you code</span>
+      <span class="clarify-tag">${dsIcon('mic', 15)} Clarify-First · before you code</span>
       <button class="clarify-skip" data-action="clarify-skip" type="button">Skip this time →</button>
     </div>
     <div class="clarify-instructions">
@@ -196,6 +196,7 @@ function _renderClarifyRitual(body, lesson, content) {
         if (isCorrect) {
           state.clarify.correct++;
           btn.classList.add('clarify-chip-correct');
+          btn.insertAdjacentHTML('afterbegin', dsIcon('check', 12));
           btn.disabled = true;
           correctTapped++;
           const cnt = cardEl.querySelector('[data-clarify-counter]');
@@ -205,13 +206,14 @@ function _renderClarifyRitual(body, lesson, content) {
             saveProgress();
             _clarifySessionCompleted.add(lesson.id);
             const progress = cardEl.querySelector('[data-clarify-progress]');
-            if (progress) progress.innerHTML = '<strong style="color:#ffce5a">✓ Ritual complete — unlocking editor…</strong>';
+            if (progress) progress.innerHTML = `<strong style="color:#ffce5a">${dsIcon('check', 14)} Ritual complete — unlocking editor…</strong>`;
             setTimeout(() => renderLesson(), 700);
           } else {
             saveProgress();
           }
         } else {
           btn.classList.add('clarify-chip-wrong');
+          btn.insertAdjacentHTML('afterbegin', dsIcon('alert', 12));
           btn.disabled = true;
           saveProgress();
         }
@@ -219,7 +221,7 @@ function _renderClarifyRitual(body, lesson, content) {
     });
   });
 }
-// iter 118: 🔥 Hot-Seat Follow-Up — opt-in post-L3-pass tap-card. When the
+// iter 118: Hot-Seat Follow-Up — opt-in post-L3-pass tap-card. When the
 // user flips `state.hotseatOn` on, every L3 pass on a Patterns/Applied lesson
 // surfaces a centered modal with one mechanic-tag-derived follow-up (mined
 // from `data/hotseat-followups.json` byMechanic map) + 3 distractors picked
@@ -323,8 +325,8 @@ function _showHotseatModal(lesson, card) {
     <div class="hotseat-scrim" data-action="hotseat-skip"></div>
     <div class="hotseat-card" role="dialog" aria-labelledby="hotseat-title">
       <div class="hotseat-header">
-        <span class="hotseat-tag">🔥 Hot-Seat · interviewer follow-up</span>
-        <button class="hotseat-skip" data-action="hotseat-skip" type="button" aria-label="Skip">✕</button>
+        <span class="hotseat-tag">${dsIcon('flame', 15)} Hot-Seat · interviewer follow-up</span>
+        <button class="hotseat-skip" data-action="hotseat-skip" type="button" aria-label="Skip">${dsIcon('x', 14)}</button>
       </div>
       <div class="hotseat-prompt" id="hotseat-title">
         You passed <strong>${escapeHtml(lesson.title)}</strong>. The interviewer leans in:
@@ -368,7 +370,7 @@ function _showHotseatModal(lesson, card) {
         if (fb) {
           fb.innerHTML = `
             <div class="hotseat-resolved">
-              <div class="hotseat-resolved-text">${firstTapWasCorrect ? '✓ First-try correct.' : '✓ Got it.'} That's the follow-up an interviewer would push.</div>
+              <div class="hotseat-resolved-text">${firstTapWasCorrect ? dsIcon('check', 14) + ' First-try correct.' : dsIcon('check', 14) + ' Got it.'} That's the follow-up an interviewer would push.</div>
               <button class="hotseat-continue" data-action="hotseat-continue" type="button">Continue →</button>
             </div>
           `;
@@ -391,7 +393,7 @@ function _showHotseatModal(lesson, card) {
 // Stats tile DEFERRED to v2 — data captured this iter for soak window.
 const _calibrationEstimated = new Set();  // lessonIds estimated this session
 const _calibrationSkipped = new Set();     // lessonIds explicitly skipped this session
-const _calibrationActive = {};              // lessonId → { bucket, startedAt }
+const _calibrationActive = {};              // lessonId  { bucket, startedAt }
 const CALIBRATION_BUCKET_MIDPOINT_SEC = {
   // Midpoints used for absError computation against actual seconds.
   'lt2': 90, '2to5': 210, '5to10': 450, 'gt10': 900
@@ -404,7 +406,7 @@ function _calibrationMaybeInject(lesson, wrap) {
   const strip = document.createElement('div');
   strip.className = 'calib-strip';
   strip.innerHTML = `
-    <div class="calib-prompt">⏱ Quick estimate — how long until L3 passes?</div>
+    <div class="calib-prompt">${dsIcon('clock', 15)} Quick estimate — how long until L3 passes?</div>
     <div class="calib-buckets">
       <button class="calib-bucket" data-bucket="lt2" type="button">&lt; 2 min</button>
       <button class="calib-bucket" data-bucket="2to5" type="button">2–5 min</button>
@@ -501,7 +503,7 @@ init().then(refreshDerivedCopy).catch(err => console.error(err));
 // iter 127: top-bar dropdown shell (Phase 2 of the nav refactor epic).
 // Single dropdown panel anchored under the topbar; opens with content
 // populated by whichever menu button (Practice/Drills/Train/Insights) or
-// the ⚙️ Settings icon was clicked. Phase 3 (iter 128) fills the menus
+// the ⚙Settings icon was clicked. Phase 3 (iter 128) fills the menus
 // with actual mode-launchers; Phase 2 ships the shell + open/close JS only.
 //
 // The existing sidebar buttons remain wired for this phase so nothing
@@ -524,14 +526,14 @@ init().then(refreshDerivedCopy).catch(err => console.error(err));
 //       Reveal-Replay / Resurrect / Bridge). They render as sidebar count
 //       pills already; users only act when count > 0, so they don't belong
 //       in a menu of CHOICES.
-//   (2) Drill collapses 17 modes-in-5-groups → 5 family entries. Each
+// (2) Drill collapses 17 modes-in-5-groups → 5 family entries. Each
 //       family is a single-tap "shuffle-within-family" launcher
 //       (action: 'shuffle') that picks one of its modes at random.
 //   (3) Practice gains one "Pick one" smart-cascade launcher
 //       (action: 'pick-smart') that replaces Lucky + Shuffle by routing
 //       to Review / Weak / At-Risk first, falling back to Lucky or
 //       Shuffle. One affordance instead of three.
-//   (4) Reflect → Review (the menu's actual job is looking BACKWARD at
+// (4) Reflect → Review (the menu's actual job is looking BACKWARD at
 //       progress, not abstract reflection).
 //
 // Item shape: either a string (sidebar button id, looked up via
@@ -573,7 +575,7 @@ const TOPBAR_MENU_TAXONOMY = {
       // being tellable apart. Each one keeps only what distinguishes it from
       // its siblings — the routing order here, the member list on the Drill
       // families — since the label already carries the gloss.
-      { emoji: '🎲', icon: 'dice', label: 'Pick one', desc: 'Routes to due reviews, weak spots or at-risk first — else a fresh lesson.', action: 'pick-smart' },
+      { icon: 'dice', label: 'Pick one', desc: 'Routes to due reviews, weak spots or at-risk first — else a fresh lesson.', action: 'pick-smart' },
       'warmup-btn',
       'audio-btn',
       // nav-audit P1-2 / P2-1: the two standalone pages get real launcher rows
@@ -591,10 +593,10 @@ const TOPBAR_MENU_TAXONOMY = {
       // audit F14: the member list IS the distinguisher — the family label
       // already says what the drills do, so the "… — mental execution drills."
       // tail was pure width. Trimmed to fit two lines at 390px.
-      { emoji: '🧠', icon: 'eye', label: 'Run it in your head', desc: 'Random pick: Predict / What-If / Trace-Hop / Reverse-Walk', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
-      { emoji: '🔧', icon: 'wrench', label: 'Judge a code change', desc: 'Random pick: Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
-      { emoji: '🧭', icon: 'compass', label: 'Name the pattern', desc: 'Random pick: Recognize / Reverse / Constellation / Match', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
-      { emoji: '📝', icon: 'file-text', label: 'Recall the traps', desc: 'Random pick: Notes-Cloze / Notes-Locate / Crux', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
+      { icon: 'eye', label: 'Run it in your head', desc: 'Random pick: Predict / What-If / Trace-Hop / Reverse-Walk', action: 'shuffle', ids: ['crystal-btn', 'whatif-btn', 'trace-hop-btn', 'reverse-walk-btn'] },
+      { icon: 'wrench', label: 'Judge a code change', desc: 'Random pick: Bug-Hunt / Mutate / Claim / Constraint-Shift / Swap', action: 'shuffle', ids: ['bug-hunt-btn', 'mutate-btn', 'claim-btn', 'constraint-shift-btn', 'swap-btn'] },
+      { icon: 'compass', label: 'Name the pattern', desc: 'Random pick: Recognize / Reverse / Constellation / Match', action: 'shuffle', ids: ['recognize-btn', 'reverse-btn', 'constellation-btn', 'match-btn'] },
+      { icon: 'file-text', label: 'Recall the traps', desc: 'Random pick: Notes-Cloze / Notes-Locate / Crux', action: 'shuffle', ids: ['notes-drill-btn', 'notes-locate-btn', 'gotcha-btn'] },
       'conv-drill-btn'
     ]
   },
@@ -613,13 +615,13 @@ const TOPBAR_MENU_TAXONOMY = {
     groups: [
       { label: 'Progress', items: ['sections-grid-btn', 'mechanics-btn'] },
       { label: 'Share', items: ['export-btn', 'ai-coach-btn'] },
-      { label: '📖 Reference (this plan)', items: ['cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn', 'cram-shapes-btn', 'cram-review-btn'] }
+      { label: dsIcon('book-open', 15) + ' Reference (this plan)', items: ['cram-cheat-btn', 'cram-glossary-btn', 'cram-behavior-btn', 'cram-shapes-btn', 'cram-review-btn'] }
     ]
   },
   settings: {
     label: 'Settings',
     blurb: 'Toggles, data, and account.',
-    // 🧭 Plan View + 👁 Hide Mastered are NOT here — they're view filters that
+    // Plan View + 👁 Hide Mastered are NOT here — they're view filters that
     // live on the Browse page's filter panel (P4 part 3), not in this menu.
     items: ['clarify-ritual-btn', 'hotseat-btn', 'calibrate-btn', 'pace-bar-btn', 'haptic-btn', 'adhd-mode-btn', 'font-size-btn', 'install-btn', 'offline-pack-btn', 'backup-btn', 'restore-btn', 'reset-btn']
   }
@@ -656,13 +658,13 @@ function topbarPickSmartTarget() {
 // Returns null when the button is missing OR currently unactionable. Three
 // hide channels exist, deliberately distinct:
 //
-//   .hidden class            → dynamic empty-state hide (Review/Weak/At-Risk
+// .hidden class            → dynamic empty-state hide (Review/Weak/At-Risk
 //                              while count=0). Filter out — the action would
 //                              launch into nothing.
-//   inline style.display:none → context/capability hide (#haptic-btn on iOS,
+// inline style.display:none → context/capability hide (#haptic-btn on iOS,
 //                              cram-only buttons with no cram active). Filter
 //                              out — the surface genuinely can't act.
-//   .sidebar-curation-hidden  → plan UX-focus hide. KEEP. The button is fully
+// .sidebar-curation-hidden  → plan UX-focus hide. KEEP. The button is fully
 //                              actionable; the active plan only chose not to
 //                              clutter the sidebar with it. Activities are
 //                              modality, not corpus — Drill/Train/Reflect
@@ -679,21 +681,15 @@ function _topbarItemFromButton(btn) {
   cloned.querySelectorAll('[id$="-count"]').forEach(el => el.remove());
   // Collapse whitespace + strip empty parens left behind by the span removal.
   const text = cloned.textContent.trim().replace(/\s*\(\s*\)\s*$/, '').replace(/\s+/g, ' ').trim();
-  // Split on first whitespace: emoji prefix + label tail. Plain-text buttons
-  // (Reset / Backup / Restore) have no leading emoji — emoji becomes ''.
-  const spaceIdx = text.indexOf(' ');
-  let emoji = '', label = text;
-  if (spaceIdx > 0) {
-    const first = text.slice(0, spaceIdx);
-    // Heuristic: if the first token contains any non-ASCII byte, treat it
-    // as an emoji/symbol; otherwise it's part of the label.
-    if (/[^\x00-\x7f]/.test(first)) {
-      emoji = first;
-      label = text.slice(spaceIdx + 1).trim();
-    }
-  }
+  // The mark comes from DS_MODE_ICONS, keyed by button id — not from the label.
+  // It used to be parsed OUT of the label by a "first token contains a
+  // non-ASCII byte" heuristic, which made the button's TEXT the de-facto icon
+  // registry: every surface wanting a mode's glyph re-parsed it, and a label
+  // that merely began with a symbol grew a phantom icon. The label is now just
+  // the label, and the mark has one home (invariant 9).
   const desc = (btn.getAttribute('title') || '').trim();
-  return { id: btn.id, emoji, label, desc };
+  const icon = (typeof DS_MODE_ICONS === 'object' && DS_MODE_ICONS[btn.id]) || '';
+  return { id: btn.id, icon, label: text, desc };
 }
 
 function renderTopbarMenuContents(menuKey) {
@@ -703,13 +699,13 @@ function renderTopbarMenuContents(menuKey) {
   // dropdown with that category's items (delegated in initTopbarDropdowns).
   if (menuKey === 'mobile-browse') {
     const cats = ['practice', 'drills', 'train', 'insights'];
-    const blurb = `<div class="topbar-menu-blurb">Browse modes by category. (Or use 🔍 to search by name, ⚙️ for toggles.)</div>`;
+    const blurb = `<div class="topbar-menu-blurb">Browse modes by category. (Or search by name, or open Settings for toggles.)</div>`;
     const rows = cats.map(key => {
       const cat = TOPBAR_MENU_TAXONOMY[key];
       if (!cat) return '';
       return `<button class="topbar-item-mobile-cat" role="menuitem" data-mobile-cat="${escapeHtml(key)}">
         <div class="topbar-item-text">
-          <div class="topbar-item-name">${escapeHtml(cat.label)} <span class="topbar-item-caret" aria-hidden="true">▸</span></div>
+          <div class="topbar-item-name">${escapeHtml(cat.label)} <span class="topbar-item-caret" aria-hidden="true">${dsIcon('chevron-right', 13)}</span></div>
           <div class="topbar-item-desc">${escapeHtml(cat.blurb)}</div>
         </div>
       </button>`;
@@ -739,14 +735,14 @@ function renderTopbarMenuContents(menuKey) {
       const ids = Array.isArray(it.ids) ? it.ids.join(',') : '';
       return `
         <button class="topbar-item" role="menuitem" data-action="shuffle" data-shuffle-ids="${escapeHtml(ids)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-          <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+          <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
           <span class="topbar-item-name">${escapeHtml(it.label)}</span>
         </button>`;
     }
     if (it.action === 'pick-smart') {
       return `
         <button class="topbar-item" role="menuitem" data-action="pick-smart"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-          <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+          <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
           <span class="topbar-item-name">${escapeHtml(it.label)}</span>
         </button>`;
     }
@@ -756,7 +752,7 @@ function renderTopbarMenuContents(menuKey) {
     if (it.action === 'href') {
       return `
         <a class="topbar-item" role="menuitem" data-action="href" href="${escapeHtml(it.href)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-          <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji || '')}</span>
+          <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
           <span class="topbar-item-name">${escapeHtml(it.label)}</span>
         </a>`;
     }
@@ -767,7 +763,7 @@ function renderTopbarMenuContents(menuKey) {
     const slug = it.id.replace(/-btn$/, '');
     return `
       <a class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}" href="#/m/${escapeHtml(slug)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-        <span class="topbar-item-emoji" aria-hidden="true">${escapeHtml(it.emoji)}</span>
+        <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
         <span class="topbar-item-name">${escapeHtml(it.label)}</span>
       </a>`;
   };
@@ -902,7 +898,7 @@ function initTopbarDropdowns() {
     dropdown.addEventListener('mouseleave', scheduleHoverClose);
   }
 
-  // iter 130 Phase 5: mobile-only 📂 Browse button — opens the dropdown
+  // iter 130 Phase 5: mobile-only Browse button — opens the dropdown
   // with menuKey='mobile-browse', which renders 4 category rows. The
   // open() helper derives menuKey from `data-menu` || id.replace('topbar-',''),
   // so this id 'topbar-mobile-menu' resolves to menuKey='mobile-menu'. We
@@ -925,8 +921,8 @@ function initTopbarDropdowns() {
     // the selected category's content; aria-expanded on the mobile-menu
     // button stays true. Checked first because `.topbar-item-mobile-cat`
     // doesn't have data-btn-id (the synth-click branch below would no-op).
-    // iter 133: prepend a `‹ Categories` back button so mobile users
-    // can return to the category picker without re-tapping the 📂 Browse
+    // iter 133: prepend a dsIcon('chevron-left', 14) + ` Categories` back button so mobile users
+    // can return to the category picker without re-tapping the Browse
     // button (1-tap instead of 2-tap).
     // iter 137: also prepend a category-name heading between the back
     // button and the blurb, so the user keeps visual orientation while
@@ -942,7 +938,7 @@ function initTopbarDropdowns() {
           ? `<div class="topbar-cat-heading" data-cat-heading="${escapeHtml(key)}">${escapeHtml(cat.label)}</div>`
           : '';
         body.innerHTML = `
-          <button class="topbar-cat-back" data-cat-back type="button">‹ Categories</button>
+          <button class="topbar-cat-back" data-cat-back type="button">${dsIcon('chevron-left', 14)} Categories</button>
           ${heading}
           ${renderTopbarMenuContents(key)}
         `;
@@ -997,7 +993,7 @@ function initTopbarDropdowns() {
     target.click();
   });
 
-  // ❓ Help icon — opens the existing help-modal (same as `?` keypress).
+  // Help icon — opens the existing help-modal (same as `?` keypress).
   const helpBtn = document.getElementById('topbar-help');
   if (helpBtn) {
     helpBtn.addEventListener('click', () => {

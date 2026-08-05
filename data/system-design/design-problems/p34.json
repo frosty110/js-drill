@@ -1,0 +1,216 @@
+{
+  "id": "p34",
+  "num": 34,
+  "part": "Read-Heavy Systems & Search",
+  "title": "Design a Sanctions Screening System",
+  "summary": "Check every customer and counterparty name against government sanctions lists, at onboarding and again whenever a list changes. The signature challenge is that the two workloads look identical and are not: one is a sub-second block on a signup form, the other is a re-screen of the entire customer base triggered by a file the government publishes without warning.",
+  "keyTakeaways": [
+    "Split the workloads first: real-time screening on a user-blocking path, and batch rescreening of everyone when a list publishes. Same matching core, different serving path, different failure consequences.",
+    "Two-stage retrieval is the whole shape — cheap high-recall candidate generation, then expensive scoring on a handful of survivors. Never run the expensive matcher over the full list.",
+    "Normalization earns more recall than any clever scorer: transliteration, Unicode folding, honorifics, legal-entity suffixes, and name order that varies by culture.",
+    "Sanctions are strict liability, so the threshold stays deliberately loose and the resulting noise is cleared downstream. Tuning this on precision is how you build a compliant-looking system that misses people.",
+    "Size the index by name variants, not entities. Alias and script expansion turns tens of thousands of entities into millions of searchable strings.",
+    "Freeze the list version on every decision. 'They were not on the list then' is only a defence if you can prove which snapshot you screened against.",
+    "A list delta is an event that can rescreen millions of customers with no warning, so the batch path needs its own capacity and must not share a pool with the onboarding path.",
+    "A matching-logic change forces a full rescreen of everyone, which makes deploying a scorer change an operational event rather than a code push."
+  ],
+  "brief": {
+    "functional": [
+      "Screen a name (person or business) against consolidated sanctions and watchlists, returning a match decision with the evidence behind it.",
+      "Real-time screening at onboarding and at payment time, on the blocking path.",
+      "Rescreen the existing customer base whenever a list publishes a change, and on demand when matching logic changes.",
+      "Route probable matches to a human reviewer and record the adjudication so the same name does not re-alert forever.",
+      "Out of scope: transaction monitoring (a different system), the sanctions lists themselves (we ingest them), and the payment block itself."
+    ],
+    "scale": [
+      "Consolidated lists: ~40K sanctioned entities, but alias, script and spelling expansion yields ~2-5M searchable name variants",
+      "Customer base: 20M customers plus counterparties, screened at onboarding and on every payment",
+      "Real-time path: ~500 screenings/sec average, ~2K/sec peak, p99 under 200ms because it blocks a signup form or a payment",
+      "Batch path: a list delta touching a common name can force a rescreen of the full 20M base, which is 4 orders of magnitude more work arriving with no notice",
+      "Index size is small in bytes (a few GB of name variants) but the fan-out per query is what costs"
+    ],
+    "gate": [
+      0,
+      1
+    ]
+  },
+  "questions": [
+    {
+      "type": "open",
+      "prompt": "Scope a sanctions screening system. What are you building, and what is the first structural decision?",
+      "points": [
+        "Functional: screen a name against consolidated watchlists, return a decision with evidence, route probable matches to a reviewer, and record adjudications so a cleared name does not re-alert forever.",
+        "The first structural decision is that there are two workloads, not one, and they only share the matching core.",
+        "Real-time screening sits on a blocking path — a signup form or a payment — so it needs a tight p99 and a defined behaviour when the screener is down.",
+        "Batch rescreening is triggered by an external event (a list publish) and can touch the entire customer base with no warning.",
+        "Out of scope: transaction monitoring is a different system, and we ingest the lists rather than curating them.",
+        "The dominating legal constraint is strict liability: for sanctions, intent is not a defence, so a miss is categorically worse than noise.",
+        "That inverts the usual tuning instinct — you deliberately over-generate candidates and pay for human clearing, rather than tightening the threshold to reduce alerts.",
+        "State the availability decision explicitly: if the screener is unavailable, do you block onboarding or let it through and screen later? Both are real answers with different regulatory exposure."
+      ],
+      "answer": "Screen a name against consolidated watchlists, return a decision with the evidence behind it, route probable matches to a human, and remember adjudications so a cleared name does not alert forever. The first thing I would establish is that this is two workloads sharing one matching core: a real-time path that blocks a signup or a payment and needs a tight p99, and a batch path triggered by a government list publish that can rescreen the whole customer base with no notice. Those have completely different capacity shapes and should not share a pool. The constraint that shapes the tuning is strict liability — for sanctions, intent is not a defence — so a miss is categorically worse than noise, and I would deliberately over-generate candidates and pay for human clearing rather than tighten the threshold. I would also force an explicit decision on what happens when the screener is down, because blocking onboarding and letting it through are both defensible and they have very different exposure.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Estimate the scale on both paths, and say which number surprises people.",
+      "points": [
+        "Lists: roughly 40K sanctioned entities across consolidated sources. That sounds tiny and it is the misleading number.",
+        "Each entity carries aliases, transliterations, spelling variants and script variants — often 20-100 per entity — so the searchable set is 2-5M name variants, not 40K.",
+        "Sizing the index by entity count underestimates it by two orders of magnitude, which is the classic mistake on this problem.",
+        "Real-time path: 20M customers, screened at onboarding plus every payment. Say 500 screenings/sec average, 2K/sec peak.",
+        "p99 under 200ms because it is blocking a form or a payment authorization, so this is a latency-sensitive read path.",
+        "Batch path: a list delta adding one common surname can force rescreening all 20M customers. That is 20M matches in a window versus 500/sec steady state.",
+        "So the batch path is four orders of magnitude more work, arriving on someone else's schedule. It needs isolated capacity.",
+        "Storage is trivial — a few GB of name variants and adjudication records. The cost is fan-out per query and the burst capacity for rescreening."
+      ],
+      "answer": "The number that misleads people is the list size: about forty thousand sanctioned entities, which sounds like something you could linear-scan. But each entity carries aliases, transliterations and spelling variants, often twenty to a hundred of them, so the searchable set is two to five million name strings. Sizing the index by entities underestimates it by two orders of magnitude. On the real-time path, twenty million customers screened at onboarding and on every payment gives roughly five hundred a second with peaks around two thousand, at a p99 under two hundred milliseconds because it blocks a form. The batch path is the interesting one: a list delta adding one common surname can force a rescreen of all twenty million customers, so it is four orders of magnitude more work arriving on a government's schedule rather than mine. Storage is negligible; the cost is fan-out per query and burst capacity.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: how does the matching actually work? Walk through a single screening.",
+      "points": [
+        "Normalize aggressively first: Unicode folding, transliteration to a common script, case, punctuation, honorifics (Mr, Dr, Sheikh), and legal-entity suffixes (Ltd, GmbH, LLC).",
+        "Handle name-order variance — given/family order differs by culture, so compare as an unordered token set rather than as a string.",
+        "Stage one is candidate generation, optimized for recall and cheapness: n-gram inverted index, phonetic keys, or vector nearest-neighbour, returning tens of candidates from millions of variants.",
+        "Stage two is scoring, optimized for precision and allowed to be expensive: edit distance, token overlap, Jaro-Winkler, plus non-name signals.",
+        "Score beyond the name: date of birth, nationality, place of birth, and known identifiers such as passport or company registration number. A name match with a matching DOB is a different animal from a name match alone.",
+        "Bucket the output into three bands — clear no-match, probable match to a human, definite match blocked — rather than a binary.",
+        "The borderline band is where the cost is, and where an LLM adjudicating with a written rationale genuinely helps, because the alternative is a person reading the same three fields.",
+        "Never run stage two over the full list. The entire design is that the expensive comparison only ever sees a handful of survivors."
+      ],
+      "answer": "Normalization does most of the work and it is where recall is won or lost: Unicode folding, transliteration into a common script, stripping honorifics and legal-entity suffixes, and comparing as an unordered token set because given and family name order varies by culture. Then two stages. Stage one generates candidates cheaply and with high recall — an n-gram inverted index, phonetic keys, or vector nearest-neighbour — pulling tens of candidates out of millions of variants. Stage two scores those survivors expensively with edit distance, token overlap and, importantly, signals that are not the name: date of birth, nationality, place of birth, passport or registration number. A name match with a corroborating date of birth is a completely different finding from a name match alone. The output is three bands rather than a boolean, and the borderline band is where the money goes — that is exactly where an LLM writing a rationale earns its place, because the alternative is a human reading the same three fields.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "Your screener produces 95% false positives. A tempting fix is to raise the match threshold until the alert volume is manageable. Why is that the wrong instinct here?",
+      "options": [
+        "Because higher thresholds increase latency on the scoring stage",
+        "Because sanctions are strict liability: a missed match is a violation regardless of intent or of how well-calibrated the threshold was, so recall is not tradeable against operational cost",
+        "Because regulators mandate a specific numeric threshold that cannot be changed",
+        "Because false positives are cheaper to process than false negatives are to detect"
+      ],
+      "answer": 1,
+      "explain": "This is the domain constraint that overrides normal tuning instincts. Under a strict-liability regime, processing a payment for a sanctioned party is a violation whether or not you were careless and whether or not your model was well calibrated — there is no defence that says the threshold was statistically reasonable. So recall is close to non-negotiable and the false-positive volume is a cost you manage downstream rather than a signal to tighten the matcher. The right responses are better normalization, more corroborating signals like date of birth to separate the bands, adjudication memory so a cleared name stops re-alerting, and cheaper clearing of the borderline band. Regulators do not publish a numeric threshold; they expect a risk-based program you can justify. And the last option has the economics backwards: false negatives are largely undetectable, which is precisely why you cannot trade against them.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Deep dive: a list publishes a delta at 09:00 on a Tuesday. What happens?",
+      "points": [
+        "Ingest the new list version as an immutable, versioned snapshot — never mutate the current index in place, because decisions reference the version they screened against.",
+        "Diff against the previous version to get added, modified and removed entries. Additions are the urgent case.",
+        "Build the new index alongside the old, then swap atomically. A half-updated index screens some customers against old data and some against new, with no way to tell which.",
+        "Rescreen scope: for a pure addition you only need to screen the existing base against the new entries, which is far cheaper than a full cross-product.",
+        "That asymmetry is the key optimization — new-entries-against-all-customers, not all-entries-against-all-customers.",
+        "But a matching-logic change (a new normalizer, a re-tuned scorer) invalidates every prior result and forces a genuine full rescreen, so deploying the scorer is an operational event, not a code push.",
+        "Run the batch on isolated capacity. If it shares a pool with the real-time path, a rescreen brings down onboarding.",
+        "Emit progress and completion as first-class state: 'we rescreened everyone against the 14 March list' is a claim someone will have to make to a regulator.",
+        "Adjudication memory has to survive: a name a human cleared last month should not re-alert identically, but a name cleared against an old list version must re-alert when the entry it was cleared against changes."
+      ],
+      "answer": "Ingest the delta as a new immutable list version rather than mutating in place, because every past decision references the version it screened against. Diff it to get additions, modifications and removals, then build the new index alongside the old and swap atomically — a half-updated index screens some customers against old data and some against new and you cannot tell afterwards which. The important optimization is scope: for pure additions you only need to screen the existing base against the new entries, not re-run the full cross-product, which turns an intractable job into a manageable one. The case that does force a genuine full rescreen is a matching-logic change, since a new normalizer invalidates every prior result — which makes deploying the scorer an operational event rather than a deploy. I would run all of this on isolated capacity, because if the batch shares a pool with the real-time path then a rescreen takes down onboarding.",
+      "crux": true
+    },
+    {
+      "type": "mc",
+      "q": "A customer was screened and cleared in January. In September they are found to have been sanctioned since March. What in the design determines whether you can defend that?",
+      "options": [
+        "The reviewer's written justification for clearing them in January",
+        "Whether the January decision recorded the list version it screened against, and whether the March delta triggered a rescreen that covered this customer",
+        "Whether the matching algorithm scored them below the threshold at the time",
+        "Whether the customer's identifiers were complete enough to match on"
+      ],
+      "answer": 1,
+      "explain": "The January decision is defensible on its own terms if you can show which list snapshot it screened against and that the name genuinely was not on it. What creates liability is the gap between March and September — the period when they were sanctioned and you did not notice. So the defence has two halves, and both are design features: the decision must pin its list version, and the March delta must have triggered a rescreen whose coverage you can demonstrate. A reviewer's justification and a threshold score both defend the January decision only, which was never the exposed part. Incomplete identifiers explain a weak match but do not explain six months of not re-checking.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "What does the real-time path look like, and what happens when the screener is unavailable?",
+      "points": [
+        "Keep the index in memory in the screening service, replicated to every instance, because it is only a few GB and a network hop per screening blows the latency budget.",
+        "That makes the service stateless and horizontally scalable, and it makes index updates a deploy-or-reload concern rather than a data-tier concern.",
+        "Cache adjudications, not raw matches: a name a human already cleared against the current list version should return fast and not re-enter the queue.",
+        "Screening at payment time can often be skipped if the counterparty was screened recently against the current list version, which is a large and legitimate saving.",
+        "Availability decision: if the screener is down, blocking onboarding costs revenue and letting it through creates exposure. Pick one, write it down, and make it configurable per flow.",
+        "The usual answer differs by flow — block on payments to new counterparties, queue-and-screen-later on account signup — because the exposure differs.",
+        "Never fail open silently. If a screening did not happen, that has to be a recorded state with a follow-up obligation, not an absence of a record.",
+        "Sharding is by name variant, not by customer, since the index is the thing being searched. At a few GB you likely replicate rather than shard at all, which is worth saying explicitly."
+      ],
+      "answer": "The index is only a few gigabytes, so I would hold it in memory in each screening instance rather than behind a network call — that keeps the service stateless and horizontally scalable and it keeps the p99 achievable. On top I would cache adjudications rather than raw match results, so a name a human already cleared against the current list version returns immediately instead of re-entering the review queue, and I would skip re-screening a counterparty that was already screened recently against the current version. The availability question needs an explicit decision per flow: blocking onboarding when the screener is down costs revenue, letting it through creates exposure, and the right answer differs between a signup and a payment to a new counterparty. The one thing that must never happen is failing open silently — if a screening did not occur, that is a recorded state carrying a follow-up obligation, not simply the absence of a record.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How do you evaluate a matcher when you have almost no positive examples?",
+      "points": [
+        "True positives are vanishingly rare — most institutions have a handful of genuine matches ever — so ordinary accuracy metrics are close to meaningless.",
+        "Build a synthetic evaluation set by perturbing real list entries: transliterate, misspell, reorder names, swap scripts, add and remove honorifics. If the matcher cannot find a known entity under a plausible variant, that is a real failure you can measure.",
+        "Regulators and vendors publish test datasets for exactly this reason; use them and report against them, because it is a claim your model risk function can validate.",
+        "Measure recall on the synthetic set and false-positive volume on the production stream separately. They come from different populations and averaging them hides both.",
+        "Track adjudication outcomes as your only real precision signal: what fraction of escalated matches do humans clear, and is it moving?",
+        "A rising clear rate means the matcher is getting noisier; a falling escalation volume with a stable list is a warning sign, not a win, because it may mean recall dropped.",
+        "Every scorer change reruns the synthetic recall suite before it ships, and forces a full rescreen after it ships.",
+        "Report per-population: match quality on Latin-script Western names is not evidence about Arabic, Cyrillic or Chinese name handling, and reporting one average hides exactly the populations most likely to be sanctioned."
+      ],
+      "answer": "Genuine positives are almost nonexistent, so accuracy on production data tells you nothing. The workable approach is a synthetic recall suite built by perturbing real list entries — transliterations, misspellings, reordered names, script swaps, honorifics added and removed — because if the matcher cannot find a known sanctioned entity under a plausible variant of its own name, that is a real and measurable failure. Regulators and vendors publish test sets for this and using them matters, because it gives your model risk function something to validate against. For precision I would track adjudication outcomes: what fraction of escalations humans clear, and whether that is trending. The subtle signal is a falling escalation volume against a stable list, which reads as a win and is usually recall dropping. And I would report per script and per name population, because an average over mostly-Western names hides performance on exactly the populations most likely to appear on these lists.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Staff-level wrap-up: what breaks, and what would you build second?",
+      "points": [
+        "The batch path is the operational risk: a large delta or a scorer change can generate a rescreen that saturates capacity and floods the human queue at the same time.",
+        "Rate-limit the escalation feed into the review queue rather than the matching itself — the matching is cheap, the humans are the bottleneck, and a flooded queue means real matches sit behind noise.",
+        "Prioritize the review queue by risk rather than arrival, because a rescreen dumps 20M results and FIFO buries the ones that matter.",
+        "Entity resolution is the second system: the same human appearing as three customers should be screened and adjudicated once, and getting that wrong either duplicates work or lets a cleared alias mask a new match.",
+        "Multi-region: the index is small and replicable, so screen locally everywhere; the adjudication store is the piece needing a clear ownership model to avoid two regions clearing the same match differently.",
+        "Watch the list-ingest pipeline itself — a silently failed list update means you are screening against stale data while every dashboard stays green, which is the highest-severity silent failure in this system.",
+        "Alert on list freshness as a first-class SLO: 'hours since the last successful list update' is the single most important number on the dashboard.",
+        "Ship the adjudication memory early. Without it, every rescreen re-alerts every previously cleared name and the human queue never converges."
+      ],
+      "answer": "The operational risk is the batch path: a large delta or a scorer change produces a rescreen that saturates capacity and floods the human queue at the same moment. The fix is to rate-limit escalations into the review queue rather than the matching, because matching is cheap and humans are the bottleneck, and to order that queue by risk rather than arrival, since a rescreen dumps twenty million results and FIFO buries the ones that matter. The second system I would build is entity resolution, so the same human appearing as three customers is screened and adjudicated once. The failure I would instrument hardest is a silently failed list update: you carry on screening against stale data while every dashboard stays green, so hours-since-last-successful-list-update is the most important number I would put on a wall. And adjudication memory needs to ship early, because without it every rescreen re-alerts every previously cleared name and the queue never converges.",
+      "crux": true
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "architecture-overview",
+      "title": "Two workloads, one matching core",
+      "kind": "mermaid",
+      "role": "overview",
+      "takeaway": "The real-time and batch paths share the matcher and nothing else, because a rescreen must never be able to take down onboarding.",
+      "afterQuestion": 1,
+      "code": "flowchart LR\n  SIGNUP([\"onboarding / payment\"]) -->|\"p99 < 200ms\"| RT[\"Real-time screener<br/>index in memory\"]\n  GOV([\"government list publish\"]) --> ING[\"List ingest<br/>immutable versions\"]\n  ING --> IDX[(\"Name-variant index<br/>2-5M strings\")]\n  IDX --> RT\n  IDX --> BATCH[\"Batch rescreen<br/>isolated capacity\"]\n  RT --> BANDS{\"three bands\"}\n  BATCH --> BANDS\n  BANDS -->|\"clear\"| OK([\"pass\"])\n  BANDS -->|\"probable\"| REV([\"review queue\"])\n  BANDS -->|\"definite\"| BLOCK([\"block\"])\n  REV --> ADJ[(\"Adjudication memory\")]\n  ADJ --> RT"
+    },
+    {
+      "id": "two-stage-matching",
+      "title": "Candidate generation, then scoring",
+      "kind": "mermaid",
+      "role": "mechanism",
+      "takeaway": "The expensive comparison only ever sees a handful of survivors, which is the only reason this is affordable at all.",
+      "afterQuestion": 2,
+      "code": "flowchart TD\n  IN([\"raw name\"]) --> NORM[\"normalize: fold, transliterate,<br/>strip honorifics + suffixes\"]\n  NORM --> TOK[\"unordered token set<br/>(name order varies by culture)\"]\n  TOK --> GEN[\"stage 1: candidate generation<br/>n-gram index / phonetic / ANN\"]\n  GEN -->|\"millions to tens\"| CAND[\"~30 candidates\"]\n  CAND --> SCORE[\"stage 2: scoring<br/>edit distance + token overlap\"]\n  SCORE --> SIG[\"+ DOB, nationality,<br/>passport, registration no.\"]\n  SIG --> BAND{\"three bands\"}\n  BAND --> CLEAR([\"clear\"])\n  BAND --> PROB([\"probable: human or LLM adjudicates\"])\n  BAND --> HIT([\"definite: block\"])"
+    },
+    {
+      "id": "list-delta",
+      "title": "What a list publish actually triggers",
+      "kind": "mermaid",
+      "role": "lifecycle",
+      "takeaway": "An addition only needs new-entries-against-all-customers; only a matching-logic change forces the full cross-product.",
+      "afterQuestion": 4,
+      "code": "flowchart TD\n  PUB([\"list publishes\"]) --> VER[\"ingest as new immutable version\"]\n  VER --> DIFF[\"diff vs previous\"]\n  DIFF --> BUILD[\"build new index alongside old\"]\n  BUILD --> SWAP[\"atomic swap\"]\n  SWAP --> SCOPE{\"what changed?\"}\n  SCOPE -->|\"entries added\"| NEW[\"screen all customers<br/>against NEW entries only\"]\n  SCOPE -->|\"matching logic changed\"| FULL[\"full rescreen:<br/>every prior result invalid\"]\n  NEW --> QUEUE([\"escalations, rate-limited into review\"])\n  FULL --> QUEUE\n  HALF[\"half-updated index =<br/>some screened old, some new,<br/>no way to tell which\"] --> SWAP"
+    },
+    {
+      "id": "stale-list",
+      "title": "The silent failure",
+      "kind": "mermaid",
+      "role": "failure",
+      "takeaway": "A failed list update produces no errors and no alerts, because screening against stale data succeeds perfectly.",
+      "afterQuestion": 8,
+      "code": "flowchart TD\n  FEED([\"list feed\"]) --> FETCH{\"update succeeds?\"}\n  FETCH -->|\"yes\"| FRESH[(\"current index\")]\n  FETCH -->|\"no, silently\"| STALE[(\"stale index\")]\n  STALE --> SCREEN[\"screening continues<br/>and returns clean results\"]\n  SCREEN --> GREEN([\"every dashboard green:<br/>latency fine, errors zero\"])\n  GREEN --> MISS([\"newly sanctioned parties<br/>pass for weeks\"])\n  FRESH --> SLO[\"SLO: hours since last<br/>successful list update\"]\n  STALE --> SLO\n  SLO --> PAGE([\"this is the alert that matters\"])"
+    }
+  ]
+}

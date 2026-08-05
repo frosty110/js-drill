@@ -7,16 +7,16 @@
 //
 // Wiring: each item synthetically clicks the canonical launcher button — the
 // same contract the command palette uses:
-//   Home     → #home-btn         (Home — the front door, js/app/22-home.js)
-//   Browse   → #browse-btn       (Browse page — js/app/19-browse.js)
-//   Practice → #practice-launcher-btn (ds-sheet launcher — 18-practice-launcher.js)
-//   Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
-//   Search   → #palette-trigger  (command palette, rail only)
-//   Settings → #topbar-settings  (opens the ds Settings sheet — P6/D11;
+// Home     → #home-btn         (Home — the front door, js/app/22-home.js)
+// Browse   → #browse-btn       (Browse page — js/app/19-browse.js)
+// Practice → #practice-launcher-btn (ds-sheet launcher — 18-practice-launcher.js)
+// Progress → #dashboard-btn    (unified Dashboard — becomes P5 Progress)
+// Search   → #palette-trigger  (command palette, rail only)
+// Settings → #topbar-settings  (opens the ds Settings sheet — P6/D11;
 //              js/app/21-settings.js openSettings)
 //
 // Interop rules (see css/06-ds-nav.css):
-//   · Mobile: L3's sticky Run bar owns the bottom edge → the bar hides there
+// · Mobile: L3's sticky Run bar owns the bottom edge → the bar hides there
 //     (immersive-rep pattern; L3 is the at-desk tier per PROFILE.md). The
 //     audio dock lifts above the bar (mini-player-above-tabs pattern).
 //   · Desktop: the rail slots under the topbar; the audio dock yields the
@@ -29,26 +29,28 @@
 // aria-current (kept truthful by the #lesson-shell observer below).
 
 (() => {
+  // Icons are NAMES, resolved against ds/icons.js at render time. They used to
+  // be inlined path strings here — byte-identical copies of five DS_ICONS
+  // entries — which is the drift invariant 5 exists to stop: editing the set
+  // would have left the primary navigation on the old drawing, and nothing
+  // would have looked broken.
   const NAV_ITEMS = [
     // Home — the front door (js/app/22-home.js). Replaced the "Today"
     // destination in the nav, and since audit F5 there is no Today page left
     // to compete with it: #/m/today-home delegates here. Today's Plan (the
     // modal, #today-btn) is one tap away in Home's More list.
     { key: 'home', label: 'Home', target: 'home-btn',
-      title: 'Home — continue any track, review what’s due',
-      icon: '<path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>' },
-    { key: 'browse', label: 'Browse', target: 'browse-btn',
-      icon: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="5" rx="1.5"/><rect x="14" y="15" width="7" height="5" rx="1.5"/>' },
-    { key: 'practice', label: 'Practice', target: 'practice-launcher-btn',
-      icon: '<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>' },
-    { key: 'progress', label: 'Progress', target: 'dashboard-btn',
-      icon: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3.5-4 3 2.5L20 7"/>' },
+      title: 'Home — continue any track, review what’s due', icon: 'home' },
+    { key: 'browse', label: 'Browse', target: 'browse-btn', icon: 'grid' },
+    { key: 'practice', label: 'Practice', target: 'practice-launcher-btn', icon: 'zap' },
+    { key: 'progress', label: 'Progress', target: 'dashboard-btn', icon: 'chart' },
     // System Design — the standalone drill (separate page). No in-shell page to
     // highlight (it navigates away), so it never takes aria-current; that's
-    // correct — you've left the SPA. Icon mirrors the `sysdesign` ds icon.
+    // correct — you've left the SPA. The same `sysdesign` mark the standalone
+    // page wears as its wordmark, so arriving there shows one glyph.
     { key: 'sysdesign', label: 'Design', target: 'system-design-btn',
       title: 'System Design — standalone memorization drill (DDIA, building blocks, design problems)',
-      icon: '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="8.5" y="15" width="7" height="5" rx="1"/><path d="M6.5 8v4M17.5 8v4M6.5 12h11M12 12v3"/>' },
+      icon: 'sysdesign' },
   ];
 
   // Rail-only aux items (ds/components.css hides them in bottom-bar mode —
@@ -56,10 +58,9 @@
   const AUX_ITEMS = [
     { key: 'palette', label: 'Search', hint: '⌘K', target: 'palette-trigger',
       title: 'Command palette · ⌘K / Ctrl-K · search modes, lessons, sections',
-      icon: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>' },
+      icon: 'search' },
     { key: 'settings', label: 'Settings', target: 'topbar-settings',
-      title: 'Settings — toggles, data, reset',
-      icon: '<path d="M21 6h-7"/><path d="M10 6H3"/><circle cx="12" cy="6" r="2"/><path d="M21 12h-3"/><path d="M14 12H3"/><circle cx="16" cy="12" r="2"/><path d="M21 18h-9"/><path d="M8 18H3"/><circle cx="10" cy="18" r="2"/>' },
+      title: 'Settings — toggles, data, reset', icon: 'sliders' },
   ];
 
   function navButton(item, extraClass) {
@@ -68,8 +69,10 @@
     btn.className = 'ds-navitem' + (extraClass ? ' ' + extraClass : '');
     btn.dataset.nav = item.key;
     if (item.title) btn.title = item.title;
+    // Sized by .ds-navitem svg in ds/components.css, not by the attribute —
+    // dsIcon's default is fine and the rule wins either way.
     btn.innerHTML =
-      `<svg viewBox="0 0 24 24" aria-hidden="true">${item.icon}</svg>${item.label}` +
+      `${typeof dsIcon === 'function' ? dsIcon(item.icon) : ''}${item.label}` +
       (item.hint ? `<span class="ds-navitem__hint" aria-hidden="true">${item.hint}</span>` : '');
     btn.addEventListener('click', (e) => {
       // Don't let this event bubble to document-level close-on-outside
@@ -119,27 +122,21 @@
     syncCurrent();
   }
 
-  // Topbar chrome: swap emoji glyphs for the ds stroke icon set (D07 — emoji
-  // is banned from chrome). Labels/tooltips are untouched; only the glyph
-  // span / button face changes. Legacy surfaces (sidebar buttons, palette)
-  // convert when their phases land — they retire or migrate anyway.
-  function upgradeTopbarIcons() {
+  // Static markup declares its icon and this fills it — one convention across
+  // all three pages (system-design.html's mountChromeIcons does the same).
+  //
+ // It replaced a hardcoded selector→icon swap table living here, which was a
+  // second place the markup's iconography was decided: the element said one
+  // thing, this file said another, and only one of them rendered. Now the
+  // element names its own mark and this is pure plumbing, so a new icon in the
+  // markup needs no change here at all.
+  function mountChromeIcons(root = document) {
     if (typeof dsIcon !== 'function') return;
-    const swaps = [
-      ['.surface-seg[data-surface="problems"] [aria-hidden]', 'code', 15],
-      ['.surface-seg[data-surface="reference"] [aria-hidden]', 'book-open', 15],
-      ['#topbar-plan [aria-hidden]', 'clipboard-list', 15],
-      ['#palette-trigger', 'search', 19],
-      ['#topbar-help', 'help', 19],
-      ['#topbar-settings', 'sliders', 19],
-      ['#topbar-dashboard-mobile', 'chart', 19],
-      ['#topbar-mobile-menu', 'grid', 19],
-    ];
-    for (const [sel, name, size] of swaps) {
-      const el = document.querySelector(sel);
-      if (el) el.innerHTML = dsIcon(name, size);
+    for (const el of root.querySelectorAll('[data-icon]')) {
+      el.innerHTML = dsIcon(el.dataset.icon, +el.dataset.iconSize || 16);
     }
   }
+  window.mountChromeIcons = mountChromeIcons;
 
   // System Design launcher target: the single click-sink shared by the rail/bar
   // "Design" item, the Practice launcher's Study row, Home's System Design
@@ -150,5 +147,5 @@
 
   // Slices are deferred so the DOM is parsed by the time this runs.
   mountDsNav();
-  upgradeTopbarIcons();
+  mountChromeIcons();
 })();

@@ -5,8 +5,8 @@
 // listeners. Reading top-to-bottom = reading the boot sequence.
 //
 // Order rules:
-//   1. initBootstrap MUST be awaited first. It loads PATHS → progress →
-//      manifest → mechanics, GC's stale state, resolves the resume target,
+// 1. initBootstrap MUST be awaited first. It loads PATHS → progress →
+// manifest → mechanics, GC's stale state, resolves the resume target,
 //      and paints the first render. If loadManifest fails it returns false
 //      and we abort — the UI shell already shows the error message.
 //   2. After bootstrap, the wiring sub-inits run in any order. They only
@@ -344,55 +344,55 @@ async function initBootstrap() {
 //  the breadcrumb. `?.addEventListener` no-ops on absent buttons.
 // ──────────────────────────────────────────────────────────────────────────
 const DRILL_LAUNCHERS = [
-  // iter 49 — 🔎 Recognize: diagnose the pattern from a problem prompt
+  // iter 49 — Recognize: diagnose the pattern from a problem prompt
   ['recognize-btn',        startRecognizeSession],
-  // iter 76 — 🎯 Reverse: output → problem (sibling to Recognize)
+  // iter 76 — Reverse: output → problem (sibling to Recognize)
   ['reverse-btn',          startReverseSession],
-  // iter 77 — 🔮 Predict: mental-execution from same-type distractors
+  // iter 77 — Predict: mental-execution from same-type distractors
   ['crystal-btn',          startCrystalSession],
-  // iter 79 — 📐 Claim: smell-test stated complexity vs the code
+  // iter 79 — Claim: smell-test stated complexity vs the code
   ['claim-btn',            startClaimSession],
-  // iter 83 — 🎰 Gotcha Roulette: reference.notes recall stream
+  // iter 83 — Gotcha Roulette: reference.notes recall stream
   ['gotcha-btn',           startGotchaSession],
-  // iter 86 — 🔀 Swap-Bench: pairwise idiom-equivalence ("same behavior?")
+  // iter 86 — Swap-Bench: pairwise idiom-equivalence ("same behavior?")
   ['swap-btn',             startSwapBenchSession],
-  // iter 91 — 🎬 Conversation Drill: classify section by interview-arc phase
+  // iter 91 — Conversation Drill: classify section by interview-arc phase
   ['conv-drill-btn',       startConvDrillSession],
-  // iter 93 — 🧬 Trace-Hop: pick the middle state of 3 consecutive frames
+  // iter 93 — Trace-Hop: pick the middle state of 3 consecutive frames
   ['trace-hop-btn',        startTraceHopSession],
-  // iter 97 — 📝 Notes Cloze: keyword-blank MC over reference.notes[]
+  // iter 97 — Notes Cloze: keyword-blank MC over reference.notes[]
   ['notes-drill-btn',      startNotesDrillSession],
-  // iter 98 — 🪐 Mechanic Constellation: multi-select lessons by tag
+  // iter 98 — Mechanic Constellation: multi-select lessons by tag
   ['constellation-btn',    startConstellationSession],
-  // iter 99 — ⏪ Reverse-Walkthrough: final state → which input produced it
+  // iter 99 — Reverse-Walkthrough: final state → which input produced it
   ['reverse-walk-btn',     startReverseWalkSession],
-  // iter 102 — 🗂 Notes Locate: cross-corpus note → which lesson
+  // iter 102 —  Notes Locate: cross-corpus note → which lesson
   ['notes-locate-btn',     startNotesLocateSession],
-  // iter 122 — 🧪 What-If: input → output prediction over walkthrough examples
+  // iter 122 — What-If: input → output prediction over walkthrough examples
   ['whatif-btn',           startWhatifSession],
-  // iter 142 — 🔀 Mutate-and-Predict: name the failure class of a mutation
+  // iter 142 — Mutate-and-Predict: name the failure class of a mutation
   ['mutate-btn',           startMutateSession],
-  // iter 147 — 📞 Phone Screen: chained 3-card session under one timer
+  // iter 147 — Phone Screen: chained 3-card session under one timer
   ['phone-screen-btn',     startPhoneScreenSession],
-  // iter 148 — 🚧 Constraint-Shift: rewrite under a swapped constraint
+  // iter 148 — Constraint-Shift: rewrite under a swapped constraint
   ['constraint-shift-btn', startConstraintShiftSession],
-  // iter 109 — 🔖 Match: bidirectional title ↔ description matcher
+  // iter 109 — Match: bidirectional title ↔ description matcher
   ['match-btn',            startMatchSession],
-  // iter 111 — 🌈 Sections: section mastery heatmap (28-cell grid)
+  // iter 111 — Sections: section mastery heatmap (28-cell grid)
   ['sections-grid-btn',    startSectionGrid],
-  // iter 88 — 🤖 AI Coach Export: clipboard payload for paste-into-LLM tutoring
+  // iter 88 — AI Coach Export: clipboard payload for paste-into-LLM tutoring
   ['ai-coach-btn',         startAiCoachExport],
-  // iter 54 — ⚡ Rapid-Fire L1: cross-lesson interleaved tap stream
+  // iter 54 — Rapid-Fire L1: cross-lesson interleaved tap stream
   ['rapid-fire-btn',       startRapidFireSession],
   // iter 75 — ⏱ Big-O: complexity-filtered L1 stream
   ['big-o-btn',            startBigOSession],
-  // iter 57 — 🌅 Warmup: 3-card micro-session over Today's Plan mix
+  // iter 57 — Warmup: 3-card micro-session over Today's Plan mix
   ['warmup-btn',           startWarmupSession],
-  // iter 71 — 🏁 Section Speedrun: pick a section, race its L1 stream
+  // iter 71 — Section Speedrun: pick a section, race its L1 stream
   ['speedrun-btn',         startSpeedrunPicker],
-  // iter 125 — 🥊 Gauntlet: chained all-L1 untimed across one section
+  // iter 125 — Gauntlet: chained all-L1 untimed across one section
   ['gauntlet-btn',         startGauntletPicker],
-  // iter 73 — 🪲 Bug-Hunt: tap the buggy line on a mutated canonical
+  // iter 73 — Bug-Hunt: tap the buggy line on a mutated canonical
   ['bug-hunt-btn',         startBugHuntSession],
 ];
 
@@ -472,7 +472,7 @@ function initSidebarActions() {
     if (id) selectLesson(id);
   });
 
-  // iter 108: 🍀 Lucky — random not-yet-mastered lesson dropped at the first
+  // iter 108: Lucky — random not-yet-mastered lesson dropped at the first
   // incomplete level so the user is drilling, not reading. Land on L1 by
   // default; skip to L2/L3 if those earlier levels are already passed.
   document.getElementById('lucky-btn').addEventListener('click', () => {
@@ -517,7 +517,7 @@ function initSidebarActions() {
     renderSidebar();
   });
 
-  // Phase E: 🛠 Repair filter — show only lessons needing work.
+  // Phase E: Repair filter — show only lessons needing work.
   document.getElementById('repair-filter-btn')?.addEventListener('click', () => {
     state.repairFilter = !state.repairFilter;
     saveProgress();
@@ -551,7 +551,7 @@ function initSidebarActions() {
     if (id) navToLesson(id, { tab: 'L1' });
   });
 
-  // iter 65: 💀 Resurrect — jump to most-overdue mastered lesson at L1.
+  // iter 65: Resurrect — jump to most-overdue mastered lesson at L1.
   // On touch devices land on L2 (mirror Review-button pattern); on fine
   // pointer land on L3 — same recall calibration the SR ladder uses.
   document.getElementById('resurrect-btn').addEventListener('click', () => {
@@ -561,7 +561,7 @@ function initSidebarActions() {
     navToLesson(ids[0], { tab: coarse ? 'L2' : 'L3', updateHash: true, collapseMobile: true });
   });
 
-  // iter 94: 🧠 Bridge — route to a cross-track transfer-gap lesson. Picks
+  // iter 94: Bridge — route to a cross-track transfer-gap lesson. Picks
   // the first candidate from `_bridgeCandidates()` (one per gap-mechanic,
   // deterministic by MECHANIC_INDEX iteration order). Lands on L1 with a
   // 2.2-sec fuchsia toast prefacing the transfer context. Closes iter-90
@@ -594,7 +594,7 @@ function initSidebarActions() {
 //  on click. Some force a render on flip to engage/disengage immediately.
 // ──────────────────────────────────────────────────────────────────────────
 function initSettingsToggles() {
-  // iter 117: 🎤 Clarify-First Ritual — opt-in toggle (default OFF).
+  // iter 117: Clarify-First Ritual — opt-in toggle (default OFF).
   // ON state painted sky-200 (matches button hover color). Toggling resets
   // the in-memory per-session completion set so flipping ON immediately
   // gates the current lesson's L3 (no need to re-navigate).
@@ -615,7 +615,7 @@ function initSettingsToggles() {
     });
   }
 
-  // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle (default OFF).
+  // iter 118: Hot-Seat Follow-Up — opt-in toggle (default OFF).
   // Rose-200 hover when ON. No re-render needed on flip — only affects
   // the next L3-pass moment.
   const hotseatBtn = document.getElementById('hotseat-btn');
@@ -675,7 +675,7 @@ function initSettingsToggles() {
     });
   }
 
-  // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
+  // iter 141: Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
   // hover when ON. Auto-hides on platforms without the Vibration API (iOS
   // Safari, desktop without vibration motor) so the user never sees a toggle
   // that does nothing. The capability check is at MOUNT time, not click time
@@ -703,7 +703,7 @@ function initSettingsToggles() {
     }
   }
 
-  // 🖍 ADHD Mode — opt-in toggle (default OFF). Purple-200 hover when ON.
+  // ADHD Mode — opt-in toggle (default OFF). Purple-200 hover when ON.
   // Restyles the Conversation tab with bionic word-heads + marker highlight
   // on backtick code terms + looser spacing. The body.adhd-mode class drives
   // the CSS for marker + spacing; bionic markup is render-time gated, so we
@@ -726,10 +726,10 @@ function initSettingsToggles() {
     });
   }
 
-  // 🔠 Font scale — cycles md (1.0×) → lg (1.125×, default) → xl (1.25×) → md.
+  // Font scale — cycles md (1.0×) → lg (1.125×, default) → xl (1.25×) → md.
   // The --font-scale CSS variable on :root drives html font-size so every
   // rem-based value scales uniformly. Button label reflects the current step
-  // ("🔠 Font: M / L / XL") so users see the state without opening a menu.
+  // (dsIcon('type', 15) + " Font: M / L / XL") so users see the state without opening a menu.
   // No re-render needed — CSS picks up the variable change instantly.
   const fontBtn = document.getElementById('font-size-btn');
   if (fontBtn) {
@@ -739,7 +739,7 @@ function initSettingsToggles() {
     function _applyFontScale() {
       const k = state.fontScale in FONT_SCALE_FACTOR ? state.fontScale : 'lg';
       document.documentElement.style.setProperty('--font-scale', FONT_SCALE_FACTOR[k]);
-      fontBtn.textContent = '🔠 Font: ' + FONT_SCALE_LABEL[k];
+      fontBtn.innerHTML = dsIcon('type', 15) + ' Font: ' + FONT_SCALE_LABEL[k];
       fontBtn.classList.toggle('text-teal-200', k !== 'md');
       fontBtn.classList.toggle('text-slate-500', k === 'md');
     }
@@ -756,7 +756,7 @@ function initSettingsToggles() {
 //  PWA INSTALL — beforeinstallprompt capture + button + appinstalled cleanup
 // ──────────────────────────────────────────────────────────────────────────
 function initPwaInstall() {
-  // iter 145: 📲 PWA Install button. Hidden by default (.hidden class on
+  // iter 145: PWA Install button. Hidden by default (.hidden class on
   // the HTML element). Listens for the browser's `beforeinstallprompt` event
   // (fires on Chrome/Edge/Android when the PWA install criteria are met:
   // manifest present + service worker registered + valid scope). When the
@@ -899,7 +899,7 @@ function initSearchAndKeyboard() {
 //  to the palette DOM (input, overlay click, trigger button, Cmd-K binding).
 // ──────────────────────────────────────────────────────────────────────────
 function initCommandPalette() {
-  // iter 104: 🗺 Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
+  // iter 104: Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
   // search across sidebar buttons + lessons + sections. Closes the 33-button
   // discoverability decay the recent ship-spree caused. First REORGANIZE-not-
   // ADD surface. Results ranked by recent-use frequency from state.commandUsage.
@@ -974,7 +974,7 @@ function initMobileDrawer() {
 //  AT-RISK MODAL — decay-radar union of dueAt + weakness + revealed flags
 // ──────────────────────────────────────────────────────────────────────────
 function initAtRiskModal() {
-  // iter 60: 📡 At Risk — opens decay-radar modal with union-of-3-signals
+  // iter 60: At Risk — opens decay-radar modal with union-of-3-signals
   // list. Closes iter-59 roadmap entry #1. The modal lists up to 7 rows;
   // each row is tap-to-jump to that lesson at the appropriate tab.
   const atRiskModal = document.getElementById('at-risk-modal');
@@ -982,7 +982,7 @@ function initAtRiskModal() {
     const rows = _atRiskRows(7);
     const body = document.getElementById('at-risk-body');
     if (!rows.length) {
-      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons! 🎉</div>`;
+      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons.</div>`;
     } else {
       // iter 33 (refine): urgency-shape inventory above the cards. ADHD/phone
       // user sees the distribution upfront ("2 DUE NOW · 1 SOON · 1 NO-SR")
@@ -1009,7 +1009,7 @@ function initAtRiskModal() {
           ? `<span style="color:#fdba74; font-size:11px;">⚠ ${r.weaknessCount}×</span>`
           : '';
         const revealDot = r.revealedLevels.length > 0
-          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(255,206,90,0.12); border:1px solid rgba(255,206,90,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">🃏 ${escapeHtml(r.revealedLevels.join('+'))}</span>`
+          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(255,206,90,0.12); border:1px solid rgba(255,206,90,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">${dsIcon('cards', 15)}${escapeHtml(r.revealedLevels.join('+'))}</span>`
           : '';
         return `<button data-lesson-id="${escapeHtml(r.lessonId)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:pointer; display:flex; flex-direction:column; gap:6px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -1049,7 +1049,7 @@ function initAtRiskModal() {
 // ──────────────────────────────────────────────────────────────────────────
 //  STREAK MAP MODAL — 60-day calendar density heatmap
 // ──────────────────────────────────────────────────────────────────────────
-// iter 62: 📅 Streak Map — 60-day calendar density heatmap. Renders a 9-column
+// iter 62: Streak Map — 60-day calendar density heatmap. Renders a 9-column
 // grid of 60 day-cells (oldest top-left → today bottom-right); cell color depth
 // reflects events that day; tooltip shows date + breakdown on hover/tap, and a
 // tap on a day with misses surfaces drill-route buttons. Extracted from the old
@@ -1077,8 +1077,8 @@ function renderActivityInto(rootEl, closeFn) {
   const rateStr = rate >= 10 ? String(Math.round(rate)) : rate.toFixed(1);
   const successRate = (wkPass + wkMiss) > 0 ? Math.round(wkPass / (wkPass + wkMiss) * 100) : null;
   const streakLine = streak > 0
-    ? `🔥 <strong style="color:#f5b62b;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
-    : `<span style="color:#9aa0aa;">No streak yet — one solve today starts it 🔥</span>`;
+    ? `${dsIcon('flame', 15)}<strong style="color:#f5b62b;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
+    : `<span style="color:#9aa0aa;">No streak yet — one solve today starts it.</span>`;
   const chip = (label, value, color) =>
     `<div style="flex:1; background:#17181c; border:1px solid #262930; border-radius:8px; padding:8px 10px; text-align:center;">
        <div style="font-size:18px; font-weight:700; color:${color};">${value}</div>
@@ -1227,7 +1227,7 @@ function initStreakMapModal() {
 //  AUDIO EPISODES — two-voice podcast playback over Conversation-tab content.
 //
 //  Two surfaces, one persistent playback state:
-//    (1) #audio-modal — playlist entry point. Pick an episode → modal closes.
+// (1) #audio-modal — playlist entry point. Pick an episode → modal closes.
 //    (2) #audio-dock — fixed bottom bar. Renders while audio is queued, even
 //        across tab and lesson navigation. Closing it stops + clears state.
 //
@@ -1302,7 +1302,7 @@ function initAudioPlayer() {
         const isPlaying = _audioLessonId === ep.lessonId && _audioQueue;
         const marker = isPlaying
           ? '<span style="color:#f5b62b;">●</span>'
-          : '<span style="color:#6b7079;">▶</span>';
+          : `<span style="color:#6b7079;">${dsIcon('play', 13)}</span>`;
         return `<button class="audio-episode" data-ep-id="${escapeHtml(ep.lessonId)}" style="text-align:left; background:#262930; border-radius:6px; padding:8px 12px; color:#eef0f2; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; border:1px solid ${isPlaying ? '#f5b62b' : 'transparent'};">
           <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(ep.title)}</span>
           ${marker}
@@ -1375,10 +1375,10 @@ function initAudioPlayer() {
     // content like the L3 action bar. Cleared when the dock hides.
     document.body.style.paddingBottom = '70px';
     document.getElementById('audio-dock-title').textContent =
-      '🎧 ' + (_audioLessonTitle || '') + '  ·  clip ' + (_audioClipIdx + 1) + ' / ' + _audioQueue.length;
+      dsIcon('headphones', 15) + '' + (_audioLessonTitle || '') + '  ·  clip ' + (_audioClipIdx + 1) + ' / ' + _audioQueue.length;
     const voiceTag = c.voice === 'a' ? 'Voice A · what you would say' : 'Voice B · why it matters';
     document.getElementById('audio-dock-section').textContent = c.title + '  —  ' + voiceTag;
-    dockPlaypause.textContent = _audioPlaying ? '⏸' : '▶';
+    dockPlaypause.innerHTML = dsIcon(_audioPlaying ? 'pause' : 'play', 16);
     dockPrev.disabled = _audioClipIdx <= 0;
     dockNext.disabled = _audioClipIdx >= _audioQueue.length - 1;
     dockPrev.style.opacity = dockPrev.disabled ? '0.4' : '1';
@@ -1555,7 +1555,7 @@ function initAudioPlayer() {
   }
 
   // Expose a programmatic start so the Conversation tab can mount an inline
-  // 🎧 Listen button without going through the playlist surface. Any lesson
+  // Listen button without going through the playlist surface. Any lesson
   // with a conversation.sections block is a valid target — the EPISODES list
   // only gates what the playlist surfaces, not what can play.
   window.startAudioEpisode = startEpisode;
@@ -1681,7 +1681,7 @@ function renderStatsInto(statsBodyEl, _close) {
       : '';
     const compassHtml = `
       <div style="margin-bottom: 14px; padding: 12px 14px; background: #17181c; border: 1px solid #262930; border-radius: 8px;">
-        <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">🧭 Track Balance</div>
+        <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">${dsIcon('compass', 15)} Track Balance</div>
         ${compassRows.map(r => `
           <div style="display:grid; grid-template-columns: 70px 1fr 70px; gap:8px; align-items:center; padding:3px 0;">
             <span style="font-size:12px; color:${r.color}; font-weight:600;">${escapeHtml(r.label)}</span>
@@ -1738,7 +1738,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.2); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🔎 Recognize lifetime <span style="color: #6b7079; font-weight: 400;">(incl. 🎯 Reverse)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('scan', 15)} Recognize lifetime <span style="color: #6b7079; font-weight: 400;">(incl. Reverse)</span></div>
               <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.recognize.correct} / ${state.recognize.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.recognize.correct / state.recognize.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-recognize-from-stats" style="background: rgba(245,182,43,0.16); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Drill →</button>
@@ -1749,7 +1749,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🎯 Crux lifetime <span style="color: #6b7079; font-weight: 400;">(key-trick recall)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('target', 15)} Crux lifetime <span style="color: #6b7079; font-weight: 400;">(key-trick recall)</span></div>
               <div style="color: #ffedc2; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.gotcha.correct} / ${state.gotcha.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.gotcha.correct / state.gotcha.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-gotcha-from-stats" style="background: rgba(255,206,90,0.16); color: #ffedc2; border: 1px solid rgba(255,206,90,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Recall →</button>
@@ -1760,7 +1760,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">📐 Claim lifetime <span style="color: #6b7079; font-weight: 400;">(smell-test complexity)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('gauge', 15)} Claim lifetime <span style="color: #6b7079; font-weight: 400;">(smell-test complexity)</span></div>
               <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.claim.correct} / ${state.claim.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.claim.correct / state.claim.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-claim-from-stats" style="background: rgba(245,182,43,0.16); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
@@ -1771,7 +1771,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🔮 Predict lifetime <span style="color: #6b7079; font-weight: 400;">(mental-execution)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('eye', 15)} Predict lifetime <span style="color: #6b7079; font-weight: 400;">(mental-execution)</span></div>
               <div style="color: #ffdd8a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.crystal.correct} / ${state.crystal.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.crystal.correct / state.crystal.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-crystal-from-stats" style="background: rgba(245,182,43,0.16); color: #ffdd8a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Predict →</button>
@@ -1782,7 +1782,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🪲 Bug-Hunt lifetime <span style="color: #6b7079; font-weight: 400;">(spot the operator flip)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('bug', 15)} Bug-Hunt lifetime <span style="color: #6b7079; font-weight: 400;">(spot the operator flip)</span></div>
               <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.bugHunt.correct} / ${state.bugHunt.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-bughunt-from-stats" style="background: rgba(255,206,90,0.16); color: #ffce5a; border: 1px solid rgba(255,206,90,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Hunt →</button>
@@ -1790,7 +1790,7 @@ function renderStatsInto(statsBodyEl, _close) {
         </div>
       ` : ''}
       ${(() => {
-        // iter 101: 🎯 Self-rescue rate tile. Aggregates L3-pass events across
+        // iter 101: Self-rescue rate tile. Aggregates L3-pass events across
         // all lessons, counts ones that completed with zero hints used. First
         // surface that measures QUALITY-OF-PASS (not pass/fail). Closes the
         // iter-37 deferred metric. Hidden when no L3-pass history yet so the
@@ -1805,7 +1805,7 @@ function renderStatsInto(statsBodyEl, _close) {
           <div style="background: ${bgTone}; padding: 10px; border-radius: 6px; border: 1px solid ${borderTone};">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <div style="color: #9aa0aa; font-size: 12px;">🎯 Self-rescue rate <span style="color: #6b7079; font-weight: 400;">(zero-hint L3 passes)</span></div>
+                <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('target', 15)} Self-rescue rate <span style="color: #6b7079; font-weight: 400;">(zero-hint L3 passes)</span></div>
                 <div style="color: ${tone}; font-size: 16px; font-weight: 600; margin-top: 2px;">${sr.zeroHint} / ${sr.total} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${sr.rate}%)</span></div>
               </div>
             </div>
@@ -1841,7 +1841,7 @@ function renderStatsInto(statsBodyEl, _close) {
         `;
       })()}
       ${(() => {
-        // iter 106: 📈 Mastery Half-Life tile. Per-lesson longitudinal SR
+        // iter 106: Mastery Half-Life tile. Per-lesson longitudinal SR
         // signal — buckets each lesson's median L3-pass gap into Sticky /
         // Normal / Slippery. Tap-routed top-5 slippery lessons list lets
         // the user jump straight to "what's slipping." Hidden when no
@@ -1858,7 +1858,7 @@ function renderStatsInto(statsBodyEl, _close) {
         return `
         <div style="margin-top: 8px;">
           <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.2);">
-            <div style="color: #9aa0aa; font-size: 12px; margin-bottom: 6px;">📈 Mastery Half-Life <span style="color: #6b7079; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
+            <div style="color: #9aa0aa; font-size: 12px; margin-bottom: 6px;">${dsIcon('chart', 15)} Mastery Half-Life <span style="color: #6b7079; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
             <div class="half-life-buckets">
               <div class="half-life-bucket"><span class="half-life-dot sticky"></span><span class="half-life-label">Sticky</span><span class="half-life-count">${hl.sticky}</span><span class="half-life-range">&gt;${HALF_LIFE_STICKY_DAYS}d</span></div>
               <div class="half-life-bucket"><span class="half-life-dot normal"></span><span class="half-life-label">Normal</span><span class="half-life-count">${hl.normal}</span><span class="half-life-range">${HALF_LIFE_NORMAL_DAYS}-${HALF_LIFE_STICKY_DAYS}d</span></div>
@@ -1881,8 +1881,7 @@ function renderStatsInto(statsBodyEl, _close) {
       })()}
       ${_renderSectionRetentionBlock(14)}
       ${state.calibrateOn === false ? `
-        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(245,182,43,0.08); border: 1px solid rgba(245,182,43,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">
-          💡 <strong>⏱ Calibration</strong> not tracking yet — turn on from <strong>⚙️ Settings → ⏱ Calibrate</strong> to log your time-to-solve per mechanic and see your top miscalibrated patterns here.
+        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(245,182,43,0.08); border: 1px solid rgba(245,182,43,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">${dsIcon('lightbulb', 15)}<strong>Calibration</strong> not tracking yet — turn on from <strong>${dsIcon('sliders', 15)} Settings → Calibrate</strong> to log your time-to-solve per mechanic and see your top miscalibrated patterns here.
         </div>
       ` : ''}
       ${_renderCalibrationTile()}
@@ -1925,7 +1924,7 @@ function renderStatsInto(statsBodyEl, _close) {
       _close();
       startBugHuntSession();
     });
-    // iter 106: 📈 Mastery Half-Life — wire each slippery-list row to deep-link
+    // iter 106: Mastery Half-Life — wire each slippery-list row to deep-link
     // to its lesson. Each row carries data-lesson-id; selectLesson handles the
     // rest (default tab = Reference, so the user lands on the canonical they
     // need to re-encode before re-attempting L3).
@@ -1937,7 +1936,7 @@ function renderStatsInto(statsBodyEl, _close) {
         selectLesson(id);
       });
     });
-    // iter eval-2026-05-30 (Phase 4-B): 🏷 Mistake Tagging tile chips
+    // iter eval-2026-05-30 (Phase 4-B): Mistake Tagging tile chips
     // now tap-route to the most-recent miss of that tag. Per
     // audits/mistake-tagging.md edits 1+2.
     statsBodyEl.querySelectorAll('[data-mistake-route]').forEach(btn => {
@@ -1989,7 +1988,7 @@ function renderDailyInto(rootEl) {
        <div style="font-size:20px; font-weight:700; color:${color};">${value}</div>
      </div>`;
   rootEl.innerHTML = `
-    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">📆 Today</div>
+    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">${dsIcon('calendar', 15)} Today</div>
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
       ${tile('Solved today', today.passes || 0, '#34d399', 'rgba(52,211,153,0.08)', 'rgba(52,211,153,0.25)')}
       ${tile('Missed today', today.misses || 0, '#f87171', 'rgba(248,113,113,0.08)', 'rgba(248,113,113,0.25)')}
@@ -2016,12 +2015,12 @@ function openDashboard() {
   shell.innerHTML = `
     <div class="dashboard-page">
       <div class="dashboard-page-header">
-        <h1 class="dashboard-page-title">📊 Dashboard</h1>
-        <button class="dashboard-exit" data-action="exit-dashboard" aria-label="Exit dashboard">✕ Exit</button>
+        <h1 class="dashboard-page-title">${dsIcon('chart', 15)} Dashboard</h1>
+        <button class="dashboard-exit" data-action="exit-dashboard" aria-label="Exit dashboard">${dsIcon('x', 13)} Exit</button>
       </div>
       <section class="dash-section" data-dash-daily></section>
-      <section class="dash-section"><div class="dash-h">📅 Activity · 60 days</div><div data-dash-activity></div></section>
-      <section class="dash-section"><div class="dash-h">📊 Mastery &amp; progress</div><div data-dash-stats></div></section>
+      <section class="dash-section"><div class="dash-h">${dsIcon('calendar-check', 15)} Activity · 60 days</div><div data-dash-activity></div></section>
+      <section class="dash-section"><div class="dash-h">${dsIcon('chart', 15)} Mastery &amp; progress</div><div data-dash-stats></div></section>
     </div>`;
   renderDailyInto(shell.querySelector('[data-dash-daily]'));
   renderActivityInto(shell.querySelector('[data-dash-activity]'), () => {});
@@ -2047,7 +2046,7 @@ function initDashboardModal() {
     e.preventDefault();
     openDashboard();
   });
-  // Mobile-only 📊 icon (the desktop nav link is display:none ≤767px).
+  // Mobile-only icon (the desktop nav link is display:none ≤767px).
   const mob = document.getElementById('topbar-dashboard-mobile');
   if (mob) mob.addEventListener('click', openDashboard);
 }
@@ -2062,7 +2061,7 @@ function initTodaysPlanModal() {
     const plan = dailyPlan();
     const body = document.getElementById('today-body');
     if (!plan.length) {
-      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Nothing queued — you're caught up! 🎉<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
+      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Nothing queued — you're caught up.<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
     } else {
       // Iter 10: PRIMARY autopilot CTA. Surfaces the smartest pick (plan[0]
       // — dailyPlan ranks SR-due first, then weak, then path) as a single
@@ -2088,7 +2087,7 @@ function initTodaysPlanModal() {
       const primaryCta = `
         <button data-action="start-first" data-lesson-id="${escapeHtml(first.id)}" style="text-align:left;width:100%;padding:14px 16px;border-radius:8px;background:rgba(52,211,153,0.14);border:1px solid rgba(52,211,153,0.55);color:#ecfdf5;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit;margin-bottom:14px;">
           <span style="display:flex;flex-direction:column;gap:3px;min-width:0;">
-            <span style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">🎯 Start</span>
+            <span style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">${dsIcon('target', 15)} Start</span>
             <span style="font-size:15px;font-weight:600;color:#f0fdf4;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(firstTitle)}</span>
             <span style="font-size:11px;color:#86efac;">${escapeHtml(first.why)}</span>
           </span>
@@ -2138,7 +2137,7 @@ function initTodaysPlanModal() {
     const heading = document.getElementById('today-heading');
     const sub = document.getElementById('today-sub');
     const body = document.getElementById('today-body');
-    if (heading) heading.textContent = `⏱ Day ${dayIdx + 1} of ${totalDays} — ${day.title}`;
+    if (heading) heading.innerHTML = `${dsIcon('clock', 15)} Day ${dayIdx + 1} of ${totalDays} — ${day.title}`;
     if (sub) sub.textContent = `${day.date}. Tasks auto-tick when you master the linked lesson. Earlier-day lessons resurface below as SR comes due.`;
 
     let totalTasks = 0, doneTasks = 0;
@@ -2255,7 +2254,7 @@ function initTodaysPlanModal() {
     }
     const heading = document.getElementById('today-heading');
     const sub = document.getElementById('today-sub');
-    if (heading) heading.textContent = `📅 Today's session`;
+    if (heading) heading.innerHTML = `${dsIcon('calendar-check', 15)} Today's session`;
     if (sub) sub.textContent = `Curated from your due reviews, starter path, and weak spots. Click any item to start.`;
     openToday();
   }
@@ -2432,7 +2431,7 @@ function initCheatsheetWiring() {
     renderCheatsheetBody();
   });
   document.getElementById('cheatsheet-expand-all').addEventListener('click', toggleCheatsheetExpandAll);
-  // iter 126: 📱 Save — printable PDF export. window.open() must fire synchronously
+  // iter 126: Save — printable PDF export. window.open() must fire synchronously
   // from this click handler (no await before it) to preserve iOS Safari popup-allow.
   document.getElementById('cheatsheet-save-pdf').addEventListener('click', exportCheatsheetToPdf);
 }
@@ -2485,7 +2484,7 @@ function initBootTail() {
       lastDueCount = dueNow;
     }
   }, 60 * 1000);
-  // iter 113: 📦 Offline Drill Pack — paint chip from last-known stats
+  // iter 113: Offline Drill Pack — paint chip from last-known stats
   // immediately so cold-start has no blank flash, then ask the SW for fresh
   // stats (round-trip is sub-second once SW is active).
   updateOfflinePackChip();

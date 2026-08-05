@@ -1,0 +1,125 @@
+{
+  "id": "ch09",
+  "num": 9,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Learning and Adaptation",
+  "summary": "Making an agent better over time rather than only at design time. The cheapest forms are in-context: remember what worked, retrieve past successes as examples, adjust the instructions. The heavier forms change artifacts — optimized prompts, learned skills, finetuned weights. All of them need an evaluation gate, because a system that changes itself without measurement drifts, and the drift is invisible until it is expensive.",
+  "keyTakeaways": [
+    "Adaptation exists on a ladder of cost and permanence: in-context feedback within a session, memory of past outcomes across sessions, automatic prompt or example optimization, learned reusable skills, and finally weight updates.",
+    "Storing outcomes — which approach worked, which failed, and why — turns experience into retrievable few-shot examples, which is the highest-leverage cheap form of learning.",
+    "Automatic prompt optimization treats the prompt as a parameter tuned against a metric on a dataset, which requires an evaluation set to exist first; without it there is nothing to optimize against.",
+    "Procedural learning captures repeated successful sequences as reusable skills or tools, converting an expensive rediscovery each time into a cheap deterministic call.",
+    "Every learned change must pass an evaluation gate before promotion — offline evaluation on a held-out set, then a staged rollout — because self-modification without a gate is unbounded drift.",
+    "Feedback loops can degenerate: learning from signals the system itself produced, or from user approval alone, drives sycophancy and reinforces early mistakes.",
+    "Adaptation must be reversible: version learned artifacts, keep the ability to roll back, and log what changed and why — otherwise a regression cannot be attributed."
+  ],
+  "questions": [
+    {
+      "q": "Which forms of learning does the pattern cover, ordered from cheapest to most permanent?",
+      "options": [
+        "In-context feedback, memory of past outcomes, prompt/example optimization, learned skills, and weight updates",
+        "Only finetuning, since prompts are not learning",
+        "Only in-context learning, since weights cannot be changed after deployment",
+        "Retrieval and caching"
+      ],
+      "answer": 0,
+      "explain": "The ladder matters because each rung costs more and is harder to undo. Most production 'learning' should live on the cheap rungs, where a bad change is a config rollback rather than a retraining run."
+    },
+    {
+      "q": "What makes storing past outcomes such a high-leverage form of adaptation?",
+      "options": [
+        "It reduces the model's parameter count",
+        "Successful and failed trajectories become retrievable examples — the agent can be shown what worked for a similar case instead of re-deriving it, with no training run",
+        "It eliminates the need for tools",
+        "It guarantees the same answer every time"
+      ],
+      "answer": 1,
+      "explain": "Experience becomes few-shot context, retrieved by similarity to the current task. It requires no training pipeline, is inspectable and editable, and can be rolled back by deleting a record — properties that weight updates do not have."
+    },
+    {
+      "q": "What is the prerequisite for automatic prompt optimization?",
+      "options": [
+        "A model that exposes logprobs",
+        "A dataset with a metric — an evaluation set that scores candidate prompts, since optimization is search against an objective",
+        "Access to the model's training data",
+        "A multi-agent architecture"
+      ],
+      "answer": 1,
+      "explain": "Optimizers propose and score prompt variants. Without a labelled set and a metric there is no objective, and the process degenerates into rewriting text and hoping. This is why evaluation infrastructure precedes automation."
+    },
+    {
+      "q": "What is procedural learning in this context?",
+      "options": [
+        "Learning by reading documentation at runtime",
+        "Adjusting temperature based on task type",
+        "Capturing a repeatedly successful sequence of actions as a reusable skill or tool, so future runs call it directly instead of rediscovering it",
+        "Storing user preferences in a profile"
+      ],
+      "answer": 2,
+      "explain": "If the agent works out the same six-step procedure every week, that procedure should become a named capability. This converts a costly and variable rediscovery into a cheap deterministic call — and makes the behaviour reviewable."
+    },
+    {
+      "q": "Why must a learned change pass an evaluation gate before promotion?",
+      "options": [
+        "Because providers require approval for prompt changes",
+        "Because a self-modifying system without measurement drifts — changes that help the cases that triggered them can silently regress everything else",
+        "Because evaluation reduces token cost",
+        "Because gates are needed only for weight updates"
+      ],
+      "answer": 1,
+      "explain": "Learning is optimization against whatever signal is available, which is rarely the full objective. A held-out evaluation set plus a staged rollout is what keeps a local improvement from becoming a global regression."
+    },
+    {
+      "q": "What is the danger of learning primarily from user approval signals?",
+      "options": [
+        "Approval signals are too sparse to store",
+        "Approval measures satisfaction rather than correctness, so optimizing it produces agreeable, flattering, engagement-seeking behaviour instead of accurate behaviour",
+        "Approval signals cannot be attached to trajectories",
+        "Approval data violates provider terms"
+      ],
+      "answer": 1,
+      "explain": "This is the sycophancy trap. Users approve answers that agree with them, and a system tuned on approval learns to agree. Approval should be one input balanced against objective correctness measures, never the sole objective."
+    },
+    {
+      "q": "Which property must any adaptation mechanism have to be operable in production?",
+      "options": [
+        "It must run continuously without human review",
+        "It must be reversible and versioned — you can see what changed, attribute a regression to it, and roll it back",
+        "It must update after every single interaction",
+        "It must be implemented in the same process as the model"
+      ],
+      "answer": 1,
+      "explain": "Learned artifacts — prompts, examples, skills, adapters — are deployable code. Versioning, changelogs, and rollback are what let you debug 'quality dropped on Tuesday' instead of discovering that the system quietly rewrote itself."
+    },
+    {
+      "type": "open",
+      "prompt": "Design a safe self-improvement loop for a support agent that should get better at handling recurring issues over time.",
+      "points": [
+        "Capture outcomes as structured records: the request, the trajectory, the resolution, and an outcome signal (resolved, escalated, corrected by a human).",
+        "Prefer human-corrected outputs as the highest-quality learning signal, over raw user approval.",
+        "Cheap rung first: retrieve similar past cases as few-shot examples at inference time, which is immediately reversible.",
+        "Mine recurring successful sequences into named skills or tools, reviewed by a human before they become callable.",
+        "Use accumulating data to grow the evaluation set continuously — every failure becomes a permanent test case.",
+        "Gate promotions: any learned artifact (new example set, optimized prompt, new skill) must beat the incumbent on the held-out set before rollout.",
+        "Roll out in stages with monitoring, and keep one-switch rollback with versioned artifacts.",
+        "Guard against degenerate loops: do not train on the agent's own unverified outputs, and balance approval signals with objective checks.",
+        "Watch for drift in the input distribution and re-validate periodically rather than assuming a past gate still holds."
+      ],
+      "answer": "I would build it as a data loop first and a learning loop second, because without the data nothing else is safe. Every interaction produces a structured record: the request, the retrieved context, the trajectory of tool calls, the answer, and an outcome — resolved, escalated, or corrected by a human agent. Human corrections are the gold signal here; raw thumbs are noisy and biased, and optimizing them produces an agreeable bot rather than a correct one. With that data, I start on the cheapest rung: retrieve similar resolved cases at inference time and include them as examples. This is immediately effective, entirely reversible, and inspectable — if it makes things worse, I stop retrieving. The next rung is procedural: when the traces show the agent rediscovering the same multi-step resolution repeatedly, that sequence gets promoted into a named skill or tool, but only after a human reviews it, because promoting a wrong procedure into a callable capability makes an occasional error into a systematic one. In parallel, the accumulating failures grow the evaluation set — every escalation becomes a permanent test case, which means the bar rises as the system learns. Nothing gets promoted without passing that bar: a new example set, an optimized prompt, or a new skill must beat the incumbent on a held-out slice-by-slice comparison, then roll out to a fraction of traffic with monitoring before going wide, with versioned artifacts and one-switch rollback. The failure modes I would actively guard against are the loops: never train on the agent's own unverified outputs, since that amplifies its errors; never optimize approval alone; and periodically re-validate, because the ticket mix drifts and a gate passed three months ago says nothing about today's traffic."
+    },
+    {
+      "type": "open",
+      "prompt": "When is finetuning the right form of adaptation for an agent, and when do the cheaper rungs of the ladder suffice?",
+      "points": [
+        "Cheaper rungs suffice when the gap is knowledge (retrieval), examples (few-shot from memory), or instruction clarity (prompt optimization).",
+        "Finetuning is warranted when behaviour must change consistently — format, style, domain conventions, refusal policy — and prompting has demonstrably plateaued.",
+        "Finetuning is also warranted for distillation: making a small cheap model reproduce a large model's behaviour at high volume.",
+        "Costs: dataset curation, training and evaluation infrastructure, hosting, and redoing the work when the base model is superseded.",
+        "Finetuning is less reversible and less inspectable than a prompt or an example set, and it cannot cite what it learned.",
+        "Agent-specific caution: tool-calling behaviour and reasoning quality can regress from a narrow finetune, so evaluation must cover the whole loop, not just the target task.",
+        "A prompting baseline and evaluation set must exist first, both to justify the finetune and to measure it."
+      ],
+      "answer": "The cheap rungs handle most of what people reach for finetuning to fix. If the agent lacks facts, that is retrieval, and finetuning is a worse solution because the facts go stale and cannot be cited. If it handles a case badly that it has seen handled well before, that is memory plus few-shot retrieval. If the instructions are ambiguous, that is prompt work, and it can now be done semi-automatically against an evaluation set. All three are reversible in seconds and inspectable by a human, which matters enormously in production. Finetuning earns its place in two situations. The first is consistent behavioural change: the agent must always use our house format, follow our domain's conventions, apply our refusal policy, or speak in a specific register — and prompting has demonstrably plateaued below the bar, measured on a real evaluation set rather than by impression. The second is economics: distilling the behaviour of an expensive model into a small one for high-volume traffic, which can cut cost and latency dramatically while holding quality on the narrow task. Against that, the costs are permanent. Dataset curation is the actual work, evaluation must exist either way, you now host and version a model artifact, and when the next base model lands you may repeat the whole exercise. A finetune is also the least inspectable rung: I cannot open it and read what it learned, and I cannot roll it back by deleting a row. There is an agent-specific caution too — narrow finetuning can degrade tool-calling and general reasoning even while improving the target task, so evaluation has to cover the whole agent loop, not the single behaviour I was aiming at. My rule is that a finetune needs a prompting baseline to beat and an evaluation set to prove it, and if either is missing, that is the work to do first."
+    }
+  ]
+}

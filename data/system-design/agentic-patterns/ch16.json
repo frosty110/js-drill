@@ -1,0 +1,129 @@
+{
+  "id": "ch16",
+  "num": 16,
+  "part": "Part III: Scale, Safety & Discovery",
+  "title": "Resource-Aware Optimization",
+  "summary": "Make the system spend deliberately. Every agent decision — which model, how much context, how many steps, whether to retrieve again, whether to verify — is a purchase of quality with money and time. The pattern is about making those purchases explicit: budgets per request, difficulty-aware routing, caching, early stopping, and graceful degradation when the budget runs short.",
+  "keyTakeaways": [
+    "Cost and latency are design parameters, not outcomes: an agent without an explicit budget will spend whatever the loop allows.",
+    "Difficulty-aware model selection is the single largest lever, because production traffic is dominated by easy requests that do not need the expensive model.",
+    "Context is a cost centre — long prompts, over-retrieval, and full transcript replay inflate both spend and latency, and often hurt quality by burying the important content.",
+    "Caching pays repeatedly: exact response caching for repeats, prefix caching for shared preambles, and reuse of intermediate results within a session.",
+    "Early stopping and step budgets prevent the pathological case where an agent burns its entire allowance discovering it cannot answer.",
+    "Under budget pressure the system should degrade deliberately — fewer steps, a smaller model, a narrower answer, an honest 'I need more time' — rather than failing or silently truncating.",
+    "Per-request cost and latency must be measured and attributed to the component that spent them, or optimization is guesswork."
+  ],
+  "questions": [
+    {
+      "q": "Why does an agent need an explicit resource budget?",
+      "options": [
+        "Because providers require a budget field on each request",
+        "Because without one, the loop spends whatever it can — steps, retries, retrievals, and reasoning tokens accumulate until something else stops it",
+        "Because budgets improve model accuracy",
+        "Because unbudgeted agents cannot use tools"
+      ],
+      "answer": 1,
+      "explain": "Autonomy without bounds is unbounded spend. A budget expressed in steps, tokens, wall-clock, and money makes the tradeoff explicit and gives the system something to degrade against when it runs short."
+    },
+    {
+      "q": "Why is difficulty-aware model routing usually the biggest cost lever?",
+      "options": [
+        "Because small models are more accurate on hard tasks",
+        "Because routing removes the need for retrieval",
+        "Because real traffic is dominated by easy requests, so serving the majority with a small model and escalating only the hard minority preserves quality where it matters while cutting most of the spend",
+        "Because providers discount routed traffic"
+      ],
+      "answer": 2,
+      "explain": "The saving comes from the traffic distribution. The requirement is measuring quality per route, since a router that sends hard requests down the cheap path degrades exactly the cases users care about most."
+    },
+    {
+      "q": "How does context length affect cost and quality simultaneously?",
+      "options": [
+        "Longer context always improves quality but costs more",
+        "Context length affects cost only",
+        "Longer context raises prefill cost and latency and consumes serving memory, while also diluting attention — so over-retrieval frequently costs more and answers worse",
+        "Context length is irrelevant once caching is enabled"
+      ],
+      "answer": 2,
+      "explain": "It is not a straight quality-for-money trade. Padding the context with marginally relevant material buries the passages that mattered, so retrieving less but better is often both cheaper and more accurate."
+    },
+    {
+      "q": "Which caching strategies apply to an agentic system?",
+      "options": [
+        "Exact response caching for repeated requests, prefix caching for a shared system prompt or document, and reuse of intermediate results within a session",
+        "Only exact response caching",
+        "Only vector index caching",
+        "Caching is incompatible with agents because every request is unique"
+      ],
+      "answer": 0,
+      "explain": "Even when the overall request is unique, its parts are not: the same preamble, the same retrieved document, the same tool result within a session. Caching at those levels is where agent systems recover most of their waste."
+    },
+    {
+      "q": "What is the purpose of early stopping in an agent loop?",
+      "options": [
+        "To reduce the model's temperature over time",
+        "To stop when the answer is good enough or when further steps are unlikely to help — rather than exhausting the full budget on diminishing returns",
+        "To end the session after a fixed number of user turns",
+        "To skip the final verification step"
+      ],
+      "answer": 1,
+      "explain": "Value per step drops sharply once the agent has what it needs, and rises not at all once it is stuck. Stopping conditions based on goal satisfaction or lack of progress convert wasted budget into either a faster answer or an earlier escalation."
+    },
+    {
+      "q": "What does deliberate degradation under budget pressure look like?",
+      "options": [
+        "Silently truncating the context and continuing",
+        "Returning a generic error",
+        "Reducing scope explicitly — fewer steps, a smaller model, a partial answer with what was verified, or telling the user more time is needed — with the reduction visible rather than hidden",
+        "Retrying with a larger budget automatically"
+      ],
+      "answer": 2,
+      "explain": "The failure to avoid is silent degradation, where the answer quietly gets worse and nobody knows why. Explicit degradation preserves trust: the user learns the answer is partial, and the system logs why."
+    },
+    {
+      "q": "What measurement makes resource optimization possible?",
+      "options": [
+        "Total monthly spend by provider",
+        "Per-request cost and latency attributed to components — which step, tool, retrieval, or retry consumed what — so optimization targets the actual spender",
+        "Average tokens per response across all users",
+        "GPU utilization on the provider's side"
+      ],
+      "answer": 1,
+      "explain": "Aggregate spend tells you there is a problem, not where. Attribution per component turns 'agent requests cost too much' into 'the verification step reruns retrieval three times', which is a fixable statement."
+    },
+    {
+      "type": "open",
+      "prompt": "Your agent product's unit economics do not work: average cost per resolved request is triple the target. Lay out how you would attack it without wrecking quality.",
+      "points": [
+        "Instrument first: attribute cost per request to components — prompt tokens, retrieval, each step, retries, verification, output tokens — and look at the distribution rather than the mean.",
+        "Find the tail: a small fraction of runaway runs (loops, retries, over-retrieval) often dominates total spend, and capping them is quality-neutral.",
+        "Reduce context: trim system prompts, retrieve fewer and better passages, stop replaying full transcripts, and use structured state instead of raw history.",
+        "Enable caching: prefix caching for shared preambles, exact caching for repeated queries, and session-level reuse of tool results.",
+        "Route by difficulty: send the easy majority to a smaller model, measure quality per route, and escalate on failure signals.",
+        "Cut steps: shorter plans, early stopping when the goal is met, and eliminating verification passes that never change the outcome.",
+        "Control output length, since generated tokens drive both cost and latency.",
+        "Re-run the evaluation set after each change, per slice, so quality regressions are caught rather than assumed away.",
+        "Set budgets and alerts as permanent guardrails so the fix does not decay."
+      ],
+      "answer": "I would start by refusing to optimize the average, because in agent systems the mean is usually a lie told by a fat tail. The first job is attribution: per request, how many tokens went to the system prompt, to retrieved context, to each step's reasoning, to retries, to verification, and to output — plus the same breakdown for latency. Almost every time I have done this, a small fraction of runs — loops, repeated retrieval, retry storms — turns out to consume a large share of total spend, and capping those is quality-neutral. So step one is bounding the pathological tail: step budgets, loop detection, global retry ceilings, and early stopping when the goal is satisfied. Step two is context, which is usually the largest structural cost. Long system prompts, over-retrieval, and replaying entire transcripts inflate prefill on every single call. Trimming retrieval to fewer, better passages typically improves quality as well as cost, and replacing raw transcript replay with a compact structured state does the same. Step three is caching: prefix caching for the shared preamble, exact caching for genuinely repeated questions, and reuse of tool and retrieval results within a session, which agents re-fetch constantly. Step four is model right-sizing, which is the big lever but also the risky one. I would route by difficulty, keep the strong model for the hard minority, and measure quality per route rather than in aggregate, with an escalation path when the cheap route shows failure signals. Step five is output length, which is the most overlooked: cost and latency both scale with generated tokens, and much of that is verbosity nobody asked for. Throughout, every change goes through the evaluation set with results per slice, because the failure mode here is shaving 60% of cost and 10% of quality on the segment that matters most. Then I would leave permanent guardrails behind: per-request cost budgets, alerts on the p99, and cost-per-resolved-request as a tracked metric beside quality, so the economics do not silently drift back.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "How would you design an agent that must meet a hard latency budget — say two seconds — for a user-facing interaction?",
+      "points": [
+        "Work backwards from the budget: allocate a time slice to each stage (routing, retrieval, generation, guardrails) and treat the sum as a constraint.",
+        "Prefer a fixed pipeline over an autonomous loop, since multi-step agents multiply round trips and have unpredictable trajectories.",
+        "Stream output so time-to-first-token, not total time, governs perceived latency.",
+        "Cut prefill: short prompts, prefix caching, and minimal retrieved context.",
+        "Run independent work concurrently — retrieval and safety checks in parallel rather than in series.",
+        "Choose a smaller/faster model for the interactive path, escalating asynchronously for anything that needs more.",
+        "Use deadlines with graceful degradation: if retrieval has not returned within its slice, proceed with what is available and say so.",
+        "Move non-blocking work off the critical path: logging, memory writes, evaluation, and non-safety checks happen after the response.",
+        "Split the interaction: give a fast partial answer now and continue heavier work in the background with an update.",
+        "Measure p95/p99 rather than the mean, and treat the budget as an SLO with alerting."
+      ],
+      "answer": "I would design backwards from the budget and treat two seconds as a constraint that shapes the architecture rather than a target to hope for. First, allocate: routing gets a small slice, retrieval a few hundred milliseconds, generation the bulk, guardrails whatever remains. Anything that does not fit the allocation does not go on the critical path. Second, prefer a fixed pipeline to an autonomous loop. Multi-step agents are inherently unpredictable in latency because each step is a round trip, so for an interactive path I want a known number of hops — typically one retrieval and one generation. Third, stream, because perceived latency is time to first token. A response that starts in 400ms and finishes in three seconds feels fast; one that appears complete at two seconds feels slower. That also means output guardrails have to be designed around streaming: stream low-risk content and buffer only what genuinely needs a completed-response check. Fourth, attack prefill: a short system prompt, prefix caching for whatever is shared, and tightly limited retrieved context, since every extra token is time before the first one comes back. Fifth, parallelize: retrieval, safety classification, and any metadata lookups run concurrently, never in series. Sixth, size the model for the path — a fast model for the interactive answer, with escalation to a stronger one handled asynchronously if the request warrants it. Deadlines need behaviour attached: if retrieval has not returned within its slice, the system proceeds with what it has and says the answer may be incomplete, rather than blowing the budget waiting. Everything non-blocking moves off the critical path — logging, memory writes, evaluation sampling, analytics all happen after the response is sent. And where the task genuinely cannot be done in two seconds, I would split the interaction: acknowledge immediately with a partial answer or a progress indicator, and deliver the rest as an update. Finally I would hold the budget as an SLO on p95 and p99, not the mean, with alerting — because the tail is what users remember."
+    }
+  ]
+}

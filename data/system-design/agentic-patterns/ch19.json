@@ -1,0 +1,129 @@
+{
+  "id": "ch19",
+  "num": 19,
+  "part": "Part III: Scale, Safety & Discovery",
+  "title": "Evaluation and Monitoring",
+  "summary": "How you know whether an agent works, before and after it ships. Agent evaluation is not just answer quality: it covers the outcome (was the goal achieved), the trajectory (which steps and tool calls got there, and at what cost), and each component in isolation. Monitoring extends the same measurements into production, where drift, dependency failures, and cost regressions surface first.",
+  "keyTakeaways": [
+    "Evaluate at three levels: end-to-end outcome, trajectory quality (tool choice, argument correctness, step efficiency), and per-component behaviour — because an outcome score alone cannot localize a failure.",
+    "Two runs that both reach the right answer are not equivalent: one may take three steps and one twenty, with the same final score and very different cost, latency, and risk.",
+    "Tool-call correctness — right tool, well-formed arguments — is a measurable, high-signal metric that generic quality scores hide.",
+    "Cost and latency belong in the same table as quality; an agent evaluation that omits them cannot support a shipping decision.",
+    "Traces are the primary observability artifact: every step, prompt, tool call, argument, result, token count, and timing, linked by a request id.",
+    "Production monitoring must include quality sampling, not just errors and latency, because the characteristic failure is a fast, well-formed, confident, wrong answer.",
+    "Evaluation sets are living: every production failure becomes a permanent regression case, and the suite is re-run when models, prompts, tools, or the corpus change."
+  ],
+  "questions": [
+    {
+      "q": "Why is an end-to-end outcome score insufficient for evaluating an agent?",
+      "options": [
+        "Because outcome scores cannot be automated",
+        "Because it tells you whether the goal was achieved but not which component failed, and it treats a three-step and a twenty-step path to the same answer as identical",
+        "Because outcomes vary by user",
+        "Because outcome scoring requires human annotators"
+      ],
+      "answer": 1,
+      "explain": "Outcome is what users care about, and trajectory is what engineers can act on. Without step-level and component-level measurement, a regression is a mystery and an expensive-but-correct agent looks the same as an efficient one."
+    },
+    {
+      "q": "What does trajectory evaluation measure?",
+      "options": [
+        "The user's path through the UI",
+        "The sequence of steps taken — which tools were chosen, whether arguments were valid, whether progress was made, how many steps and tokens were consumed",
+        "Latency between tokens",
+        "The order in which documents were indexed"
+      ],
+      "answer": 1,
+      "explain": "It is where agent-specific failure lives: wrong tool, malformed arguments, repeated actions, loops, and unnecessary detours. These are measurable directly and are far more diagnostic than a final-answer score."
+    },
+    {
+      "q": "Why is tool-call correctness worth tracking as its own metric?",
+      "options": [
+        "Because providers bill per tool call",
+        "Because it is easy to compute",
+        "Because a system can produce fluent, plausible responses while calling the wrong tools or passing wrong arguments — a failure that conversational quality scores do not surface",
+        "Because tool calls determine token cost"
+      ],
+      "answer": 2,
+      "explain": "The agent that says the right things while booking the wrong meeting scores well on answer quality and is broken. Right-tool and right-arguments rates catch that directly, and they are cheap to label."
+    },
+    {
+      "q": "Why must cost and latency appear alongside quality in agent evaluation?",
+      "options": [
+        "Because they are required by compliance",
+        "Because agent cost and latency vary enormously per request with steps, retries, and context — so a quality number without them cannot support a ship-or-not decision",
+        "Because they correlate perfectly with quality",
+        "Because they are easier to measure than quality"
+      ],
+      "answer": 1,
+      "explain": "Unlike a traditional service, an agent request's cost is not roughly fixed. A configuration that improves quality by two points while tripling spend and doubling p95 latency is a regression in product terms."
+    },
+    {
+      "q": "What belongs in an agent trace?",
+      "options": [
+        "Only the final prompt and response",
+        "Only errors",
+        "Every step: prompts, model and version, tool calls with arguments and results, retrieved context, token counts, timings, and the decisions between steps — all linked by a request id",
+        "A summary written by the agent describing what it did"
+      ],
+      "answer": 2,
+      "explain": "An agent's behaviour is only reconstructible from a full trace. A self-written summary is another generated artifact that can be wrong; the trace is the record. Linking by request id is what makes cross-component debugging possible."
+    },
+    {
+      "q": "Why is quality sampling necessary in production monitoring?",
+      "options": [
+        "Because latency monitoring is unreliable",
+        "Because the characteristic failure is a fast, well-formed, confident, wrong answer, which produces no error and no latency anomaly",
+        "Because providers do not report errors",
+        "Because sampling reduces cost"
+      ],
+      "answer": 1,
+      "explain": "Classic monitoring catches crashes and slowness. It cannot see a plausible hallucination. Continuous sampling with automated judges and periodic human review is what makes silent quality degradation visible."
+    },
+    {
+      "q": "How should the evaluation set evolve after launch?",
+      "options": [
+        "It should be frozen at launch so scores stay comparable",
+        "It should be regenerated from scratch each quarter",
+        "Every production failure should become a permanent regression case, and the suite should be re-run whenever the model, prompt, tools, or corpus change",
+        "It should only contain synthetic data"
+      ],
+      "answer": 2,
+      "explain": "A frozen suite decays as traffic shifts. Growing it with real failures means the bar rises as the system improves, and re-running on every dependency change catches the regressions that arrive from outside your code."
+    },
+    {
+      "type": "open",
+      "prompt": "Build the evaluation and monitoring plan for a tool-using agent going to production. Cover offline evaluation, production monitoring, and the feedback loop between them.",
+      "points": [
+        "Offline: a task set drawn from real requests with defined success criteria, sliced by task type and difficulty, including adversarial and out-of-scope cases.",
+        "Measure outcome (goal achieved), trajectory (tool choice, argument validity, step count, loops), and per-component behaviour (retrieval, routing, generation).",
+        "Include cost and latency per task in the same report as quality, and evaluate p95 rather than the mean.",
+        "Use automated checks where verifiable (state changes, schema, tool arguments) and an LLM judge with a versioned rubric where not, calibrated against human labels.",
+        "Production: full traces with request ids, tool-call success rates, step and cost distributions, guardrail decisions, and error rates per dependency.",
+        "Continuously sample production traffic for quality scoring, with periodic human review of a subset.",
+        "Capture user signals: corrections, escalations, retries, abandonment, and explicit feedback.",
+        "Alert on the agent-specific signals — step-count and cost distribution shifts, tool error rate, retrieval hit rate, refusal rate — not just latency and 5xx.",
+        "Close the loop: every production failure becomes a regression case; re-run the suite on model, prompt, tool, and corpus changes; and stage rollouts with comparison against the incumbent.",
+        "Version everything (prompts, tools, models, judge) so a metric change can be attributed."
+      ],
+      "answer": "Offline, I would build a task set from real requests rather than invented ones, each with a success criterion that something other than the agent can verify — a record exists, a value matches, a test passes. It gets sliced by task type and difficulty, with deliberate adversarial and out-of-scope slices, because those are where agents fail and averages hide it. For each task I measure three things: the outcome, the trajectory, and the components. Trajectory is the agent-specific part — was the right tool chosen, were the arguments valid, how many steps were taken, were there loops or repeated actions — and it is where most diagnosable failure lives. Cost and p95 latency go in the same report as quality, because an agent's spend per request is variable and a quality gain bought with triple the cost is not a win. Where correctness is mechanically checkable I check it; where it is not, I use a judge with a pinned model and a versioned rubric, calibrated against a few hundred human labels so I know how far to trust it. In production, the foundation is tracing: every step, prompt, model version, tool call with arguments and result, retrieved context, tokens, and timings, linked by a request id. On top of that I watch the agent-specific signals that classic monitoring misses — tool error rate, tool-call validity, step-count and cost distributions, retrieval hit rate, refusal rate, guardrail decisions — because the failure that hurts users produces a fast, well-formed, confident, wrong answer with no error and no latency spike. So I also sample traffic continuously for automated quality scoring, with a human reviewing a subset weekly. User signals — corrections, escalations, retries, abandonment — feed the same picture. The loop between them is the part that has to be deliberate: every production failure becomes a permanent regression case, the whole suite runs when the model, a prompt, a tool, or the corpus changes, and rollouts are staged with a live comparison against the incumbent. And everything is versioned — prompts, tools, models, and the judge itself — because otherwise 'quality dropped on Tuesday' is unanswerable.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Two agent configurations score the same on task success. What else would you compare before choosing one?",
+      "points": [
+        "Cost per task and its distribution, not just the mean — tail cost matters for unit economics.",
+        "Latency, particularly p95/p99 and time to first visible progress.",
+        "Trajectory efficiency: number of steps, tool calls, retries, and redundant retrievals.",
+        "Failure behaviour: how each fails — silently, with a wrong answer, or with an honest escalation.",
+        "Robustness across slices: performance on hard, rare, adversarial, and out-of-distribution inputs rather than the aggregate.",
+        "Variance across runs: a configuration with the same mean but wider spread is worse in production.",
+        "Risk profile: how many write actions, how much autonomy, how often approval is triggered.",
+        "Debuggability and maintainability: simpler trajectories are easier to diagnose and evolve.",
+        "Dependency exposure: number of models, tools, and providers, each of which is an availability and change risk."
+      ],
+      "answer": "Equal success rates say the two configurations solve the same fraction of tasks, which is barely half the decision. I would compare cost per task including the tail, because agent spend is skewed and a configuration with the same average but a heavy tail of runaway runs is a unit-economics problem waiting to happen. Then latency at p95 and p99, plus time to first visible progress, which is what users actually feel. Then trajectory efficiency: steps, tool calls, retries, and redundant retrievals. Two agents reaching the same answer in three steps versus fifteen have very different cost, latency, and — importantly — different exposure, since every extra tool call is another chance to do something wrong. Next I would look at how each one fails, which matters more than how each succeeds. A configuration that fails by escalating honestly with partial results is far better than one that fails by producing a confident wrong answer, even at identical success rates. I would also compare variance across repeated runs on the same inputs: same mean, wider spread means a worse production experience and a harder system to debug. Robustness gets checked per slice — hard cases, rare intents, adversarial inputs, unusual formats — because aggregate parity often hides that one configuration is carrying the easy majority and the other is stronger where it counts. Finally the operational qualities: how much autonomy and how many write actions each takes, how often approval fires, how many models and providers each depends on, and how easy the trajectories are to read when something goes wrong. All else equal I take the simpler, cheaper, more predictable one, because its advantages compound as the system evolves and its failures are the kind I can diagnose."
+    }
+  ]
+}

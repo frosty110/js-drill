@@ -1,0 +1,126 @@
+{
+  "id": "ch10",
+  "num": 10,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Model Context Protocol (MCP)",
+  "summary": "A standard interface between models and the systems they need to reach. Instead of every application writing bespoke integrations for every tool, an MCP server exposes tools, resources, and prompts over a defined protocol, and any MCP-capable host can consume them. The pattern turns an N×M integration problem into N+M — and introduces a new trust boundary, because a server's tool descriptions are input to your model.",
+  "keyTakeaways": [
+    "MCP standardizes how context and capabilities are offered to a model: a client (inside the host application) connects to servers that expose tools, resources, and prompts.",
+    "The economic argument is the integration matrix: without a standard, every host must integrate every system; with one, each system is wrapped once and every compatible host can use it.",
+    "Capabilities are discovered at runtime — the host asks the server what it offers — which is what allows tools to be added without redeploying the application.",
+    "Tools are model-invoked actions, resources are data the host can read into context, and prompts are reusable templates the server offers; conflating them muddles who decides what enters the context.",
+    "An MCP server is a trust boundary: its tool names and descriptions are read by your model, so a malicious or compromised server can attempt to steer the agent (tool poisoning) as effectively as any prompt injection.",
+    "Standardizing the wire format does not standardize permissions — authentication, authorization, scoping, and approval for consequential actions remain the host's responsibility.",
+    "MCP does not remove the tool-design problem: a server offering forty vague tools is still forty vague tools, now discovered dynamically."
+  ],
+  "questions": [
+    {
+      "q": "What problem is MCP designed to solve?",
+      "options": [
+        "Models forgetting their instructions in long conversations",
+        "The N×M integration problem — every host application writing custom integrations for every external system — by standardizing one interface both sides implement",
+        "The high cost of inference for tool-using agents",
+        "Non-deterministic sampling in tool arguments"
+      ],
+      "answer": 1,
+      "explain": "Without a standard, each application integrates each data source and tool separately. With one, a system is wrapped once as a server and any compatible host can consume it, so integrations grow additively rather than multiplicatively."
+    },
+    {
+      "q": "What is the client/server relationship in MCP?",
+      "options": [
+        "The model is the server and the tools are clients",
+        "Servers call the model directly with their data",
+        "The host application embeds a client that connects to one or more servers, each exposing capabilities the host may offer to the model",
+        "Each tool runs its own model instance"
+      ],
+      "answer": 2,
+      "explain": "The host owns the model interaction and the trust decisions; servers are capability providers. That separation is what lets an application add a new integration without changing its own code."
+    },
+    {
+      "q": "What do the three main MCP primitives correspond to?",
+      "options": [
+        "Prompts, embeddings, and completions",
+        "Tools (actions the model can invoke), resources (data the host can read into context), and prompts (reusable templates the server offers)",
+        "Requests, responses, and errors",
+        "Sessions, users, and permissions"
+      ],
+      "answer": 1,
+      "explain": "The distinction encodes who initiates. A tool call is model-driven; a resource is host-driven context loading; a prompt is a template the server supplies for a user or host to invoke. Blurring them makes it unclear who decided something entered the context."
+    },
+    {
+      "q": "Why does runtime capability discovery matter?",
+      "options": [
+        "It lets the host learn what a server offers when it connects, so capabilities can change or be added without redeploying the application",
+        "It allows the model to rewrite the server's code",
+        "It removes the need for authentication",
+        "It guarantees the server's tools are safe"
+      ],
+      "answer": 0,
+      "explain": "Discovery is what makes the ecosystem composable: connect a server and its tools become available. It also means the tool catalog is not fixed at build time, which is a flexibility win and a security consideration."
+    },
+    {
+      "q": "What is 'tool poisoning' in an MCP context?",
+      "options": [
+        "Overloading a server with too many calls",
+        "Corrupting the tool's return values in transit",
+        "A malicious or compromised server crafting tool names, descriptions, or results that manipulate the model — the descriptions are read by your model, so they are an injection surface",
+        "Registering two tools with the same name"
+      ],
+      "answer": 2,
+      "explain": "Because the model reads tool metadata to decide what to call, that metadata is untrusted input. A description containing hidden instructions can redirect an agent, which is why server trust, review, and pinning matter as much as the protocol itself."
+    },
+    {
+      "q": "What does adopting MCP NOT give you for free?",
+      "options": [
+        "A wire format for exposing tools",
+        "Runtime discovery of capabilities",
+        "Reuse of an integration across compatible hosts",
+        "Authentication, authorization, scoping, and approval policy for consequential actions"
+      ],
+      "answer": 3,
+      "explain": "The protocol standardizes the interface, not the trust model. Which servers are allowed, what credentials they receive, what the model may call without confirmation, and what is logged all remain host responsibilities."
+    },
+    {
+      "q": "Does MCP remove the need for good tool design?",
+      "options": [
+        "Yes — the protocol enforces clear tool descriptions",
+        "No — a server exposing many vague, overlapping tools still degrades model tool selection; the host must still curate which tools are offered per request",
+        "Yes — discovery ranks tools by relevance automatically",
+        "No, because MCP servers can only expose one tool each"
+      ],
+      "answer": 1,
+      "explain": "Dynamic discovery can make the problem worse by filling the catalog with dozens of tools the model must choose among. Hosts still need to curate, group, or retrieve a relevant subset — the tool-use pattern's rules do not go away."
+    },
+    {
+      "type": "open",
+      "prompt": "Your team is deciding whether to expose internal systems to agents via MCP servers or via direct in-application tool implementations. Lay out the tradeoffs and what you would decide.",
+      "points": [
+        "MCP wins on reuse: one server per system serves every compatible host — the IDE, the internal assistant, a future product — rather than reimplementing per app.",
+        "MCP wins on decoupling: the system's owners maintain their server and can evolve it without the consuming apps shipping code.",
+        "Direct implementation wins on control and simplicity: fewer moving parts, no extra process, easier to reason about permissions and latency.",
+        "Security: an MCP server is a trust boundary whose descriptions and results reach the model, so third-party servers need review, pinning, and isolation; first-party servers are easier to trust.",
+        "Operations: servers add deployment, versioning, availability, and observability surface.",
+        "Permissions remain the host's job either way — credential scoping, approval for writes, and audit logging.",
+        "Practical split: first-party MCP servers for systems used by multiple hosts, direct implementation for app-specific glue, and strict review for anything third-party.",
+        "Either way, curate the per-request tool set rather than exposing everything discovered."
+      ],
+      "answer": "The decision turns on how many consumers a given integration has. If a system will be reached by more than one host — the internal assistant today, an IDE plugin and a customer-facing product tomorrow — wrapping it once as an MCP server is clearly right: the owning team maintains it, evolves it, and every consumer benefits without shipping code. That decoupling is the real value, more than the protocol details. For app-specific glue that only one product will ever call, a direct in-application tool is simpler: one less process to deploy, monitor, and version, with permissions and latency that are trivial to reason about. Security is where I would be strict. An MCP server's tool names, descriptions, and results all reach my model, which makes it an injection surface: a compromised or malicious server can attempt to steer the agent through the metadata alone. First-party servers inside our trust boundary are fine. Third-party servers get treated like dependencies with runtime privileges — reviewed, pinned to a version, isolated, and given the narrowest credentials that work, with their outputs treated as untrusted data. I would not let an agent auto-install servers. Operationally, each server is another deployable with availability, versioning, and observability requirements, and that cost is real. And in either architecture the host still owns the things that actually protect users: credential scoping per server, approval gates on consequential actions, argument validation, and an audit log of every call. My decision would be a split — first-party MCP servers for shared systems, direct implementation for single-consumer glue, a review process for anything external — plus one rule that applies to both: curate the tool set per request rather than handing the model everything discovery returned, because selection accuracy still falls apart as the catalog grows."
+    },
+    {
+      "type": "open",
+      "prompt": "Explain the security posture you would adopt for a host application that connects to MCP servers.",
+      "points": [
+        "Treat every server as a dependency with runtime privileges: explicit allow-list, pinned versions, provenance checks, no silent auto-installation.",
+        "Treat tool descriptions and results as untrusted input — they are read by the model and can carry injected instructions.",
+        "Scope credentials per server to the minimum needed, and never hand a server broader access than its purpose requires.",
+        "Keep authorization on the host side: validate arguments, enforce per-user permissions, and never let the model's chosen arguments imply authority.",
+        "Require human approval for consequential or irreversible actions regardless of which server offers them.",
+        "Isolate execution — separate processes or sandboxes, network restrictions — so a compromised server cannot reach unrelated systems.",
+        "Curate the exposed tool set per request rather than exposing everything discovered, both for safety and for selection accuracy.",
+        "Log every connection, discovery result, and tool call with arguments and outcomes, and alert on new or changed capabilities.",
+        "Have a revocation path: disable a server instantly, with the change taking effect without redeploying the app."
+      ],
+      "answer": "I would treat an MCP server as a dependency that runs with privileges, because that is what it is. Concretely: an explicit allow-list of servers, pinned versions with provenance checks, and absolutely no auto-installation from a model's suggestion — an agent that can add its own capabilities has no meaningful security boundary. Everything a server sends is untrusted input, including the parts that look like configuration. Tool names and descriptions are read by my model, so a description containing hidden instructions is an injection with a direct line to the agent's decision-making; results are the classic indirect-injection channel. Both get clearly delimited as data, never merged into the system prompt. Credentials are scoped per server to the narrowest thing that works, and authorization stays on my side: the host validates arguments against the authenticated user's permissions, and the fact that the model produced an argument naming a resource never implies the right to touch it. Consequential and irreversible actions require human approval with a preview, regardless of which server offers the tool. Execution is isolated — separate process, restricted network, no ambient credentials — so a compromised server's reach stops at what I explicitly granted. I would also curate rather than expose: discovery may return forty tools, but the model sees the handful relevant to the request, which helps both safety and selection accuracy. Everything is logged — connections, discovery results, every call with arguments and outcomes — and I alert when a server's advertised capabilities change, because a silently mutated tool description is exactly what an attack looks like. Finally, revocation has to be instant and config-driven: I can disable a server without shipping a release."
+    }
+  ]
+}

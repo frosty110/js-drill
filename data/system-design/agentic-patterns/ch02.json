@@ -1,0 +1,125 @@
+{
+  "id": "ch02",
+  "num": 2,
+  "part": "Part I: Core Execution Patterns",
+  "title": "Routing",
+  "summary": "Dynamic path selection: classify the incoming request, then dispatch it to the handler best suited to it — a specialized prompt, a tool, a sub-agent, or a different model. Routing converts a system that must do everything into a set of specialists plus a dispatcher, which is how you buy both quality and cost efficiency, at the price of a new silent failure mode: misrouting.",
+  "keyTakeaways": [
+    "A router turns one general-purpose prompt into a dispatcher over specialists, so each branch can have its own prompt, tools, model, and evaluation.",
+    "Routers can be implemented with an LLM classifier, embedding similarity to branch descriptions, a small trained classifier, or plain rules — cost, latency, and accuracy differ, and the cheapest adequate mechanism should win.",
+    "Routing is where cost control usually lives: the large majority of production traffic is simple, so sending it to a small model and escalating only hard requests preserves quality where it matters.",
+    "Misrouting fails silently — the user gets a confident answer from the wrong specialist — so routing accuracy must be measured directly, not inferred from end-to-end quality.",
+    "Every router needs a default or fallback branch and a policy for ambiguous or multi-intent requests; without one, unclassifiable input produces arbitrary behaviour.",
+    "Routing composes with the other patterns: it selects which chain, which agent, or which tool set runs, and it is the natural place to enforce policy (refuse, escalate, require human review)."
+  ],
+  "questions": [
+    {
+      "q": "What does the routing pattern add over a single prompt that handles everything?",
+      "options": [
+        "It guarantees lower latency for all requests",
+        "It removes the need for guardrails",
+        "It selects among specialized handlers, so each branch gets its own prompt, tools, model, and evaluation instead of one prompt compromising across all cases",
+        "It allows the model to answer without any context"
+      ],
+      "answer": 2,
+      "explain": "One prompt serving many intents is a compromise on every one of them. Routing lets each intent be handled by something purpose-built — and lets you add a new capability by adding a branch, rather than by editing a prompt everything else depends on."
+    },
+    {
+      "q": "Which implementations of a router does the pattern admit?",
+      "options": [
+        "An LLM classifying the request, embedding similarity against branch descriptions, a small trained classifier, or deterministic rules",
+        "Only an LLM call, since routing requires reasoning",
+        "Only a rules engine, since routing must be deterministic",
+        "Only a vector database lookup"
+      ],
+      "answer": 0,
+      "explain": "The mechanism is a design choice with a cost/latency/accuracy tradeoff. Rules are free and brittle; embeddings are cheap and fuzzy; a small classifier is fast and needs training data; an LLM is flexible and the most expensive. Use the cheapest one that routes accurately."
+    },
+    {
+      "q": "Why is misrouting considered a particularly dangerous failure?",
+      "options": [
+        "It causes the request to time out",
+        "It corrupts the vector index",
+        "It doubles the token cost of the request",
+        "It is silent: the wrong specialist still produces a fluent, confident answer, so nothing errors and the failure looks like a quality problem rather than a dispatch problem"
+      ],
+      "answer": 3,
+      "explain": "A crashed branch is obvious; a billing question answered by the technical-support prompt is not. That is why the router needs its own labelled evaluation set and its own accuracy metric, tracked separately from answer quality."
+    },
+    {
+      "q": "How does routing serve cost optimization in practice?",
+      "options": [
+        "By compressing prompts before dispatch",
+        "By exploiting the skew in real traffic — most requests are simple, so they go to a small cheap model, and only the hard minority escalates to an expensive one",
+        "By caching the router's decision for all future users",
+        "By batching all requests into a single call"
+      ],
+      "answer": 1,
+      "explain": "The saving comes from the traffic distribution, not from the routing itself. The engineering requirement is to measure quality per route, because a router that sends hard queries down the cheap path degrades exactly the requests that matter most."
+    },
+    {
+      "q": "What must every router define beyond its branches?",
+      "options": [
+        "A default/fallback branch and a policy for ambiguous or multi-intent requests",
+        "A separate API key per branch",
+        "A cache for each branch's outputs",
+        "A minimum confidence of 100% before dispatch"
+      ],
+      "answer": 0,
+      "explain": "Real input does not respect your taxonomy. Without an explicit fallback — a general handler, a clarifying question, or an escalation — unclassifiable requests get forced into whichever branch was closest, which is the worst possible outcome."
+    },
+    {
+      "q": "What is a sound way to handle a request that plausibly belongs to two branches?",
+      "options": [
+        "Always pick the first branch in the list",
+        "Return an error to the user",
+        "Ask a clarifying question, run both branches and merge, or route to a handler that owns the overlap — chosen deliberately rather than left to chance",
+        "Route to the most expensive branch by default"
+      ],
+      "answer": 2,
+      "explain": "Multi-intent input is common, so the design must name a policy. Clarification is cheapest for high-stakes branches; running both and merging costs more but avoids a round trip; an explicit combined branch works when the overlap is predictable."
+    },
+    {
+      "q": "How does routing relate to the other agentic patterns?",
+      "options": [
+        "It replaces planning and tool use entirely",
+        "It only applies to multi-agent systems",
+        "It is a control-flow pattern that selects which chain, agent, tool set, or model handles a request — and it is a natural place to apply policy such as refusal or escalation",
+        "It can only be used as the final step of a pipeline"
+      ],
+      "answer": 2,
+      "explain": "Routing is the branch in the flow chart: chaining is the straight line, parallelization is the fan-out, routing is the switch. Because every request passes through it, it is also the cheapest place to enforce policy decisions."
+    },
+    {
+      "type": "open",
+      "prompt": "Design the routing layer for a customer assistant that handles billing, technical support, account changes, and general questions. Cover mechanism, evaluation, and failure handling.",
+      "points": [
+        "Define branches by how they are actually handled — different tools, data access, policy, and risk — rather than by surface topic alone.",
+        "Choose the mechanism by measurement: start with an LLM or embedding router, consider a small trained classifier once labelled traffic exists, and use rules for unambiguous signals.",
+        "Return a structured routing decision with a confidence and a reason, so low-confidence cases can be treated differently.",
+        "Build a labelled routing evaluation set from real traffic and track routing accuracy and a confusion matrix, separate from answer quality.",
+        "Define the ambiguity policy: clarify, run multiple branches, or use a combined handler — and the fallback branch for out-of-scope input.",
+        "Apply policy at the router: high-risk intents (refunds, account deletion, security) escalate to stricter handling or a human.",
+        "Right-size models per branch and measure quality per route to catch a cheap branch quietly under-serving hard requests.",
+        "Log routing decisions with the input so misroutes can be mined and fed back as new evaluation cases."
+      ],
+      "answer": "I would start by defining branches around handling rather than around topic labels, because the reason to split is that the branches need different tools, different data access, different policy, and carry different risk. Billing touches payment systems and has refund policy attached; account changes are write operations that need identity verification; technical support needs the documentation corpus; general questions need very little. That framing also tells me where the danger is: a misroute into billing or account changes is far more costly than one into general questions, so those branches deserve confirmation and stricter thresholds. Mechanically I would start with an LLM or embedding router because it needs no training data, have it return a structured decision — branch, confidence, brief reason — and log every decision alongside the input. Once a few thousand labelled examples accumulate from that logging, a small classifier usually matches the LLM at a fraction of the cost and latency, and unambiguous signals (a pasted invoice number, a menu selection from the UI) should short-circuit to rules before any model runs. Evaluation is the part teams skip. I build a labelled routing set from real traffic and track accuracy plus a confusion matrix, because 'billing misrouted as technical' and 'technical misrouted as general' have different consequences and different fixes. That is measured independently of answer quality, since a misroute produces a fluent answer and hides in end-to-end scores. Failure handling has three parts: a default branch for genuinely out-of-scope input, an explicit ambiguity policy — clarify for high-risk branches, run both and merge for cheap ones — and a low-confidence path that either asks a question or escalates rather than guessing. Finally I would put policy at the router because every request passes through it: high-risk intents get routed into handlers that require verification or human approval, and refusal categories are caught here rather than at the end of four downstream steps.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Your router is 92% accurate. Explain why that number alone is not enough to decide whether the system is acceptable, and what you would look at instead.",
+      "points": [
+        "Aggregate accuracy hides which confusions occur; a confusion matrix shows whether errors land in harmless or costly branches.",
+        "Errors are not symmetric in cost — misrouting into a write-capable or high-risk branch is far worse than into a general one.",
+        "Traffic distribution matters: 8% error on the rarest intent is different from 8% concentrated in the most common one.",
+        "Downstream recovery matters: some branches detect that a request does not belong to them and can hand back; others answer confidently regardless.",
+        "Confidence calibration matters: if errors cluster at low confidence, a threshold plus clarification recovers most of them.",
+        "Segment the metric — by language, channel, phrasing style, length — since routers commonly fail on a specific segment while the average looks fine.",
+        "The end-user metric is what matters: resolution rate, escalation rate, and repeat contacts, which is where a misroute actually shows up.",
+        "Errors should be mined into new evaluation cases and branch descriptions improved, treating routing as a maintained model rather than a fixed rule."
+      ],
+      "answer": "Because 92% is an average over a distribution I have not looked at, and routing errors are not fungible. The first thing I want is the confusion matrix: eight percent of requests going to the wrong branch is tolerable if they are general questions landing in technical support, and unacceptable if they are technical questions landing in a branch that can issue refunds. Error cost is asymmetric, so I would weight the matrix by consequence, not count. Second, I want the traffic distribution overlaid, because an eight percent error rate concentrated in the highest-volume intent is a different product than the same rate spread across the rare tail. Third, I want to know what happens downstream: some branches can recognize that a request is not theirs and hand it back, which converts a routing error into a small latency cost, while others will confidently answer anything — those are the branches where misroutes turn into wrong answers users act on. Fourth, calibration: if the router emits a confidence and the errors cluster at low confidence, then a threshold plus a clarifying question recovers most of them cheaply, and the effective accuracy is much better than 92%. If errors are spread evenly across confidence, the score is untrustworthy and I need a different mechanism. Then I would slice: by language, by channel, by message length, by whether the user pasted an error log. Routers characteristically work well on the phrasing they were designed against and fail on a segment nobody tested. Finally I would check the outcome metrics that actually matter — resolution rate, escalation rate, repeat contacts within a day — because that is where a misroute surfaces as a real cost. And I would treat every logged error as a new evaluation case, since a router is a model that drifts as the product and the users' vocabulary change."
+    }
+  ]
+}

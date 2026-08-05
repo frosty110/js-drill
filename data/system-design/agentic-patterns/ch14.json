@@ -1,0 +1,129 @@
+{
+  "id": "ch14",
+  "num": 14,
+  "part": "Part II: State, Knowledge & Interaction",
+  "title": "Knowledge Retrieval (RAG)",
+  "summary": "Ground the agent in knowledge it does not have: chunk and index a corpus, retrieve what is relevant to the request, and put it in the context with citations. The agentic form goes further — retrieval becomes a tool the agent can invoke repeatedly, rewriting queries and following up across multiple hops until it has what it needs, or concluding that the corpus does not contain the answer.",
+  "keyTakeaways": [
+    "RAG keeps knowledge outside the weights, where it can be updated, cited, permission-checked, and removed — which is why it beats finetuning for facts.",
+    "Retrieval quality is the ceiling on answer quality: if the supporting passage was never retrieved, no prompt improvement can recover it, so retrieval must be measured separately.",
+    "Hybrid retrieval (keyword plus embedding) with a reranking stage is the reliable default, because sparse and dense retrieval fail on different queries.",
+    "Chunking determines what can be found: chunks must be self-contained enough to answer with and focused enough to match, which usually means splitting on document structure with overlap and attached context.",
+    "Agentic RAG turns retrieval into a tool the agent calls in a loop — rewriting the query, retrieving again, and following multi-hop chains — which handles questions a single retrieval pass cannot.",
+    "Citations and grounding checks are what make RAG auditable: every claim should trace to a retrieved passage, and unsupported claims should be detectable.",
+    "The agent must be permitted and instructed to say the corpus does not contain the answer; without that escape hatch it will fabricate one.",
+    "Retrieval must respect the user's permissions and the corpus's freshness — a permission-blind index leaks, and a stale index confidently answers with last quarter's policy."
+  ],
+  "questions": [
+    {
+      "q": "Why is knowledge retrieval generally preferred over finetuning for supplying facts?",
+      "options": [
+        "Because retrieval is more accurate on every task",
+        "Because facts stay outside the weights, so they can be updated, cited, access-controlled, and deleted — none of which is possible once they are trained in",
+        "Because retrieval uses fewer tokens",
+        "Because finetuning cannot be done on commercial models"
+      ],
+      "answer": 1,
+      "explain": "Weights are a bad database: you cannot update one fact, you cannot show where an answer came from, and you cannot revoke a document's access retroactively. Retrieval preserves all three properties."
+    },
+    {
+      "q": "Why must retrieval quality be measured separately from answer quality?",
+      "options": [
+        "Because retrieval runs on separate infrastructure",
+        "Because vector databases report their own metrics",
+        "Because a bad answer may be a retrieval miss or a generation failure, and only separate measurement — recall and precision at k — tells you which to fix",
+        "Because answer quality cannot be measured"
+      ],
+      "answer": 2,
+      "explain": "Most production RAG failures are retrieval failures wearing a generation costume. Measuring recall at k against labelled query-to-document pairs distinguishes 'the model ignored the passage' from 'the passage was never there'."
+    },
+    {
+      "q": "Why is hybrid retrieval the common default?",
+      "options": [
+        "Because it halves storage costs",
+        "Because keyword search handles exact identifiers and rare terms that embeddings blur, while embeddings handle paraphrase and synonymy that keyword search misses",
+        "Because embeddings cannot be indexed at scale",
+        "Because keyword search is deprecated"
+      ],
+      "answer": 1,
+      "explain": "The two methods have complementary blind spots. An error code or a product SKU is a keyword problem; 'how do I stop being billed' matching a document titled 'subscription cancellation' is an embedding problem. Reranking then orders the merged candidates."
+    },
+    {
+      "q": "What is the chunking tradeoff?",
+      "options": [
+        "Smaller chunks are always better because they are more precise",
+        "Chunk size affects only storage cost",
+        "Larger chunks always retrieve more accurately",
+        "Small chunks match queries precisely but may lack the context needed to answer; large chunks carry context but dilute relevance and consume context budget"
+      ],
+      "answer": 3,
+      "explain": "The usual mitigations are structure-aware splitting (on sections and clauses rather than token counts), overlap, and attaching surrounding or parent-document context to each chunk so a precise match still arrives with enough context to be usable."
+    },
+    {
+      "q": "What does agentic RAG add over a single retrieve-then-generate pass?",
+      "options": [
+        "It compresses the retrieved documents",
+        "It replaces the embedding model with a larger one",
+        "Retrieval becomes a tool the agent can call repeatedly — rewriting queries, retrieving again after seeing results, and following multi-hop chains until it has enough",
+        "It removes the need for citations"
+      ],
+      "answer": 2,
+      "explain": "Some questions cannot be answered by one similarity search: they need a term found in the first result, or they combine facts from two documents. Iterative retrieval handles those, at the cost of extra latency and the need for a stopping condition."
+    },
+    {
+      "q": "Why do citations matter beyond user trust?",
+      "options": [
+        "They make claims auditable — every assertion can be traced to a retrieved passage, which makes ungrounded statements detectable automatically rather than invisible",
+        "They reduce token cost",
+        "They are required by embedding models",
+        "They improve retrieval recall"
+      ],
+      "answer": 0,
+      "explain": "Citations turn faithfulness into something you can check: an automated grounding evaluation verifies each claim against its cited passage. Without them, a fluent hallucination is indistinguishable from a supported answer."
+    },
+    {
+      "q": "What must a RAG system be explicitly allowed to do, to avoid fabrication?",
+      "options": [
+        "Search the public internet as a fallback",
+        "Answer from the model's own knowledge when retrieval is thin",
+        "Report that the corpus does not contain the answer, and refuse rather than improvise",
+        "Retry retrieval indefinitely"
+      ],
+      "answer": 2,
+      "explain": "A model instructed only to be helpful, with no supported answer available, will produce something plausible. The escape hatch must be an explicit, rewarded behaviour — and the evaluation set must include questions the corpus genuinely cannot answer."
+    },
+    {
+      "type": "open",
+      "prompt": "Design a permission-aware retrieval layer for an internal assistant where different employees may see different documents. What breaks if you get it wrong, and how do you evaluate it?",
+      "points": [
+        "Enforce permissions at retrieval time against the requesting user's identity — never post-filter generated text, since the content has already entered the context.",
+        "Store document ACLs alongside chunks and filter in the query, so unauthorized chunks are never candidates.",
+        "Beware derived artifacts: summaries, caches, memories, and embeddings computed from restricted documents inherit their restrictions.",
+        "Scope caches and any semantic cache per permission set, or an answer computed for one user gets served to another.",
+        "Handle the empty-result case honestly: 'no accessible documents cover this' rather than answering from general knowledge or revealing that a restricted document exists.",
+        "Avoid metadata leaks: titles, counts, and citations can reveal the existence and content of documents the user cannot read.",
+        "Log access decisions for audit, and re-check permissions at query time rather than trusting a stale index snapshot.",
+        "Evaluate with negative tests: users who should not see a document, deleted or newly restricted documents, and permission changes propagating to the index.",
+        "Handle revocation: reindex or invalidate promptly when access changes, since a stale index is an access-control bypass."
+      ],
+      "answer": "The rule I would hold to is that permissions are enforced at retrieval, never after generation. Once a restricted passage is in the context, the leak has already happened — a post-hoc filter on the output is not access control, because the model may paraphrase, summarize, or infer from what it read. Concretely, every chunk carries its source document's ACL, and the retrieval query filters on the requesting user's identity so unauthorized chunks are never candidates. Permissions are checked against the live source of truth at query time, because a nightly-synced index is an access-control bypass with a latency of up to a day. The subtle failures are in derived data. A summary of a restricted document is restricted. A memory extracted from a session with a privileged user is restricted. An embedding computed from restricted text can leak through similarity. And caches are the classic hole: an exact or semantic response cache keyed only by the question will happily serve one employee an answer computed from another employee's documents, so every cache key must include the permission scope. Metadata leaks matter too — 'I found 3 documents but cannot show them' tells the user that documents exist, and even a citation title can disclose something sensitive, so the empty case should be indistinguishable from genuinely having nothing. On revocation, access changes must invalidate index entries and caches promptly, and deletion has to propagate to chunks, embeddings, and any derived summaries. Evaluation is mostly negative testing, which is what teams skip. I would build a suite of user-document pairs that must not match, run every one on each release, and include the hard cases: a user who lost access yesterday, a document whose ACL tightened, a question whose answer appears in both a public and a restricted document, and a cache warmed by a privileged user followed by an unprivileged query. Access decisions get logged for audit. And I would treat any single leak as a stop-ship, because unlike a quality regression it cannot be undone.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Your RAG agent answers well on questions whose answer sits in one document, and poorly when the answer requires combining two. Explain why and how you would fix it.",
+      "points": [
+        "Single-pass retrieval optimizes similarity to the question, and a multi-hop question is not similar to either supporting document individually.",
+        "The bridging entity or term needed for the second lookup often appears only in the first document's content.",
+        "Fix 1: iterative/agentic retrieval — retrieve, read, formulate a follow-up query using what was found, retrieve again, with a stopping condition.",
+        "Fix 2: query decomposition — split the question into sub-questions, retrieve for each, then synthesize.",
+        "Fix 3: improve the index for connectivity — larger or parent-linked chunks, metadata linking related documents, or a graph/structured index over entities.",
+        "Fix 4: reranking over a wider candidate pool so a partially relevant bridging document survives the cut.",
+        "Costs: more retrieval round trips, more latency and tokens, and a need for loop bounds.",
+        "Evaluate specifically: build a multi-hop slice in the evaluation set and measure recall of all required documents, not just the top one.",
+        "Detect the shape at request time so simple questions keep the cheap single-pass path."
+      ],
+      "answer": "This is the structural weakness of single-pass RAG. A retriever ranks by similarity to the question, but a multi-hop question is often not very similar to either document that supports it — the first document contains the bridging fact, and the second is only relevant once you know that fact. So the top-k for the original question contains one relevant document and four near-misses, and the model answers from what it has. The fixes come in two families. The first is making retrieval iterative: let the agent retrieve, read, and then formulate a second query using what it just learned — the customer's account tier, the component name, the policy identifier — and retrieve again, with a bound on hops and a stopping condition when it has enough to answer. Query decomposition is the planned version of the same idea: split the question into sub-questions up front, retrieve for each, and synthesize. Decomposition is cheaper and more predictable; iterative retrieval handles the cases where you cannot know the second question in advance. The second family is index-side. Chunking that preserves connectivity — parent-document links, section context attached to each chunk, metadata that relates documents in a series — makes the bridge findable. Where the domain is genuinely relational, an entity or graph index over the corpus turns multi-hop into traversal rather than repeated similarity search. And widening the candidate pool before reranking helps, because the bridging document is frequently rank 15 on the original query and gets cut before the reranker ever sees it. The costs are latency and tokens, so I would detect the question shape and keep the cheap single-pass path for simple lookups. Most importantly I would evaluate this specifically: a multi-hop slice in the evaluation set, measuring whether all required documents were retrieved rather than whether the top result was relevant. Without that slice, this failure is invisible in aggregate metrics, because most questions are single-hop and they carry the average."
+    }
+  ]
+}

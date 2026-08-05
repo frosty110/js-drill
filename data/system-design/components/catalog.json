@@ -1294,6 +1294,53 @@
       ]
     },
     {
+      "id": "cqrs",
+      "category": "async-messaging",
+      "title": "CQRS / Read-Model Projection",
+      "what": "Serving reads from a second model derived from the write model, so the shape that accepts and validates a change is not the shape that answers a query.",
+      "drill": { "topic": "ddia", "unit": "ch11" },
+      "reachFor": [
+        "The write shape and the read shape genuinely disagree — writes are single-entity and validated, reads are wide joins or fan-ins across many entities",
+        "Reads outnumber writes by orders of magnitude and the read query is the expensive one",
+        "The same underlying facts must be answered in several different shapes, and one schema cannot be optimal for all of them",
+        "The write side must stay append-only or auditable, so current state has to be a derived view rather than the record"
+      ],
+      "avoid": [
+        "One normalized model already serves both sides — the split buys a second store and a pipeline and nothing else",
+        "The read must reflect the write immediately; a projection is eventually consistent by construction",
+        "Read volume is low enough that an index, a cache or a read replica closes the gap"
+      ],
+      "costs": [
+        "Two models to keep correct, and a pipeline between them that is now on the critical path for freshness",
+        "Every new read shape is another projection to build, backfill and operate",
+        "Replay tooling is not optional — a projection you cannot rebuild is a second source of truth you did not mean to create"
+      ],
+      "failureModes": [
+        "Projection lag surfacing as a user writing something and not seeing it, with no error anywhere",
+        "A projection bug silently corrupting the read model while the write log stays correct — invisible until someone reconciles",
+        "Read-your-writes broken for the author of a change, because the UI reads the projection it just raced",
+        "The two models drifting after a partial replay, so which one is right becomes an operational question"
+      ],
+      "alternatives": [
+        {
+          "id": "replication",
+          "note": "A read replica scales read VOLUME against the same schema; CQRS is for when the read SHAPE is the problem."
+        },
+        {
+          "id": "caching",
+          "note": "A cache stores the answer to a query you already run; a projection maintains a model no query would produce cheaply."
+        },
+        {
+          "id": "aggregation",
+          "note": "Rollups are the narrow case — a projection whose read model is counters. Reach for the general form only when the view is richer than that."
+        },
+        {
+          "id": "outbox-cdc",
+          "note": "This is how the projection is fed: the write commits its change event in the same transaction, and the read model follows the log."
+        }
+      ]
+    },
+    {
       "id": "idempotency",
       "category": "correctness-coordination",
       "title": "Idempotency",

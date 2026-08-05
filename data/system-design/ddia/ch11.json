@@ -10,7 +10,8 @@
     "AMQP/JMS brokers (RabbitMQ) delete a message once acknowledged; log-based brokers (Kafka) append to a partitioned log, retain messages, and let consumers replay by tracking an offset.",
     "Change Data Capture (CDC) turns a database's replication log into an event stream to keep derived systems (search indexes, caches, warehouses) in sync, avoiding fragile dual writes.",
     "Event sourcing stores immutable events as the source of truth and derives current state by replaying them, enabling auditability, multiple read views (CQRS), and reprocessing to fix bugs.",
-    "Stream time reasoning distinguishes event time from processing time and uses windows (tumbling/hopping/sliding/session) with watermarks; fault tolerance targets exactly-once via checkpointing, idempotence, and atomic commit."
+    "Stream time reasoning distinguishes event time from processing time and uses windows (tumbling/hopping/sliding/session) with watermarks; fault tolerance targets exactly-once via checkpointing, idempotence, and atomic commit.",
+    "CQRS takes that separation as the design: the write model stays normalized and validation-shaped while each read model is a projection denormalized for one query, so neither compromises for the other — paid for with eventual consistency and a projection per read shape that must be rebuildable from the log."
   ],
   "questions": [
     {
@@ -205,6 +206,53 @@
         "There's an inherent tradeoff: wait longer (looser watermark) for completeness vs. emit sooner for lower latency."
       ],
       "answer": "Processing time is when my operator sees the event; event time is when it actually happened. With mobile clients buffering offline, an event can be processed hours after it occurred, so bucketing by processing time drops it in the wrong hour — I need to window by event time to get correct hourly counts. Watermarks handle the lateness: a watermark is a heuristic saying 'events older than time T have most likely all arrived,' which lets me decide when an event-time window is complete enough to emit. For stragglers that still arrive after the watermark I pick a policy — drop them, or emit a correction to the already-published count — trading off how long I wait (completeness) against how soon I publish (latency)."
+    },
+    {
+      "q": "CQRS separates the model that accepts writes from the model that answers reads. What is the primary thing that separation buys?",
+      "options": [
+        "Writes become faster because the database has fewer rows to scan",
+        "Neither model has to compromise: the write model can stay normalized and validation-shaped while read models are denormalized into whatever shape each query wants, instead of one schema being a compromise between both jobs",
+        "It removes the need for a database, since reads are served entirely from memory",
+        "It guarantees that reads and writes are strongly consistent with each other"
+      ],
+      "answer": 1,
+      "explain": "The gain is that one schema no longer has to serve two jobs with opposite requirements. Writes want a normalized model that's cheap to validate and keeps one fact in one place; reads want data pre-joined and pre-shaped for the query. Splitting them lets each be optimal — and the write path stops carrying the denormalized copies and read-optimized indexes it only maintained for the reader's benefit. It buys neither strong consistency (the opposite — the read model is derived, so it lags) nor the elimination of storage."
+    },
+    {
+      "q": "What is the standing cost a team takes on when it splits into a write model and derived read models?",
+      "options": [
+        "The write model can no longer be queried at all",
+        "Eventual consistency between the models, and a projection for every read shape that must be rebuildable — the read model is derived, so it lags the write and any bug in it is repaired by replaying rather than by editing",
+        "Every read must now take a distributed lock across both models",
+        "The event log has to be deleted after each projection is built"
+      ],
+      "answer": 1,
+      "explain": "The read model is maintained asynchronously from the write side, so it is behind by however long the pipeline takes — which shows up first as a user not seeing their own write. The second cost is operational: each read shape is another projection to build, backfill and reconcile, and a projection you cannot rebuild from the log has quietly become a second source of truth. This is why replay tooling isn't optional in a CQRS design."
+    },
+    {
+      "q": "A read replica also serves reads off a second copy of the data. What does a CQRS read model do that a read replica does not?",
+      "options": [
+        "Nothing — 'read model' is just another name for a read replica",
+        "It holds the same schema but on faster hardware",
+        "It holds a DIFFERENT model — data reshaped for the query (denormalized, pre-joined, pre-aggregated, or in another kind of store entirely) — whereas a replica is a byte-for-byte follower of the same schema",
+        "It accepts writes as well as reads, unlike a replica"
+      ],
+      "answer": 2,
+      "explain": "A read replica scales read VOLUME: same schema, same query cost, just more copies to spread load across. A CQRS read model attacks read SHAPE: the expensive join or fan-in is done once at write time and stored as the answer, often in a different engine (a search index, a sorted set, a wide-column timeline). If the query is merely frequent, add a replica or a cache; reach for a separate model only when the query itself is the expensive part."
+    },
+    {
+      "type": "open",
+      "prompt": "Your product's home feed page runs an eight-table join across posts, follows, profiles and engagement counts. It's correct, but it takes 900ms and reads outnumber writes 1000:1. Walk through how you'd apply CQRS here — what the read model is, how it's kept current, and what breaks for the user the day you ship it.",
+      "points": [
+        "Diagnose first: this is a read-SHAPE problem, not a read-volume problem — a replica or a cache would still pay for the eight-way join, so the join has to move off the read path.",
+        "The read model is a per-user materialized feed — the already-joined, already-ranked list of what that user should see, keyed by user id, stored in whatever engine serves that shape cheapest.",
+        "The write model stays normalized: a post is still one row, a follow is still one row, and it remains the thing that gets validated and is the source of truth.",
+        "Keeping it current: the write commits its change event alongside the state change (transactional outbox / CDC) and a stream consumer applies it to the affected read models — never a dual write from application code, which is how the two drift.",
+        "Name the cost the user feels: eventual consistency — most visibly read-your-writes, where an author posts and doesn't see it in their own feed because the projection hasn't landed yet. Common fix is to serve the author's own recent writes from the write model, or optimistically insert client-side.",
+        "Name the operational cost: the projection must be rebuildable by replaying the log, because a bug in the projection corrupts the read model silently while the write side stays correct.",
+        "Note the shape that makes this hard: a high-follower account fans out to millions of read models per post, so the pure write-side projection needs a hybrid — pull those few accounts in at read time instead."
+      ],
+      "answer": "The first thing I'd establish is that this is a read-shape problem rather than a read-volume one. A 1000:1 read ratio tempts you toward read replicas, but a replica runs the same eight-table join — it just runs it on more machines. The join itself has to leave the read path, and that means maintaining a second model. So: the read model is a per-user feed — the joined, ranked list of posts that user should see, keyed by user id, in whatever store serves that access pattern cheapest. The write model doesn't change; a post is still one normalized row and it's still what gets validated and stays the source of truth. To keep the projection current I'd have the write commit a change event in the same transaction as the state change — a transactional outbox, or CDC off the replication log — and have a stream consumer fan that event into the affected feeds. What I would not do is have application code write both the posts table and the feeds directly, because a partial failure or a reorder there leaves them permanently inconsistent with nothing signalling it. What breaks the day it ships is consistency: the read model is now eventually consistent, and the way users notice is read-your-writes — someone posts and doesn't see it in their own feed. I'd handle that by serving the author's own recent posts from the write model, or inserting optimistically on the client. The operational cost is that the projection has to be rebuildable from the log, because a projection bug corrupts the read side while the write side stays perfectly correct — invisible until someone reconciles. And the shape-specific trap here is the high-follower account: one post from someone with ten million followers means ten million read-model updates, so I'd go hybrid and pull those few accounts in at read time rather than fanning them out."
     }
   ]
 }

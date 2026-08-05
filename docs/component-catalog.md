@@ -209,7 +209,7 @@ connections break the stateless assumption). Authoring an edge everywhere the
 component technically appears would rebuild the link farm the annotations exist
 to prevent, just with more words in it.
 
-Current shape: **253 edges over all 65 components**, 5–12 per problem, ~7 on average.
+Current shape: **262 edges over all 66 components**, 5–12 per problem, ~7 on average.
 No orphans: every component names at least one problem it does work in, and the
 probe asserts that so regressing is visible rather than only noted.
 

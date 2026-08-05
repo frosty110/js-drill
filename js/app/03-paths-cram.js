@@ -257,7 +257,6 @@ function renderCramHome(path) {
       if (cb.checked) state.cramTaskChecks[id] = true;
       else delete state.cramTaskChecks[id];
       saveProgress();
-      updateCramProgressStrip();
       rerender();
     });
   });
@@ -266,7 +265,6 @@ function renderCramHome(path) {
       const id = btn.getAttribute('data-cram-redo');
       delete state.cramTaskChecks[id];
       saveProgress();
-      updateCramProgressStrip();
       rerender();
     });
   });
@@ -279,7 +277,6 @@ function renderCramHome(path) {
         if (!t.lessonId) delete state.cramTaskChecks[t.id];
       }
       saveProgress();
-      updateCramProgressStrip();
       rerender();
     });
   });
@@ -946,36 +943,6 @@ function applySidebarCuration() {
   });
 }
 
-// Top-bar cram progress strip: "Day N · ▓▓▓░░ · X/Y" — RETIRED with the rest
-// of the old header chrome (D15 phase 2). The header now carries ONE progress
-// instrument, scoped to wherever the user is; a second bar reporting a
-// different thing beside it is exactly the disagreement the redesign exists to
-// remove. The information itself is not lost: Day N and its task count are on
-// Today's Plan, which is where cram home already lives.
-//
-// The function stays as a no-op rather than being deleted at seven call sites
-// spread across four slices, and returns early on the absent element the same
-// way it always did for non-cram users. Re-point it at a new element and every
-// caller works again.
-function updateCramProgressStrip() {
-  const wrap = document.getElementById('topbar-cram-progress');
-  if (!wrap) return;
-  const path = getSubscribedPath();
-  if (!path || path.kind !== 'cram') { wrap.hidden = true; return; }
-  const dayIdx = getCramDayIndex(path);
-  if (dayIdx < 0) { wrap.hidden = true; return; }
-  const day = path.days[dayIdx];
-  let total = 0, done = 0;
-  for (const b of day.blocks) for (const t of b.tasks) { total++; if (isCramTaskDone(t)) done++; }
-  const pct = total ? Math.round(100 * done / total) : 0;
-  const dayEl = document.getElementById('topbar-cram-day');
-  const barEl = document.getElementById('topbar-cram-bar');
-  const countEl = document.getElementById('topbar-cram-count');
-  if (dayEl) dayEl.textContent = `⏱ Day ${dayIdx + 1}/${path.days.length}`;
-  if (barEl) barEl.style.width = pct + '%';
-  if (countEl) countEl.textContent = `${done}/${total}`;
-  wrap.hidden = false;
-}
 
 function openPathModal(opts = {}) {
   const modal = document.getElementById('path-modal');
@@ -1062,7 +1029,6 @@ function openPathModal(opts = {}) {
       saveProgress();
       updatePathChip();
       applySidebarCuration();
-      updateCramProgressStrip();
       if (typeof updateCramReviewCount === 'function') updateCramReviewCount();
       modal.style.display = 'none';
       if (typeof renderSidebar === 'function') renderSidebar();

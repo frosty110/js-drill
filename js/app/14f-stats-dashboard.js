@@ -462,20 +462,11 @@ function openDashboard() {
 }
 
 function initDashboardModal() {
-  // Hidden #dashboard-btn — the uniform target the #/m/dashboard route + the
-  // retired stats/streak buttons all resolve to.
+  // Hidden #dashboard-btn — the uniform target the #/m/dashboard route and the
+  // retired stats/streak buttons all resolve to. The topbar link and its
+  // mobile-only twin that used to be wired here went with the rest of the old
+  // navigation (D15 phase 2); Progress is the header's scope meter now.
   const btn = document.getElementById('dashboard-btn');
   if (btn) btn.addEventListener('click', openDashboard);
-  // Top-nav link. Modifier / middle click → let the browser open #/m/dashboard
-  // in a new tab natively (the link's href); plain click → open in place.
-  const navLink = document.getElementById('topbar-dashboard');
-  if (navLink) navLink.addEventListener('click', (e) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-    e.preventDefault();
-    openDashboard();
-  });
-  // Mobile-only 📊 icon (the desktop nav link is display:none ≤767px).
-  const mob = document.getElementById('topbar-dashboard-mobile');
-  if (mob) mob.addEventListener('click', openDashboard);
 }
 

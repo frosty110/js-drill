@@ -29,11 +29,12 @@
 // hollow = untouched). Attention chips derive from the repair index rank:
 // overdue (bad) > due (accent) > weak (bad) > reveal (warn).
 
-const _BROWSE_TRACKS = [
-  { key: 'syntax', label: 'Syntax' },
-  { key: 'patterns', label: 'Patterns' },
-  { key: 'applied', label: 'Applied' },
-];
+// Derived from the one track registry (js/app/01-state-content.js), so Browse
+// and Home can never disagree about what tracks exist. Browse still shows the
+// three tracks rather than the two AREAS Home groups them into — that is a
+// deliberate difference in altitude for a search-and-filter surface, not a
+// second taxonomy — and the Type facet crosses the two the other way.
+const _BROWSE_TRACKS = TRACKS.map(t => ({ key: t.key, label: t.label }));
 
 // Repair-rank → row chip (label + ds-chip modifier). Ranks come from
 // buildRepairIndex (09-stats): 0 overdue · 1 due · 2 weak · 3 reveal.
@@ -46,7 +47,7 @@ const _BROWSE_REP_CHIP = [
 
 let _browseQ = ''; // transient search text (not persisted — a fresh Browse starts clean)
 
-function _browseIsProblem(l) { return l.track === 'patterns' || l.track === 'applied'; }
+function _browseIsProblem(l) { return isProblemsTrack(l.track); }
 
 // Count of active filters for the disclosure badge (view toggles + facet picks).
 function _browseFilterCount() {

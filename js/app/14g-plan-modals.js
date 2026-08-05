@@ -176,7 +176,6 @@ function initTodaysPlanModal() {
         if (cb.checked) state.cramTaskChecks[id] = true;
         else delete state.cramTaskChecks[id];
         saveProgress();
-        updateCramProgressStrip();
         openCramToday(path);
       });
     });
@@ -235,7 +234,6 @@ function initPathSwitcher() {
   });
   updatePathChip();
   applySidebarCuration();
-  updateCramProgressStrip();
 
   // Phase 3 — cram reference modals
   const cramRefModal = document.getElementById('cram-ref-modal');

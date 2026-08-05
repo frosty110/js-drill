@@ -44,6 +44,7 @@ const GATES = [
   { name: 'crawlable pages',     cmd: ['tools/build-share-pages.js', '--check'], fix: ['tools/build-share-pages.js'] },
   { name: 'URL contract',        cmd: ['tools/check-url-contract.js'] },
   { name: 'shell contract',      cmd: ['tools/check-shell-contract.js'] },
+  { name: 'dom references',      cmd: ['tools/check-dom-refs.js'] },
   { name: 'sd slice order',      cmd: ['tools/split-system-design.py', '--check'], bin: 'python3' },
   { name: 'init slice order',    cmd: ['tools/split-init-core.py', '--check'], bin: 'python3' }
 ];

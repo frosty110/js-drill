@@ -292,9 +292,23 @@ banners with the concatenation asserted byte-identical.
 Gated by `tools/check-shell-contract.js` (26 checks), the slice-order `--check`,
 and `tools/cdp/nav-hierarchy.js` at 34 assertions.
 
-**Still open:** phase 4's other half — Home's track cards and Library are still
-two renderings of the same 29-section taxonomy. And §4.1's endgame: System
-Design has the shell but is still a separate page, not a Library track.
+**Still open, precisely:**
+
+- **One taxonomy, two altitudes.** `TRACKS` in `js/app/01-state-content.js` is
+  now the single definition of what the corpus is made of, and Home's areas and
+  Browse's segments both derive from it, so they can no longer disagree about
+  what exists. They still *present* at different altitudes — Home groups into
+  areas (Coding = Patterns + Applied), Browse lists the three tracks. That is
+  defensible for a search-and-filter surface, but whether Home's cards should
+  exist at all once Library is the corpus is phase 4's remaining product call.
+- **Six legacy label tables.** `04-progress-sr.js`, `09-stats-cheatsheet-mock.js`
+  (×3), `10-render-sidebar-lesson.js` (×2), `14f-stats-dashboard.js` and
+  `20-progress.js` each restate the track list for their own display, with three
+  different labels for one track ("Syntax", "Syntax Fundamentals", "Track A —
+  Syntax Fundamentals"). Each is display copy inside one surface; migrating them
+  is mechanical but was not done blind at the end of a large change.
+- **§4.1's endgame.** System Design has the shell, the header and the
+  breadcrumb, but is still a separate page rather than a Library track.
 
 **Left standing on purpose:** the bespoke up-affordances (`×` on a lesson, `Close` in a
 sheet) are still there. System Design's five bespoke `‹ …` crumb buttons are

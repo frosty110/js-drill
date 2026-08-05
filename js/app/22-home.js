@@ -40,12 +40,12 @@ const HOME_AREAS = [
   {
     key: 'coding', label: 'Coding', icon: 'code',
     sub: 'Patterns + Applied — the interview problem set',
-    tracks: ['patterns', 'applied'],
+    tracks: tracksInArea('coding'),
   },
   {
     key: 'syntax', label: 'Syntax', icon: 'braces',
     sub: 'JavaScript fundamentals, toolbox and traps',
-    tracks: ['syntax'],
+    tracks: tracksInArea('syntax'),
   },
   {
     key: 'sysdesign', label: 'System Design', icon: 'sysdesign',

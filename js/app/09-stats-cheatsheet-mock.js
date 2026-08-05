@@ -1122,26 +1122,15 @@ function setSurface(surface) {
     if (first) selectLesson(first.id);
     else { saveProgress(); renderSidebar(); }
   }
-  updateSurfaceToggle();
 }
 
 // Paint the segmented toggle's active state from state.surface.
-function updateSurfaceToggle() {
-  document.querySelectorAll('.surface-seg').forEach(b => {
-    const on = b.dataset.surface === state.surface;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-}
 
 // Wire the topbar Problems⇄Reference segmented toggle.
 function initSurfaceToggle() {
   document.querySelectorAll('.surface-seg').forEach(b => {
     b.addEventListener('click', () => setSurface(b.dataset.surface));
   });
-  const planBtn = document.getElementById('topbar-plan');
-  if (planBtn) planBtn.addEventListener('click', () => goToPlanHome());
-  updateSurfaceToggle();
 }
 
 // Phase E: union the "needs work" signals into one ranked index, consumed by the

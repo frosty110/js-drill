@@ -286,7 +286,6 @@ function renderSidebar() {
   const tracksToRender = state.surface === 'problems'
     ? _problemsTracks()
     : _allTracks.filter(t => t.id === 'syntax');
-  updateSurfaceToggle();
   // Faceted tag filter panel — only over the merged Problems list. Inserted at
   // the top of the nav (above the lesson list / any Plan-View track row).
   if (state.surface === 'problems') renderTagFacets(nav);
@@ -687,7 +686,6 @@ function renderLesson() {
   const shell = document.getElementById('lesson-shell');
   shell.innerHTML = '';
   document.body.classList.remove('l2-mobile-active');
-  if (typeof updateCramProgressStrip === 'function') updateCramProgressStrip();
   if (!state.currentLessonId) {
     const subbed = typeof getSubscribedPath === 'function' ? getSubscribedPath() : null;
     if (subbed && subbed.kind === 'cram' && Array.isArray(subbed.days) && subbed.days.length) {

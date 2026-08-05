@@ -3,7 +3,7 @@
   "chapter": 8,
   "part": "Designing with Agents",
   "title": "Agentic System Design Tradeoffs",
-  "summary": "The design questions that only exist once an LLM is making decisions inside your system: how many agents, what goes in the context window, how you know it works, and when an agent is the wrong tool entirely. Increasingly asked directly in AI-company interviews, and the last question is the one that separates people who have shipped agents from people who have read about them.",
+  "summary": "The design questions that only exist once an LLM is making decisions inside your system: how many agents, what goes in the context window, how you know it works, when an agent is the wrong tool entirely, and what you pin, seam off and record so the thing stays explainable as models and prompts move underneath it.",
   "keyTakeaways": [
     "Default to one agent with several tools. Splitting buys parallelism and context isolation and costs you information at every handoff, plus a debugging story where no single trace explains the outcome.",
     "Context is a budget, not storage. Everything in it competes, so the ordering is stable-first for caching and the discipline is summarizing at the tool boundary rather than appending raw output.",
@@ -186,6 +186,61 @@
         "Ship autonomy progressively — shadow, then suggest, then act on the narrowest band — so each widening is earned."
       ],
       "answer": "I treat human review as a designed component rather than a fallback, so it gets a queue, an interface and an SLA. Routing is by confidence and by stakes, which are separate axes: low confidence on a reversible action might not need anyone, while high confidence on an irreversible one might. The threshold itself is a policy decision owned by whoever carries the risk rather than something I tune on aggregate accuracy. I capture the human's decision with a required reason, because it is simultaneously an audit fact and the best evaluation label I will ever get, and I feed overrides back into the eval set. The metric I watch is override rate: if humans are constantly overriding, the automation is not working whatever the accuracy number says."
+    },
+    {
+      "q": "An agent's answer quality degrades noticeably one Tuesday. Nothing was deployed and no code changed. What is the most likely cause, and what would have prevented it?",
+      "options": [
+        "The provider moved the alias you point at onto a newer snapshot. Pinning the dated snapshot instead makes that a change you choose rather than one you discover",
+        "History accumulated past the point where the important instructions still get attention. Compaction into a structured state object prevents it",
+        "A tool began returning a slightly different response shape. Validating tool output against a schema at the boundary catches it",
+        "Temperature is above zero, so variance day to day is expected. Setting temperature to zero removes it"
+      ],
+      "answer": 0,
+      "explain": "An alias like a bare model name is a moving pointer, and providers move it. Nothing in your repository changed, which is exactly why this is hard to date afterwards: an unannounced provider upgrade is an unreviewed change to production behavior. Pinning the dated snapshot, and versioning the prompt and tool schema alongside it, converts that into a change you make deliberately. Context rot and a drifting tool response are both real failures, but neither arrives on a day when nothing on your side moved. Temperature zero is the seductive wrong answer: it reduces sampling variance but does not make a model deterministic, and it would not explain a step change on one day."
+    },
+    {
+      "q": "You are reading an agent codebase. Feature code imports the provider SDK directly and names the model inline at each call site. What is the strongest argument for putting the model behind an interface?",
+      "options": [
+        "SDK imports are heavy, so a single import point reduces cold-start time and bundle size",
+        "It breaks the layering convention the rest of the codebase follows, and consistency makes the code easier to read",
+        "Provider SDKs change their interfaces often, so one import point reduces the work of an upgrade",
+        "Swapping a provider, running two side by side to compare, and stubbing the model in a test all become the same small change instead of three unrelated ones"
+      ],
+      "answer": 3,
+      "explain": "The seam pays for itself in the operations you will actually perform on agent code, and those three are the same operation seen from different angles: substituting the thing behind the interface. Once feature code never names a model and never touches a provider-specific response shape, each is a configuration change. The upgrade-cost argument is true and is the weaker version of the same point, because it only pays on the days you upgrade. Cold start is a real cost but a small one and is not why you would do this. Consistency is the trap: it is an argument from convention, and at a company that says clean code matters less than judgment it answers a question nobody asked. Worth saying the cost out loud too, since an abstraction over a provider you will never swap is speculative generality."
+    },
+    {
+      "q": "An agent auto-closes cases. You need to answer both “why did case 4711 close?” and “which reason closed the most cases this month?”. What does the decision row need?",
+      "options": [
+        "A free-text rationale, since any structured field will be too coarse to explain one specific case",
+        "A reason code from a closed, versioned enum and a free-text rationale, because one is what you group by and the other is what a person reads",
+        "A reason code from a closed, versioned enum, since free text cannot be aggregated and will not be written consistently",
+        "The full model response, since it already contains the rationale and any structured field can be derived from it later"
+      ],
+      "answer": 1,
+      "explain": "The two questions are different shapes and need different columns. Grouping needs a closed vocabulary, and letting the model emit free-form reason strings produces thousands of near-duplicates and no dimension at all. Explaining one case needs prose, because an enum value cannot say what was specific about this one. Neither substitutes for the other, and saying that is the point. Storing the raw response and deriving the category later is the tempting version and it fails twice: you cannot GROUP BY a paragraph, and re-deriving a category with a second model call adds its own drift on top. One honest limit to state either way: a self-reported rationale is evidence of reasoning rather than proof of it, because the model narrates after the fact."
+    },
+    {
+      "q": "Your agent reports a confidence score with every decision and the product acts automatically above 0.85. What has to be true for that threshold to mean anything?",
+      "options": [
+        "The score is derived from token probabilities rather than from the model being asked to state a number",
+        "The threshold is set so the share acted on automatically stays inside what the review team can absorb",
+        "Outcomes are sampled and checked, per model and prompt version, so you know whether 0.85 corresponds to being right about eighty-five percent of the time",
+        "The score is normalized across agents so that 0.85 carries the same meaning everywhere in the system"
+      ],
+      "answer": 2,
+      "explain": "A model stating 0.9 is producing a number, not a probability, and the only thing that turns it into one is measuring agreement with outcomes over a sample. It has to be bucketed by model and prompt version, because a prompt change can move calibration without moving anything you would notice. Uncalibrated confidence is worse than none, since people act on it. Token probabilities feel more principled and are still uncalibrated, so they need the same measurement. Sizing the automated share to review capacity is real operational planning and is a different question from whether the number means anything. Normalizing across agents makes uncalibrated scores uniformly meaningless rather than fixing them."
+    },
+    {
+      "q": "You are moving an agent from recommending an action to taking it. What should decide when to widen the band it acts on by itself?",
+      "options": [
+        "Measured agreement between the agent's recommendation and the reviewer's decision on the same cases, which only exists if you stored both",
+        "A schedule agreed with the customer up front, so the rollout has dates everyone can plan around",
+        "The agent's own confidence distribution, widening once a large enough share of decisions clears the threshold",
+        "The size of the queue, widening when the backlog grows past what the reviewers can clear"
+      ],
+      "answer": 0,
+      "explain": "Autonomy is earned against evidence, and the evidence is disagreement: run the agent alongside the humans, store the recommendation next to the applied action, and widen where they already agree. That column pair is the whole mechanism, and a system that only stores the final outcome cannot compute it at all. Advancing on a schedule is a deploy wearing a rollout's clothes, since the date arrives whether the evidence did or not. Using the agent's own confidence to justify widening is circular unless that confidence has been calibrated against outcomes, which is the thing you are trying to establish. Backlog pressure is the most dangerous of the four: it is a real force and it argues for more autonomy exactly when you have the least evidence for it."
     }
   ]
 }

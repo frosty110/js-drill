@@ -222,8 +222,18 @@ function validateCatalog() {
     }
   }
 
+  // A component with no edges is REPORTED, not failed. Its failure mode is
+  // visible — the page says "not yet mapped to a canonical design problem" —
+  // and invariants are for the failures you cannot see. Blocking here would
+  // also forbid the honest case: a block worth knowing that no canonical
+  // problem happens to turn into a decision.
+  const unmapped = comps.filter(c => !Object.keys(edges[c.id] || {}).length);
+
   if (errors === 0) {
     console.log(`  Component catalog OK — ${comps.length} components in ${cats.length} categories, ${edgeCount} annotated edges.`);
+    if (unmapped.length) {
+      console.log(`  note: ${unmapped.length} component(s) carry no problem edge — ${unmapped.slice(0, 4).map(c => c.id).join(', ')}${unmapped.length > 4 ? ', …' : ''}`);
+    }
   }
 }
 

@@ -33,6 +33,19 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">7</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/blob-storage/">Object / Blob Storage</a> <span class="ds-chip">signature</span> — The backing store for content-addressed chunks, with the file manifest in a database pointing at each one.</li>
+      <li><a href="../../../sd/components/c/chunking/">Chunking</a> <span class="ds-chip">signature</span> — Files are split so only changed blocks transfer on edit, which is what makes syncing a large file after a small change cheap.</li>
+      <li><a href="../../../sd/components/c/dedup/">Deduplication</a> <span class="ds-chip">signature</span> — Content-addressed chunks mean an identical block uploaded by any user is stored once — where the storage savings in this design come from.</li>
+      <li><a href="../../../sd/components/c/conflict-resolution/">Conflict Resolution</a> <span class="ds-chip">signature</span> — Two devices editing the same file offline produce divergent versions, and the design must choose between merging and conflicted copies.</li>
+      <li><a href="../../../sd/components/c/reverse-proxy/">Reverse Proxy</a> — Absorbs slow client uploads and TLS at the edge, while the chunks themselves go direct to object storage rather than through the application tier.</li>
+      <li><a href="../../../sd/components/c/document-store/">Document Store</a> — Holds the file manifest: chunk list, versions and sharing state for one file, all read together on every sync.</li>
+      <li><a href="../../../sd/components/c/bloom-filter/">Bloom Filter</a> — Tests whether a chunk already exists before uploading it, so the dedup path avoids a round trip for genuinely new content.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Upload/download files; sync across a user&#39;s devices; share files and folders; view and restore prior versions.</li><li>Sync must transfer only changed bytes, never re-upload a whole file on a small edit.</li><li>Metadata is strongly consistent (a device must see the latest version list); blob content is immutable.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>500M registered · 100M DAU · ~2 devices each · ~50 GB stored per user → ~25 EB raw, before dedup and tiering</li><li>~10 saves per DAU/day → ~1B writes/day, ~12K/s average, ~60K/s peak</li><li>With chunk-level dedup the average uploaded delta is ~1 MB → ~1 PB/day, roughly 12 GB/s</li><li>Durability is paramount (11 nines); downloads exceed uploads and are served from CDN/blob store</li></ul>

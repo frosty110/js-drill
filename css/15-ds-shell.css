@@ -10,6 +10,146 @@
 #ds-appnav a.ds-navitem { text-decoration: none; }
 #ds-appnav a.ds-navitem:hover { text-decoration: none; }
 
+/* ── The top bar ───────────────────────────────────────────────────────────
+   ONE bar, two pages. These rules used to live in css/05-shell-chrome.css,
+   which only index.html loads — so system-design.html grew a second, bespoke
+   header (a big badge+<h1> button, a labelled Stats button, and a "JS Drill ↗"
+   escape hatch) that merely HOSTED #ds-shellbar in whatever room was left.
+   Measured at 390px: none. The shell bar computed to 0px wide, so the
+   breadcrumb, the scope meter and the due chip were all rendered and all
+   invisible, and the page read as a different product because two of its three
+   header elements existed nowhere else.
+
+   The shell's rule for the nav applies to the header too: a component that
+   only one page can style is not a component. Structure is the same on both
+   pages — wordmark, breadcrumb, then the numbers and the page's own capability
+   icons — and each page supplies only its own wordmark and icons.
+
+   Load order note: index.html loads 05-shell-chrome.css BEFORE this file, so
+   these definitions win on cascade order at equal specificity. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: calc(48px + env(safe-area-inset-top));
+  flex: 0 0 calc(48px + env(safe-area-inset-top));
+  background: var(--ds-bg-elevated, #101115);
+  border-bottom: 1px solid var(--ds-line, #262930);
+  padding: env(safe-area-inset-top) 12px 0 12px;
+  position: relative;
+  z-index: 50;
+}
+/* The left side GROWS and may shrink: it hosts the breadcrumb, whose width is
+   a lesson or unit title. `flex: 0 0 auto` was right when it held a fixed
+   wordmark and fixed controls, and is what pushed the shell bar to zero. */
+.topbar-left { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
+.topbar-right { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+
+/* The wordmark never shrinks and never ellipses — it is two words, and a
+   truncated one is noise. It yields by dropping to its mark alone (below). */
+.topbar-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ds-text-strong, #eef0f2);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+}
+a.topbar-wordmark:hover { text-decoration: none; color: var(--ds-accent, #f5b62b); }
+a.topbar-wordmark:focus-visible { outline: 2px solid var(--ds-accent, #f5b62b); outline-offset: 3px; border-radius: 6px; }
+/* A wordmark that carries a mark keeps its <h1> as the page's heading — the
+   text is the label, the mark is the identity (docs/iconography.md). */
+.topbar-wordmark h1 { margin: 0; font: inherit; }
+.topbar-wordmark .badge { display: grid; place-items: center; color: var(--ds-accent, #f5b62b); flex: none; }
+
+.topbar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-dim, #c4c9cf);
+  border: 1px solid transparent;
+  font-size: 16px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+/* An explicit `display` outranks the `hidden` attribute's UA `display: none`,
+   so a button JS hides with `el.hidden = true` stays on screen. The System
+   Design page's Stats button did exactly that on its topics landing — hidden
+   in code since the landing has no stats to show, visible in every screenshot.
+   (The retired .hbtn class had the same bug; it moved with the markup.) */
+.topbar-icon[hidden] { display: none; }
+.topbar-icon:hover { background: var(--ds-surface-2, #262930); color: #ffffff; }
+.topbar-icon[aria-expanded="true"] {
+  background: var(--ds-surface-2, #262930);
+  border-color: var(--ds-border-strong, #363a43);
+}
+
+/* ── The Sync chip yields the top strip ────────────────────────────────────
+   js/sync.js injects a `position: fixed; top: 10px; right: 12px` chip from a
+   runtime <style> tag — authored before either page had a bar, and now landing
+   on top of one. index.html pushed it below the bar; system-design.html
+   reserved a 92px gutter inside its header instead, which is where a quarter
+   of that page's 390px header row was going. One bar, one rule: the chip sits
+   below it on both. !important because sync.js's injected style would
+   otherwise win, and forking that file to move a chip is the wrong trade. */
+#sync-chip { top: calc(56px + env(safe-area-inset-top)) !important; }
+@media (max-width: 767px) {
+  /* Below the 44px mobile bar. The env() addend matters in installed-PWA mode,
+     where without it the chip renders behind the iOS status bar. */
+  #sync-chip {
+    top: calc(52px + env(safe-area-inset-top)) !important;
+    right: 8px !important;
+  }
+}
+
+/* ── Responsive tiers ──────────────────────────────────────────────────────
+   Moved here with the base rules so one file decides the bar's height at every
+   width. Split across two files, a later media query in the index-only file
+   would silently outrank the shared base and the two pages' bars would differ
+   by 4px — the exact drift this move exists to end. */
+@media (max-width: 767px) {
+  .topbar {
+    height: calc(44px + env(safe-area-inset-top));
+    flex: 0 0 calc(44px + env(safe-area-inset-top));
+    gap: 6px;
+    /* top-pad is the iOS status-bar safe area so the controls render BELOW the
+       notch / Dynamic Island when running as an installed PWA. */
+    padding: env(safe-area-inset-top) 6px 0 6px;
+  }
+  .topbar-wordmark { font-size: 13px; }
+}
+@media (max-width: 700px) {
+  .topbar-wordmark { font-size: 12px; }
+  .topbar-icon { width: 32px; height: 32px; font-size: 14px; }
+}
+
+/* ≤480px: the wordmark yields — it is the one thing in the row that says
+   something the user already knows. A plain-text wordmark goes entirely; a
+   wordmark carrying a MARK keeps the mark (it is both the page's identity and
+   its tap-to-root affordance) and clips the words to the a11y tree, so the
+   document keeps its heading.
+
+   It yields only to a breadcrumb, though. At a page ROOT the crumb is hidden
+   by design, and a bar holding one 20px glyph and nothing else is not a
+   header — so there the words stay and the wordmark IS the title. */
+@media (max-width: 480px) {
+  .topbar-wordmark:not(:has(.badge)) { display: none; }
+  .topbar:has(#ds-crumbs:not([hidden])) .topbar-wordmark:has(.badge) h1 {
+    position: absolute; width: 1px; height: 1px;
+    margin: -1px; padding: 0; overflow: hidden;
+    clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+}
+
 /* ── The header bar ────────────────────────────────────────────────────────
    Left: the breadcrumb (grows, truncates). Right: the scope meter + due chip,
    which never shrink — a number that has been squeezed to an ellipsis is worse
@@ -111,14 +251,10 @@ a.ds-duechip:focus-visible {
   .ds-shellbar__right:has(.ds-duechip) .ds-meter { display: none; }
 }
 
-/* ── The shell bar has to be allowed to shrink ─────────────────────────────
-   `.topbar-left` is `flex: 0 0 auto` (css/05-shell-chrome.css) — correct when
-   it held a fixed wordmark plus fixed controls, wrong now that it hosts a
-   breadcrumb whose width is the lesson title. Without this the row cannot
-   yield and the page gains ~3px of horizontal scroll at 390px, which is the
-   one thing guide rule 2 forbids outright.
-
-   Stated here rather than in 05-shell-chrome.css because it is a consequence
-   of what the shell puts inside the topbar, not of the topbar's own design. */
+/* The shell bar has to be allowed to shrink, or the row cannot yield and the
+   page gains ~3px of horizontal scroll at 390px — the one thing guide rule 2
+   forbids outright. Folded into `.topbar-left` above now that this file owns
+   it; the id-level restatement stays as a guard against any page-level rule
+   that reasserts the old `flex: 0 0 auto`. */
 #topbar .topbar-left { flex: 1 1 auto; min-width: 0; }
 #topbar .topbar-right { flex: 0 0 auto; }

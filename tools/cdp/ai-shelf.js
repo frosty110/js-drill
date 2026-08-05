@@ -7,6 +7,16 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
   await ensureChrome();
   const BASE = 'http://localhost:8765';
 
+  // report() prints; it does not exit, and the CDP sockets keep the event loop
+  // alive after close() — so without the explicit exit at the end this probe
+  // passes all 14 assertions and then hangs forever. Under check-all --probes
+  // that reads as `✗ ai book shelf (timed out)` six minutes later, which looks
+  // exactly like a real regression and is why every other probe here ends the
+  // same way. Tally each session's result so the exit code still means
+  // something.
+  let bad = 0;
+  const tally = (session) => { const r = session.report(); bad += r.failed + r.errors; };
+
   // ── 1. Landing page: shelves ──────────────────────────────────────────────
   let s = await connect({ url: `${BASE}/system-design.html#/`, mobile: true, waitForLoadMs: 3000 });
   const landing = await s.eval(`(() => ({
@@ -19,7 +29,7 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
   s.assert(['ai-engineering','agentic-patterns','multi-agent-systems'].every(id => landing.cards.includes(id)), 'three AI topics on the landing');
   s.assert(landing.cards.indexOf('ddia') < landing.cards.indexOf('ai-engineering'), 'system-design shelf renders before the AI shelf');
   s.assert(!landing.hscroll, 'no horizontal scroll at 390px');
-  await s.close(); s.report();
+  await s.close(); tally(s);
 
   // ── 2. Deep links into the new topics ─────────────────────────────────────
   for (const [hash, expect] of [
@@ -30,7 +40,7 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
     const p = await connect({ url: `${BASE}/system-design.html${hash}`, mobile: true, waitForLoadMs: 3000 });
     const body = await p.eval(`document.body.innerText.slice(0, 600)`);
     p.assert(expect.test(body), `${hash} renders its unit`);
-    await p.close(); p.report();
+    await p.close(); tally(p);
   }
 
   // ── 3. Home: the AI card is separate from System Design ───────────────────
@@ -52,5 +62,6 @@ const { ensureServer, ensureChrome, connect } = require('./lib');
   h.assert(/3 topics/.test(ai.topics), `AI counts 3 topics (got "${ai.topics}")`);
   h.assert(sd.frac !== ai.frac, `separate denominators (${sd.frac} vs ${ai.frac})`);
   h.assert(!home.hscroll, 'home has no horizontal scroll at 390px');
-  await h.close(); h.report();
+  await h.close(); tally(h);
+  process.exit(bad ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

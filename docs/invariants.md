@@ -112,18 +112,33 @@ fails if a gate regenerated something the author forgot to stage.
 
 ---
 
-## 3. Every local asset is precached
+## 3. Every local asset of every routed page is precached
 
-**Rule — a script or stylesheet added to `index.html` must also be added to
-`APP_SHELL` in `service-worker.js`, and `CACHE_VERSION` bumped.**
+**Rule — a script or stylesheet added to `index.html` OR `system-design.html`
+must also be added to `APP_SHELL` in `service-worker.js`, and `CACHE_VERSION`
+bumped.**
 
 The offline pack precaches a hand-maintained list. Miss an entry and the app
 works perfectly online and breaks only for offline users — a population no local
 test covers. This bit the share codec on the day it landed.
 
-**Gate** — `tools/check-sw-shell.js` asserts parity in both directions: every
-local `js/`/`css/`/`ds/` asset `index.html` references is precached, and every
-precached path exists.
+It has a second failure mode that is worse, because it hits users who are
+*online*. The fetch handler adds any successful same-origin GET to the cache, so
+a page outside `APP_SHELL` still gets cached — it just never gets refreshed by
+an install. Under the old cache-first-for-everything strategy that froze it for
+the entire life of the `CACHE_VERSION` string, which is bumped by hand.
+`system-design.html` sat outside the list for its whole life and did exactly
+that: returning users kept a copy from several releases back — no nav rail, no
+bottom bar, no header — while `index.html`, which IS in the list, looked
+current. Two halves of one product, different vintages, same phone, same
+deploy. Code (`.html`/`.js`/`.css` and any navigation) is network-first now, so
+a stale shell can no longer outlive a deploy; the drill payload stays
+cache-first, which is what the offline pack is for.
+
+**Gate** — `tools/check-sw-shell.js` asserts parity in both directions, for
+every routed page: each page is itself precached, every local `js/`/`css/`/`ds/`
+asset it references is precached, and every precached path exists. Add a page
+to its `PAGES` list when the app can navigate to it.
 
 ---
 

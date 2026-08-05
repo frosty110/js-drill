@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CQRS / Read-Model Projection — Async &amp; Messaging — system design</title>
+<meta name="description" content="Serving reads from a second model derived from the write model, so the shape that accepts and validates a change is not the shape that answers a query.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/cqrs/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CQRS / Read-Model Projection — Async &amp; Messaging — system design">
+<meta property="og:description" content="Serving reads from a second model derived from the write model, so the shape that accepts and validates a change is not the shape that answers a query.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/cqrs/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>CQRS / Read-Model Projection</h1>
+    <p class="sharepage__lede">Serving reads from a second model derived from the write model, so the shape that accepts and validates a change is not the shape that answers a query.</p>
+    <p class="sharepage__meta">
+      <span class="ds-chip">Async &amp; Messaging</span>
+      <span class="ds-chip">supporting</span>
+      <span class="ds-chip">8 problems</span>
+    </p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>The write shape and the read shape genuinely disagree — writes are single-entity and validated, reads are wide joins or fan-ins across many entities</li><li>Reads outnumber writes by orders of magnitude and the read query is the expensive one</li><li>The same underlying facts must be answered in several different shapes, and one schema cannot be optimal for all of them</li><li>The write side must stay append-only or auditable, so current state has to be a derived view rather than the record</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>One normalized model already serves both sides — the split buys a second store and a pipeline and nothing else</li><li>The read must reflect the write immediately; a projection is eventually consistent by construction</li><li>Read volume is low enough that an index, a cache or a read replica closes the gap</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>Two models to keep correct, and a pipeline between them that is now on the critical path for freshness</li><li>Every new read shape is another projection to build, backfill and operate</li><li>Replay tooling is not optional — a projection you cannot rebuild is a second source of truth you did not mean to create</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Projection lag surfacing as a user writing something and not seeing it, with no error anywhere</li><li>A projection bug silently corrupting the read model while the write log stays correct — invisible until someone reconciles</li><li>Read-your-writes broken for the author of a change, because the UI reads the projection it just raced</li><li>The two models drifting after a partial replay, so which one is right becomes an operational question</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/replication/">Replication</a> — A read replica scales read VOLUME against the same schema; CQRS is for when the read SHAPE is the problem.</li>
+      <li><a href="../../../../sd/components/c/caching/">Cache</a> — A cache stores the answer to a query you already run; a projection maintains a model no query would produce cheaply.</li>
+      <li><a href="../../../../sd/components/c/aggregation/">Pre-Aggregation &amp; Rollups</a> — Rollups are the narrow case — a projection whose read model is counters. Reach for the general form only when the view is richer than that.</li>
+      <li><a href="../../../../sd/components/c/outbox-cdc/">Transactional Outbox / CDC</a> — This is how the projection is fed: the write commits its change event in the same transaction, and the read model follows the log.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 8 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p02/">Design a News Feed</a> — Fan-out on write IS the split: a post is one row on the write side, and every follower&#39;s timeline is a separate materialized list maintained for it.</li>
+      <li><a href="../../../../sd/design-problems/p10/">Design a Collaborative Document Editor</a> — The edit log is the record and the rendered document is a projection of it, which is what lets a client that fell behind rebuild by replaying rather than by asking.</li>
+      <li><a href="../../../../sd/design-problems/p11/">Design a Leaderboard</a> — Scores are written as events and read from a sorted set that exists only to answer top-K and my-rank — a read structure no write path would choose.</li>
+      <li><a href="../../../../sd/design-problems/p15/">Design a Payment System (Wallet / Ledger)</a> — The double-entry ledger is append-only, so a wallet balance is a derived view; making the balance the record would mean losing the audit trail that proves it.</li>
+      <li><a href="../../../../sd/design-problems/p18/">Design an Ad Click Aggregator</a> — Raw clicks land immutably and the billable counts are a separate rolled-up model, so a counting bug is fixed by reprocessing rather than by admitting the number is lost.</li>
+      <li><a href="../../../../sd/design-problems/p26/">Design an Observability Platform</a> — Raw telemetry is written once and queried through pre-built time-series and index models, because the shape that ingests a million points a second cannot also serve a dashboard.</li>
+      <li><a href="../../../../sd/design-problems/p30/">Design a Feature Store</a> — The offline and online stores are two projections of the same feature definitions — the whole point being that one definition feeds both so they cannot disagree.</li>
+      <li><a href="../../../../sd/design-problems/p33/">Design a Financial Crime Alert Investigation System</a> — The event log is the source of truth and the case row is a projection of it, so the regulator-facing trace is authoritative and the read model can be rebuilt.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"cqrs","title":"CQRS / Read-Model Projection","category":"async-messaging","mechanism":null,"what":"Serving reads from a second model derived from the write model, so the shape that accepts and validates a change is not the shape that answers a query.","reachFor":["The write shape and the read shape genuinely disagree — writes are single-entity and validated, reads are wide joins or fan-ins across many entities","Reads outnumber writes by orders of magnitude and the read query is the expensive one","The same underlying facts must be answered in several different shapes, and one schema cannot be optimal for all of them","The write side must stay append-only or auditable, so current state has to be a derived view rather than the record"],"avoid":["One normalized model already serves both sides — the split buys a second store and a pipeline and nothing else","The read must reflect the write immediately; a projection is eventually consistent by construction","Read volume is low enough that an index, a cache or a read replica closes the gap"],"costs":["Two models to keep correct, and a pipeline between them that is now on the critical path for freshness","Every new read shape is another projection to build, backfill and operate","Replay tooling is not optional — a projection you cannot rebuild is a second source of truth you did not mean to create"],"failureModes":["Projection lag surfacing as a user writing something and not seeing it, with no error anywhere","A projection bug silently corrupting the read model while the write log stays correct — invisible until someone reconciles","Read-your-writes broken for the author of a change, because the UI reads the projection it just raced","The two models drifting after a partial replay, so which one is right becomes an operational question"],"usedIn":[{"problem":"p02","title":"Design a News Feed","doing":"Fan-out on write IS the split: a post is one row on the write side, and every follower's timeline is a separate materialized list maintained for it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p02/"},{"problem":"p10","title":"Design a Collaborative Document Editor","doing":"The edit log is the record and the rendered document is a projection of it, which is what lets a client that fell behind rebuild by replaying rather than by asking.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p10/"},{"problem":"p11","title":"Design a Leaderboard","doing":"Scores are written as events and read from a sorted set that exists only to answer top-K and my-rank — a read structure no write path would choose.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p11/"},{"problem":"p15","title":"Design a Payment System (Wallet / Ledger)","doing":"The double-entry ledger is append-only, so a wallet balance is a derived view; making the balance the record would mean losing the audit trail that proves it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p15/"},{"problem":"p18","title":"Design an Ad Click Aggregator","doing":"Raw clicks land immutably and the billable counts are a separate rolled-up model, so a counting bug is fixed by reprocessing rather than by admitting the number is lost.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p18/"},{"problem":"p26","title":"Design an Observability Platform","doing":"Raw telemetry is written once and queried through pre-built time-series and index models, because the shape that ingests a million points a second cannot also serve a dashboard.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p26/"},{"problem":"p30","title":"Design a Feature Store","doing":"The offline and online stores are two projections of the same feature definitions — the whole point being that one definition feeds both so they cannot disagree.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p30/"},{"problem":"p33","title":"Design a Financial Crime Alert Investigation System","doing":"The event log is the source of truth and the case row is a projection of it, so the regulator-facing trace is authoritative and the read model can be rebuilt.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p33/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/cqrs">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

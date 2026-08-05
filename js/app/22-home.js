@@ -50,7 +50,16 @@ const HOME_AREAS = [
   {
     key: 'sysdesign', label: 'System Design', icon: 'sysdesign',
     sub: 'DDIA · method · building blocks · design problems',
-    external: 'system-design.html',
+    external: 'system-design.html', shelf: 'system-design',
+  },
+  // The AI books run on the same engine and the same Leitner store, but they are
+  // a different subject, so they get their own card rather than inflating the
+  // System Design one. `shelf` is the same field topics.json declares — the two
+  // pages read one registry, so adding a book to a shelf surfaces it in both.
+  {
+    key: 'aibooks', label: 'AI Engineering', icon: 'sparkles',
+    sub: 'AI Engineering · agentic patterns · multi-agent systems',
+    external: 'system-design.html', shelf: 'ai',
   },
 ];
 
@@ -193,6 +202,9 @@ function _sdLoadIndex() {
           id: t.id,
           title: t.title || m.title || t.id,
           icon: t.icon || '',
+          // A topic with no shelf belongs to the original System Design set, so
+          // an un-shelved registry keeps rendering under that card.
+          shelf: t.shelf || 'system-design',
           unitLabel: m.unitLabel || 'Chapter',
           units: (m.chapters || []).map(c => ({ id: c.id, title: c.title, questions: +c.questions || 0 })),
           questions: (m.chapters || []).reduce((n, c) => n + (+c.questions || 0), 0),
@@ -236,32 +248,41 @@ function _sdTopicStats(topicId) {
   return { total, mastered, seen, due, pct: total ? Math.round(100 * mastered / total) : 0 };
 }
 
-function _sdAreaStats() {
+// Topics belonging to one shelf (omit `shelf` for every topic). Both the
+// area card and the aggregate stats read through this, so the System Design
+// card counts only System Design topics once the AI books exist.
+function _sdShelfTopics(shelf) {
+  if (!_sdIndex) return [];
+  return shelf ? _sdIndex.topics.filter(t => t.shelf === shelf) : _sdIndex.topics;
+}
+
+function _sdAreaStats(shelf) {
   if (!_sdIndex) return null;
-  return _sdIndex.topics.reduce((acc, t) => {
+  return _sdShelfTopics(shelf).reduce((acc, t) => {
     const s = _sdTopicStats(t.id) || { total: 0, mastered: 0, seen: 0, due: 0 };
     acc.total += s.total; acc.mastered += s.mastered; acc.seen += s.seen; acc.due += s.due;
     return acc;
   }, { total: 0, mastered: 0, seen: 0, due: 0, pct: 0 });
 }
 
-// Where "Continue System Design" goes. Prefer the drill page's own resume
-// pointer (lastTopic/lastChapter, which it already persists); otherwise the
-// first topic that still has unmastered questions; otherwise the landing.
-function _sdContinueHref() {
+// Where "Continue" goes for a shelf. Prefer the drill page's own resume
+// pointer (lastTopic/lastChapter, which it already persists) when it points
+// INTO this shelf; otherwise the first topic here that still has unmastered
+// questions; otherwise the landing.
+function _sdContinueHref(shelf) {
+  const topics = _sdShelfTopics(shelf);
+  const inShelf = (id) => !shelf || topics.some(t => t.id === id);
   const blob = _sdProgressBlob();
-  if (blob && blob.lastTopic) {
+  if (blob && blob.lastTopic && inShelf(blob.lastTopic)) {
     return blob.lastChapter
       ? `system-design.html#/${blob.lastTopic}/${blob.lastChapter}`
       : `system-design.html#/${blob.lastTopic}`;
   }
-  if (_sdIndex) {
-    const next = _sdIndex.topics.find(t => {
-      const s = _sdTopicStats(t.id);
-      return s && s.mastered < s.total;
-    });
-    if (next) return `system-design.html#/${next.id}`;
-  }
+  const next = topics.find(t => {
+    const s = _sdTopicStats(t.id);
+    return s && s.mastered < s.total;
+  });
+  if (next) return `system-design.html#/${next.id}`;
   return 'system-design.html';
 }
 
@@ -420,11 +441,12 @@ function _homeAreaCardHtml(area) {
   const chev = `<span class="home-expand__chev" aria-hidden="true">${dsIcon(open ? 'chevron-down' : 'chevron-right', 15)}</span>`;
 
   if (area.external) {
-    const s = _sdAreaStats();
+    const s = _sdAreaStats(area.shelf);
+    const shelfTopics = _sdShelfTopics(area.shelf);
     const loading = !s;
     const frac = loading ? '· · ·' : `${s.mastered}/${s.total}`;
     const pct = loading ? 0 : (s.total ? Math.round(100 * s.mastered / s.total) : 0);
-    const subRows = !_sdIndex ? '' : _sdIndex.topics.map(t => {
+    const subRows = !_sdIndex ? '' : shelfTopics.map(t => {
       const ts = _sdTopicStats(t.id) || { total: 0, mastered: 0, due: 0, pct: 0 };
       return `
         <div class="home-subrow">
@@ -453,11 +475,11 @@ function _homeAreaCardHtml(area) {
         </div>
         ${_homeMeter(pct, false)}
         <div class="home-area__actions">
-          <a class="ds-btn ds-btn--ghost" data-home-sd-continue href="${escapeHtml(_sdContinueHref())}">Continue&nbsp;→</a>
-          <a class="ds-btn ds-btn--subtle" href="system-design.html" title="All System Design topics">All topics</a>
+          <a class="ds-btn ds-btn--ghost" data-home-sd-continue href="${escapeHtml(_sdContinueHref(area.shelf))}">Continue&nbsp;→</a>
+          <a class="ds-btn ds-btn--subtle" href="system-design.html" title="All ${escapeHtml(area.label)} topics">All topics</a>
         </div>
         <button class="home-expand" data-home-toggle="${area.key}" aria-expanded="${open ? 'true' : 'false'}">
-          ${chev} ${_sdIndex ? _sdIndex.topics.length + ' topics' : 'Topics'}
+          ${chev} ${_sdIndex ? shelfTopics.length + ' topics' : 'Topics'}
         </button>
         <div class="home-subrows"${open ? '' : ' hidden'}>${subRows || '<p class="ds-dim" style="margin:6px 0;">Loading…</p>'}</div>
       </div>`;

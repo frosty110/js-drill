@@ -58,9 +58,15 @@ const EMOJI_SCAN = `((root) => (root.innerText.match(/\\p{Emoji_Presentation}|\\
     await s.eval(`location.hash = '#/'`);
     await s.sleep(900);
 
-    // ── Topic landing: four marks, one family ──────────────────────────────
+    // ── Topic landing: one mark per topic, one family ──────────────────────
+    // Counted from the registry rather than hardcoded: the landing grew a second
+    // shelf (the AI books), and what this probe protects is that every topic's
+    // mark is the same KIND of glyph in the same tile — not how many exist.
+    const TOPIC_COUNT = JSON.parse(
+      require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'data', 'system-design', 'topics.json'), 'utf8')
+    ).topics.length;
     const cards = await s.eval(`document.querySelectorAll('.topic-card').length`);
-    s.assert(cards === 4, `[${label}] 4 topic cards, got ${cards}`);
+    s.assert(cards === TOPIC_COUNT, `[${label}] ${TOPIC_COUNT} topic cards, got ${cards}`);
 
     const marks = JSON.parse(await s.eval(`JSON.stringify(
       [...document.querySelectorAll('.topic-icon')].map(el => {
@@ -70,13 +76,13 @@ const EMOJI_SCAN = `((root) => (root.innerText.match(/\\p{Emoji_Presentation}|\\
                  w: Math.round(r.width), h: Math.round(r.height),
                  tile: getComputedStyle(el).borderRadius };
       }))`));
-    s.assert(marks.length === 4 && marks.every(m => m.svg),
-      `[${label}] every topic mark is an svg, got ${marks.filter(m => m.svg).length}/4`);
+    s.assert(marks.length === TOPIC_COUNT && marks.every(m => m.svg),
+      `[${label}] every topic mark is an svg, got ${marks.filter(m => m.svg).length}/${TOPIC_COUNT}`);
     s.assert(marks.every(m => m.ds),
       `[${label}] every topic mark came from dsIcon (.ds-icon)`);
     const sizes = new Set(marks.map(m => `${m.w}x${m.h}`));
     s.assert(sizes.size === 1,
-      `[${label}] all four marks share one tile size, got ${[...sizes].join(', ')}`);
+      `[${label}] all topic marks share one tile size, got ${[...sizes].join(', ')}`);
     s.assert(marks.every(m => parseFloat(m.tile) > 0),
       `[${label}] the marks sit in rounded tiles, not free-floating`);
     await s.snap(`${label}-01-topics`);

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Building Your First Agent — Designing Multi-Agent Systems</title>
+<meta name="description" content="The agent loop implemented from first principles: a message list, a model call with tool schemas, parsing the tool calls it returns, executing them, appending the results as observations, and repeating until a termination condition. Around that core sit the things that make it usable — streaming, memory, cancellation, middleware for logging and guardrails, and traces detailed enough to debug.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Building Your First Agent — Designing Multi-Agent Systems">
+<meta property="og:description" content="The agent loop implemented from first principles: a message list, a model call with tool schemas, parsing the tool calls it returns, executing them, appending the results as observations, and repeating until a termination condition. Around that core sit the things that make it usable — streaming, memory, cancellation, middleware for logging and guardrails, and traces detailed enough to debug.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Building Your First Agent","description":"The agent loop implemented from first principles: a message list, a model call with tool schemas, parsing the tool calls it returns, executing them, appending the results as observations, and repeating until a termination condition. Around that core sit the things that make it usable — streaming, memory, cancellation, middleware for logging and guardrails, and traces detailed enough to debug.","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Designing Multi-Agent Systems","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/"},"teaches":["The core loop is small: build messages, call the model with tool schemas, execute any tool calls, append results, repeat until the model answers or a bound is hit — everything else is scaffolding around it.","Termination must be explicit — a final answer, a step cap, a wall-clock or token budget, or an error — because a loop with no bound will keep going.","Tool definitions are typed contracts: schema in, validated arguments, structured result out, and errors returned as observations the model can act on.","Streaming is a design requirement, not a nicety: without token and step streaming, every multi-step task is an opaque wait.","Middleware — logging, tracing, guardrails, retries, rate limiting — belongs around the loop as composable layers rather than tangled into the loop body.","State belongs outside the loop: the message list, the accumulated results, and any memory should be inspectable and serializable so a run can be resumed, replayed, and debugged."],"hasPart":[{"@type":"Question","position":1,"name":"What is the minimal structure of an agent loop?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q1","acceptedAnswer":{"@type":"Answer","text":"Assemble messages, call the model with tool schemas, execute returned tool calls, append results as observations, and repeat until a termination condition"}},{"@type":"Question","position":2,"name":"Why must termination be explicit?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q2","acceptedAnswer":{"@type":"Answer","text":"Because the model stops on its own only when it decides to answer — with no cap on steps, time, or tokens, a confused agent will keep calling tools indefinitely"}},{"@type":"Question","position":3,"name":"How should tool errors be handled inside the loop?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q3","acceptedAnswer":{"@type":"Answer","text":"Caught and returned to the model as observations with actionable messages, while bounding retries"}},{"@type":"Question","position":4,"name":"Why is streaming considered part of the agent's architecture rather than a UI concern?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q4","acceptedAnswer":{"@type":"Answer","text":"Because the loop must emit events — step started, tool called, result received, tokens generated — for any interface to show progress, so the loop has to be built to produce them"}},{"@type":"Question","position":5,"name":"What is the purpose of middleware around the agent loop?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q5","acceptedAnswer":{"@type":"Answer","text":"To compose cross-cutting concerns — logging, tracing, guardrails, retries, rate limiting — without entangling them in the loop's logic"}},{"@type":"Question","position":6,"name":"Why should the agent's state live outside the loop as an explicit, serializable object?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q6","acceptedAnswer":{"@type":"Answer","text":"So a run can be inspected, persisted, resumed, and replayed — and so debugging does not depend on log archaeology"}},{"@type":"Question","position":7,"name":"Why does cancellation need to be plumbed through explicitly?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q7","acceptedAnswer":{"@type":"Answer","text":"Because a user who navigates away or a request that times out must actually stop in-flight model and tool calls, rather than leaving work running and billing accruing"}},{"@type":"Question","position":8,"name":"What is the argument for building the loop from scratch before adopting a framework?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q8","acceptedAnswer":{"@type":"Answer","text":"Frameworks abstract the loop, so without having built one you cannot reason about what they are doing, debug their behaviour, or judge when their abstraction stops fitting"}},{"@type":"Question","position":9,"name":"Walk through implementing a minimal but production-shaped agent loop. What does it contain and what does each piece exist for?","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q9","acceptedAnswer":{"@type":"Answer","text":"I would start with state as an explicit object rather than local variables: the message list, a step counter, accumulated tool results, and running budget consumption in tokens, time, and cost. Making it serializable from the beginning is what later gives me resumption, replay, and debuggable runs. The loop body is then small. Assemble the messages, call the model with the typed tool schemas, and inspect the response: either it is a final answer, in which case we exit, or it contains tool calls. For each call, look the tool up, validate the arguments against its schema before executing anything, run it with a timeout, and append a structured result. Errors are caught and classified — transient, permanent, or semantic — and appended as observations with actionable messages, because the mode"}},{"@type":"Question","position":10,"name":"Your agent occasionally runs for dozens of steps and produces nothing useful. Describe how you would instrument and fix it.","url":"https://frosty110.github.io/js-drill/sd/multi-agent-systems/ch04/#q10","acceptedAnswer":{"@type":"Answer","text":"First I would make the run legible: a full trace under one request id with every prompt, tool call, argument, result, token count, and timing. Long useless runs are almost always obvious once you can read them, and invisible otherwise. The pattern I look for first is repetition — the same tool called with near-identical arguments several times — which means the agent is stuck and cannot tell. Right behind it is swallowed errors: if a tool failed and the loop returned an empty result, the agent has no idea anything went wrong and will keep trying variations of a doomed approach. Then I check the tool layer, because a surprising share of these runs are caused by definitions rather than reasoning: a vague description that makes two tools look interchangeable, an argument name the model keeps "}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/multi-agent-systems/">Designing Multi-Agent Systems</a></p>
+    <h1>Building Your First Agent</h1>
+    <p class="sharepage__lede">The agent loop implemented from first principles: a message list, a model call with tool schemas, parsing the tool calls it returns, executing them, appending the results as observations, and repeating until a termination condition. Around that core sit the things that make it usable — streaming, memory, cancellation, middleware for logging and guardrails, and traces detailed enough to debug.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Designing Multi-Agent Systems</span> <span class="ds-chip">10 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>The core loop is small: build messages, call the model with tool schemas, execute any tool calls, append results, repeat until the model answers or a bound is hit — everything else is scaffolding around it.</li><li>Termination must be explicit — a final answer, a step cap, a wall-clock or token budget, or an error — because a loop with no bound will keep going.</li><li>Tool definitions are typed contracts: schema in, validated arguments, structured result out, and errors returned as observations the model can act on.</li><li>Streaming is a design requirement, not a nicety: without token and step streaming, every multi-step task is an opaque wait.</li><li>Middleware — logging, tracing, guardrails, retries, rate limiting — belongs around the loop as composable layers rather than tangled into the loop body.</li><li>State belongs outside the loop: the message list, the accumulated results, and any memory should be inspectable and serializable so a run can be resumed, replayed, and debugged.</li><li>Cancellation and timeouts must be plumbed through, since an agent holding a long-running tool call needs to stop when the user leaves.</li><li>Building it once from scratch is the point: frameworks hide this loop, and you cannot debug what you have never seen.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">10</span></h2>
+    <p class="sharepage__note">Positions 1–10 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the minimal structure of an agent loop?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Prompt the model once and parse its output into actions</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Assemble messages, call the model with tool schemas, execute returned tool calls, append results as observations, and repeat until a termination condition <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Run several models in parallel and combine their outputs</li>
+        <li><span class="sharepage__key">D</span> Retrieve context, then generate an answer</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Everything an agent framework does is layered on this. Seeing it plainly is what makes framework behaviour — and framework bugs — comprehensible later.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why must termination be explicit?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because providers require a stop parameter</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because the model stops on its own only when it decides to answer — with no cap on steps, time, or tokens, a confused agent will keep calling tools indefinitely <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because loops cannot be streamed</li>
+        <li><span class="sharepage__key">D</span> Because context windows reset each iteration</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The loop&#39;s exit conditions are the developer&#39;s responsibility: a final answer, a step cap, a budget in time and tokens, or an unrecoverable error. Each needs defined behaviour, ideally an honest report rather than a silent stop.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>How should tool errors be handled inside the loop?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Caught and returned to the model as observations with actionable messages, while bounding retries <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Raised immediately to the user, ending the run</li>
+        <li><span class="sharepage__key">C</span> Suppressed so the loop continues cleanly</li>
+        <li><span class="sharepage__key">D</span> Retried silently until they succeed</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The model can only respond to what it sees. A specific error lets it fix its arguments or change tack; a suppressed one leads it to answer as if the call had returned nothing meaningful, which produces confident fabrication.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why is streaming considered part of the agent&#39;s architecture rather than a UI concern?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because streaming reduces token cost</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because the loop must emit events — step started, tool called, result received, tokens generated — for any interface to show progress, so the loop has to be built to produce them <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because models require streaming to use tools</li>
+        <li><span class="sharepage__key">D</span> Because streaming enables parallel tool calls</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> You cannot bolt progress onto a loop that returns only a final value. Designing the loop as an event emitter from the start is what makes streaming interfaces, live tracing, and mid-run cancellation possible.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the purpose of middleware around the agent loop?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To choose which model handles each step</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> To compose cross-cutting concerns — logging, tracing, guardrails, retries, rate limiting — without entangling them in the loop&#39;s logic <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> To store the conversation history</li>
+        <li><span class="sharepage__key">D</span> To convert between model providers&#39; formats</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> These concerns apply to every step and change independently of the loop. Keeping them as layers means the core stays readable, and a guardrail or a tracer can be added or removed without touching the control flow.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should the agent&#39;s state live outside the loop as an explicit, serializable object?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To reduce memory usage</li>
+        <li><span class="sharepage__key">B</span> Because frameworks require it</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> So a run can be inspected, persisted, resumed, and replayed — and so debugging does not depend on log archaeology <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> So multiple models can share it</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> State held only in local variables disappears when the process ends. Externalizing the message list, results, and step metadata makes long-running work resumable and makes every run reproducible for analysis.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does cancellation need to be plumbed through explicitly?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because model providers charge for cancelled requests</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because a user who navigates away or a request that times out must actually stop in-flight model and tool calls, rather than leaving work running and billing accruing <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because cancellation improves answer quality</li>
+        <li><span class="sharepage__key">D</span> Because tools cannot be interrupted otherwise</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Agents hold long-running operations. Without cancellation propagated to the model call and the tool execution, abandoned work continues consuming budget and may still perform side effects the user no longer wants.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is the argument for building the loop from scratch before adopting a framework?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Frameworks are always slower</li>
+        <li><span class="sharepage__key">B</span> Custom loops are always more capable</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Frameworks abstract the loop, so without having built one you cannot reason about what they are doing, debug their behaviour, or judge when their abstraction stops fitting <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Frameworks cannot support streaming</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> The loop is small enough to write in an afternoon and is the thing every framework wraps. Having built it, framework choices become evaluable rather than magical, and their failure modes become legible.</p>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Walk through implementing a minimal but production-shaped agent loop. What does it contain and what does each piece exist for?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>State: an explicit, serializable object holding messages, step count, accumulated results, and budget consumption.</li><li>Model call: messages plus typed tool schemas, with model and parameters configurable, and the response parsed for tool calls versus a final answer.</li><li>Tool execution: look up the tool, validate arguments against the schema, execute with a timeout, and return a structured result.</li><li>Error path: catch failures, classify them, and append actionable error observations rather than raising or suppressing.</li><li>Loop control: repeat until a final answer, a step cap, a budget limit, or an unrecoverable error; report the reason for termination.</li><li>Event emission: emit step, tool, and token events so interfaces and traces can consume progress live.</li><li>Middleware: logging/tracing, guardrails on inputs and outputs, retries with backoff, and rate limiting as composable layers.</li><li>Cancellation and timeouts propagated to model and tool calls.</li><li>Persistence: write state so a run can resume or be replayed; keep a full trace with arguments, results, tokens, and timings.</li><li>Safety: least-privilege tool credentials, argument validation server-side, approval hooks for consequential actions.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I would start with state as an explicit object rather than local variables: the message list, a step counter, accumulated tool results, and running budget consumption in tokens, time, and cost. Making it serializable from the beginning is what later gives me resumption, replay, and debuggable runs. The loop body is then small. Assemble the messages, call the model with the typed tool schemas, and inspect the response: either it is a final answer, in which case we exit, or it contains tool calls. For each call, look the tool up, validate the arguments against its schema before executing anything, run it with a timeout, and append a structured result. Errors are caught and classified — transient, permanent, or semantic — and appended as observations with actionable messages, because the model can only correct what it can see, and a swallowed error becomes a confident fabrication. Loop control has four exits: final answer, step cap, budget exhaustion, and unrecoverable error, and every exit reports which one it was rather than just returning. The loop emits events as it goes — step started, tool called with arguments, result received, tokens streaming — because interfaces and traces cannot be retrofitted onto a function that returns only a final value. Around the core I layer middleware: tracing that records every prompt, call, argument, result, token count and timing under one request id; input and output guardrails; retry with backoff on transient failures; and rate limiting. Cancellation is threaded through so an abandoned request actually stops the in-flight model and tool calls. Finally, the safety pieces that belong in the loop rather than the prompt: tool credentials scoped per tool, argument validation and authorization enforced server-side rather than trusting what the model produced, and an approval hook that consequential tools can require before executing.</div>
+    </article>
+    <article class="sharepage__q" id="q10">
+      <h3><a href="#q10" class="sharepage__anchor">Q10</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>Your agent occasionally runs for dozens of steps and produces nothing useful. Describe how you would instrument and fix it.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Get a full trace first: every step with prompt, tool, arguments, result, tokens, and time under one request id.</li><li>Look for repetition — identical or near-identical calls — which indicates a loop the agent cannot escape.</li><li>Check whether tool errors are being surfaced usefully or swallowed, since silent failures cause aimless retrying.</li><li>Check tool descriptions and argument schemas: wrong tool choice or malformed arguments produce long fruitless runs.</li><li>Verify there is a checkable goal and per-step success criteria, without which the agent cannot recognize progress or completion.</li><li>Add loop detection (hash of tool plus arguments), a no-progress window, and step, time, and cost budgets.</li><li>Feed impasse information back explicitly on replanning rather than letting it retry blindly.</li><li>Terminate with an honest report and escalation, returning partial results rather than nothing.</li><li>Turn each observed impasse into an evaluation case, and track step-count distribution as a monitored metric.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> First I would make the run legible: a full trace under one request id with every prompt, tool call, argument, result, token count, and timing. Long useless runs are almost always obvious once you can read them, and invisible otherwise. The pattern I look for first is repetition — the same tool called with near-identical arguments several times — which means the agent is stuck and cannot tell. Right behind it is swallowed errors: if a tool failed and the loop returned an empty result, the agent has no idea anything went wrong and will keep trying variations of a doomed approach. Then I check the tool layer, because a surprising share of these runs are caused by definitions rather than reasoning: a vague description that makes two tools look interchangeable, an argument name the model keeps misfilling, a schema that accepts something meaningless. Fixing the definitions often shortens runs more than any prompt change. Next, the goal: is there a checkable success criterion, per step and overall? Without one the agent has no way to distinguish progress from motion, so it wanders and cannot recognize that it is done or that it is stuck. Then I add the guards. Loop detection by hashing tool plus arguments, a no-progress window that trips when N steps pass without a verified sub-goal or new information, and hard budgets in steps, wall-clock, and cost. When any of those trip, the response is not a silent stop: the agent is told explicitly what has failed and asked to replan with that information, and if it cannot, the run terminates with an honest report, the partial results, and an escalation. Finally, I would treat this as a permanent measurement rather than a one-time fix: step-count and cost distributions become monitored metrics with alerts on the tail, and each impasse I diagnose becomes a case in the evaluation set so the same shape of failure is caught before it ships again.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"multi-agent-systems","unit":"ch04","title":"Building Your First Agent","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"What is the minimal structure of an agent loop?","options":["Prompt the model once and parse its output into actions","Assemble messages, call the model with tool schemas, execute returned tool calls, append results as observations, and repeat until a termination condition","Run several models in parallel and combine their outputs","Retrieve context, then generate an answer"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"Why must termination be explicit?","options":["Because providers require a stop parameter","Because the model stops on its own only when it decides to answer — with no cap on steps, time, or tokens, a confused agent will keep calling tools indefinitely","Because loops cannot be streamed","Because context windows reset each iteration"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"How should tool errors be handled inside the loop?","options":["Caught and returned to the model as observations with actionable messages, while bounding retries","Raised immediately to the user, ending the run","Suppressed so the loop continues cleanly","Retried silently until they succeed"],"answer":0,"answerLetter":"A"},{"n":4,"type":"mc","prompt":"Why is streaming considered part of the agent's architecture rather than a UI concern?","options":["Because streaming reduces token cost","Because the loop must emit events — step started, tool called, result received, tokens generated — for any interface to show progress, so the loop has to be built to produce them","Because models require streaming to use tools","Because streaming enables parallel tool calls"],"answer":1,"answerLetter":"B"},{"n":5,"type":"mc","prompt":"What is the purpose of middleware around the agent loop?","options":["To choose which model handles each step","To compose cross-cutting concerns — logging, tracing, guardrails, retries, rate limiting — without entangling them in the loop's logic","To store the conversation history","To convert between model providers' formats"],"answer":1,"answerLetter":"B"},{"n":6,"type":"mc","prompt":"Why should the agent's state live outside the loop as an explicit, serializable object?","options":["To reduce memory usage","Because frameworks require it","So a run can be inspected, persisted, resumed, and replayed — and so debugging does not depend on log archaeology","So multiple models can share it"],"answer":2,"answerLetter":"C"},{"n":7,"type":"mc","prompt":"Why does cancellation need to be plumbed through explicitly?","options":["Because model providers charge for cancelled requests","Because a user who navigates away or a request that times out must actually stop in-flight model and tool calls, rather than leaving work running and billing accruing","Because cancellation improves answer quality","Because tools cannot be interrupted otherwise"],"answer":1,"answerLetter":"B"},{"n":8,"type":"mc","prompt":"What is the argument for building the loop from scratch before adopting a framework?","options":["Frameworks are always slower","Custom loops are always more capable","Frameworks abstract the loop, so without having built one you cannot reason about what they are doing, debug their behaviour, or judge when their abstraction stops fitting","Frameworks cannot support streaming"],"answer":2,"answerLetter":"C"},{"n":9,"type":"open","prompt":"Walk through implementing a minimal but production-shaped agent loop. What does it contain and what does each piece exist for?","points":["State: an explicit, serializable object holding messages, step count, accumulated results, and budget consumption.","Model call: messages plus typed tool schemas, with model and parameters configurable, and the response parsed for tool calls versus a final answer.","Tool execution: look up the tool, validate arguments against the schema, execute with a timeout, and return a structured result.","Error path: catch failures, classify them, and append actionable error observations rather than raising or suppressing.","Loop control: repeat until a final answer, a step cap, a budget limit, or an unrecoverable error; report the reason for termination.","Event emission: emit step, tool, and token events so interfaces and traces can consume progress live.","Middleware: logging/tracing, guardrails on inputs and outputs, retries with backoff, and rate limiting as composable layers.","Cancellation and timeouts propagated to model and tool calls.","Persistence: write state so a run can resume or be replayed; keep a full trace with arguments, results, tokens, and timings.","Safety: least-privilege tool credentials, argument validation server-side, approval hooks for consequential actions."]},{"n":10,"type":"open","prompt":"Your agent occasionally runs for dozens of steps and produces nothing useful. Describe how you would instrument and fix it.","points":["Get a full trace first: every step with prompt, tool, arguments, result, tokens, and time under one request id.","Look for repetition — identical or near-identical calls — which indicates a loop the agent cannot escape.","Check whether tool errors are being surfaced usefully or swallowed, since silent failures cause aimless retrying.","Check tool descriptions and argument schemas: wrong tool choice or malformed arguments produce long fruitless runs.","Verify there is a checkable goal and per-step success criteria, without which the agent cannot recognize progress or completion.","Add loop detection (hash of tool plus arguments), a no-progress window, and step, time, and cost budgets.","Feed impasse information back explicitly on replanning rather than letting it retry blindly.","Terminate with an honest report and escalation, returning partial results rather than nothing.","Turn each observed impasse into an evaluation case, and track step-count distribution as a monitored metric."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/multi-agent-systems/ch04">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

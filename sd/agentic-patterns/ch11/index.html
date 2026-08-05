@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Goal Setting and Monitoring — Agentic Design Patterns</title>
+<meta name="description" content="Give the agent an explicit goal with checkable success criteria, and then watch progress against it while it runs. Without this, an autonomous loop has no way to distinguish finishing from stopping, progress from motion, or the original objective from whatever it drifted into three steps ago.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Goal Setting and Monitoring — Agentic Design Patterns">
+<meta property="og:description" content="Give the agent an explicit goal with checkable success criteria, and then watch progress against it while it runs. Without this, an autonomous loop has no way to distinguish finishing from stopping, progress from motion, or the original objective from whatever it drifted into three steps ago.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"LearningResource","name":"Goal Setting and Monitoring","description":"Give the agent an explicit goal with checkable success criteria, and then watch progress against it while it runs. Without this, an autonomous loop has no way to distinguish finishing from stopping, progress from motion, or the original objective from whatever it drifted into three steps ago.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/","learningResourceType":"Practice questions","educationalLevel":"Professional","isPartOf":{"@type":"Collection","name":"Agentic Design Patterns","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/"},"teaches":["A task instruction is not a goal: the goal is a checkable statement of the desired end state, which is what lets the system decide it is done.","Success criteria should be verifiable by something other than the agent's own opinion — a test passing, a record existing, a value matching, a human confirming.","Monitoring during execution catches the failure that end-of-run checks miss: stagnation (repeating without progress), divergence (drifting from the goal), and budget burn.","Decomposing a goal into sub-goals gives intermediate checkpoints, so failure is detected near its cause rather than at the end of a long run.","Every autonomous loop needs termination conditions on all three axes: goal achieved, budget exhausted (steps, time, cost), or unrecoverable failure — with escalation rather than silent stopping.","Progress should be observable to the user for long-running tasks; an opaque agent that works for four minutes is indistinguishable from one that is stuck."],"hasPart":[{"@type":"Question","position":1,"name":"What distinguishes a goal from a task instruction in this pattern?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q1","acceptedAnswer":{"@type":"Answer","text":"A goal names a checkable end state — what must be true when the work is done — while an instruction only says what to do"}},{"@type":"Question","position":2,"name":"Why should success criteria be verifiable by something other than the agent itself?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q2","acceptedAnswer":{"@type":"Answer","text":"Because self-assessment inherits the same blind spots that produced the work — an agent that misunderstood the task will also judge itself as having completed it"}},{"@type":"Question","position":3,"name":"What does in-flight monitoring catch that a final check does not?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q3","acceptedAnswer":{"@type":"Answer","text":"Stagnation — repeating the same actions without progress — and divergence from the goal, both detectable long before the run ends"}},{"@type":"Question","position":4,"name":"Why does decomposing a goal into sub-goals improve reliability?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q4","acceptedAnswer":{"@type":"Answer","text":"It creates intermediate checkpoints, so a failure is detected near its cause instead of surfacing as an unexplained bad result at the end"}},{"@type":"Question","position":5,"name":"Which set of termination conditions should an autonomous loop define?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q5","acceptedAnswer":{"@type":"Answer","text":"Goal achieved; budget exhausted in steps, time, or cost; and unrecoverable failure — each with a defined follow-up rather than silent stopping"}},{"@type":"Question","position":6,"name":"What is goal drift?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q6","acceptedAnswer":{"@type":"Answer","text":"The agent gradually optimizing for the most recent sub-problem in its context rather than the original objective, which recedes as the transcript grows"}},{"@type":"Question","position":7,"name":"Why does the pattern call for surfacing progress on long-running tasks?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q7","acceptedAnswer":{"@type":"Answer","text":"Because an opaque agent working for minutes is indistinguishable from a stuck one — visible progress lets a user intervene, and gives the system a place to report partial results"}},{"@type":"Question","position":8,"name":"An agent is asked to 'clean up our stale documentation'. Turn this into a goal with monitoring, and describe what you would put in place before letting it run.","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q8","acceptedAnswer":{"@type":"Answer","text":"The first thing I would do is refuse the objective as stated, because 'stale' and 'clean up' are not checkable. Operationally, stale becomes a disjunction of evidence-backed conditions: the document references a symbol or endpoint that no longer exists, its links fail, its code samples do not run, or it has not been touched in a defined period while the code it documents has changed. Cleanup becomes one of three explicit outcomes — flag for a human, propose an edit, or archive — with archiving reserved for documents meeting the strictest criteria. The goal then reads as an end state: every document in the named scope has been assessed, each stale one has a proposed action with cited evidence, and no non-stale document has been modified. Scope limits are part of the goal — which repositorie"}},{"@type":"Question","position":9,"name":"How would you detect that a running agent is making no real progress, and what should the system do about it?","url":"https://frosty110.github.io/js-drill/sd/agentic-patterns/ch11/#q9","acceptedAnswer":{"@type":"Answer","text":"I would define progress in terms of the goal rather than activity, because an agent burning tokens looks busy either way. Concretely, progress means a sub-goal was verified complete, or new information entered the state that was not there before. Against that definition, the detectors are simple. Repetition: the same tool with near-identical arguments called more than once, or a cycle between two actions — that is the classic loop, and it is cheap to catch by hashing calls. Absence of state change: a window of N steps in which no sub-goal was verified and nothing new was learned. Rate of progress: budget consumed relative to sub-goals completed, which catches the slow-motion version where the agent does make progress but will clearly exhaust its budget before finishing. And divergence: ste"}}]}</script>
+<link rel="stylesheet" href="../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../ds/components.css">
+<link rel="stylesheet" href="../../../css/13-share-page.css">
+<script src="../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../sd/">System design</a> › <a href="../../../sd/agentic-patterns/">Agentic Design Patterns</a></p>
+    <h1>Goal Setting and Monitoring</h1>
+    <p class="sharepage__lede">Give the agent an explicit goal with checkable success criteria, and then watch progress against it while it runs. Without this, an autonomous loop has no way to distinguish finishing from stopping, progress from motion, or the original objective from whatever it drifted into three steps ago.</p>
+    <p class="sharepage__meta"><span class="ds-chip">Agentic Design Patterns</span> <span class="ds-chip">9 questions</span></p>
+  </header>
+
+  <section class="ds-section" id="your-results" hidden>
+    <h2>Results carried by this link</h2>
+    <div data-results></div>
+  </section>
+
+  <section class="ds-section" id="key-ideas">
+    <h2>Key ideas</h2>
+    <ul class="sharepage__notes"><li>A task instruction is not a goal: the goal is a checkable statement of the desired end state, which is what lets the system decide it is done.</li><li>Success criteria should be verifiable by something other than the agent&#39;s own opinion — a test passing, a record existing, a value matching, a human confirming.</li><li>Monitoring during execution catches the failure that end-of-run checks miss: stagnation (repeating without progress), divergence (drifting from the goal), and budget burn.</li><li>Decomposing a goal into sub-goals gives intermediate checkpoints, so failure is detected near its cause rather than at the end of a long run.</li><li>Every autonomous loop needs termination conditions on all three axes: goal achieved, budget exhausted (steps, time, cost), or unrecoverable failure — with escalation rather than silent stopping.</li><li>Progress should be observable to the user for long-running tasks; an opaque agent that works for four minutes is indistinguishable from one that is stuck.</li><li>Goal drift is a real failure: as context accumulates, agents optimize for the latest sub-problem rather than the original objective, so the goal must be re-anchored in context.</li></ul>
+  </section>
+
+
+  <section class="ds-section" id="questions">
+    <h2>Questions <span class="sharepage__count">9</span></h2>
+    <p class="sharepage__note">Positions 1–9 of the code. Open questions are answered out loud and self-graded, so their characters are <code>Y</code> / <code>p</code> / <code>n</code> rather than option letters.</p>
+    
+    <article class="sharepage__q" id="q1">
+      <h3><a href="#q1" class="sharepage__anchor">Q1</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What distinguishes a goal from a task instruction in this pattern?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> A goal is longer and more detailed</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> A goal names a checkable end state — what must be true when the work is done — while an instruction only says what to do <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> A goal must be written by a human, an instruction by the model</li>
+        <li><span class="sharepage__key">D</span> A goal applies to multi-agent systems only</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> &#39;Investigate the outage&#39; is an instruction; &#39;a ticket exists whose stated cause is supported by log evidence&#39; is a goal. Only the second can be evaluated, which is what makes autonomous termination possible.</p>
+    </article>
+    <article class="sharepage__q" id="q2">
+      <h3><a href="#q2" class="sharepage__anchor">Q2</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why should success criteria be verifiable by something other than the agent itself?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Because agents cannot read their own output</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Because self-assessment inherits the same blind spots that produced the work — an agent that misunderstood the task will also judge itself as having completed it <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Because external checks are always cheaper</li>
+        <li><span class="sharepage__key">D</span> Because providers require external validation</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Asking the model whether it succeeded gives you its confidence, not its correctness. A test suite, a database query, a schema check, or a human confirmation is evidence; self-report is a claim.</p>
+    </article>
+    <article class="sharepage__q" id="q3">
+      <h3><a href="#q3" class="sharepage__anchor">Q3</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What does in-flight monitoring catch that a final check does not?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> Formatting errors in the final answer</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> Stagnation — repeating the same actions without progress — and divergence from the goal, both detectable long before the run ends <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> Token pricing changes</li>
+        <li><span class="sharepage__key">D</span> Retrieval index corruption</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> By the time a final check fails, the budget is already spent. Watching progress per step lets the system intervene — replan, escalate, or stop — while the loop still has resources to do something useful.</p>
+    </article>
+    <article class="sharepage__q" id="q4">
+      <h3><a href="#q4" class="sharepage__anchor">Q4</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does decomposing a goal into sub-goals improve reliability?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> It reduces the number of tokens per call</li>
+        <li><span class="sharepage__key">B</span> It removes the need for tools</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> It creates intermediate checkpoints, so a failure is detected near its cause instead of surfacing as an unexplained bad result at the end <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> It guarantees the sub-goals can run in parallel</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Checkpoints localize failure and make partial progress meaningful — the run can resume from the last verified sub-goal rather than restarting, and the trace shows where things went wrong.</p>
+    </article>
+    <article class="sharepage__q" id="q5">
+      <h3><a href="#q5" class="sharepage__anchor">Q5</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Which set of termination conditions should an autonomous loop define?</p>
+      
+      <ol class="sharepage__opts">
+        <li class="is-correct"><span class="sharepage__key">A</span> Goal achieved; budget exhausted in steps, time, or cost; and unrecoverable failure — each with a defined follow-up rather than silent stopping <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">B</span> Only &#39;goal achieved&#39;, since anything else is a bug</li>
+        <li><span class="sharepage__key">C</span> Only a maximum number of steps</li>
+        <li><span class="sharepage__key">D</span> Termination should be left to the model&#39;s judgment</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> All three happen in production. What matters as much as the bound is what happens at it: escalate with the trace, report partial results, or hand back to a human — never stop quietly and leave the caller to infer success.</p>
+    </article>
+    <article class="sharepage__q" id="q6">
+      <h3><a href="#q6" class="sharepage__anchor">Q6</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>What is goal drift?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> The goal changing because the user edited it</li>
+        <li class="is-correct"><span class="sharepage__key">B</span> The agent gradually optimizing for the most recent sub-problem in its context rather than the original objective, which recedes as the transcript grows <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">C</span> The success criteria becoming unverifiable over time</li>
+        <li><span class="sharepage__key">D</span> Latency increasing as context grows</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Long runs accumulate context, and the most recent material dominates attention. Re-anchoring — keeping the goal pinned in context and re-checking each step against it — is the standard mitigation.</p>
+    </article>
+    <article class="sharepage__q" id="q7">
+      <h3><a href="#q7" class="sharepage__anchor">Q7</a> <span class="ds-chip">multiple choice</span></h3>
+      <p>Why does the pattern call for surfacing progress on long-running tasks?</p>
+      
+      <ol class="sharepage__opts">
+        <li><span class="sharepage__key">A</span> To satisfy audit requirements</li>
+        <li><span class="sharepage__key">B</span> Because streaming reduces token cost</li>
+        <li class="is-correct"><span class="sharepage__key">C</span> Because an opaque agent working for minutes is indistinguishable from a stuck one — visible progress lets a user intervene, and gives the system a place to report partial results <span class="sharepage__tick">correct</span></li>
+        <li><span class="sharepage__key">D</span> Because users prefer longer responses</li>
+      </ol>
+      <p class="sharepage__why"><strong>Why:</strong> Progress reporting is both a UX requirement and an operational one: it converts a black box into something a human can supervise, and it makes the intervention point explicit when the agent goes off track.</p>
+    </article>
+    <article class="sharepage__q" id="q8">
+      <h3><a href="#q8" class="sharepage__anchor">Q8</a> <span class="ds-chip">explain &amp; apply</span> <span class="ds-chip">crux</span></h3>
+      <p>An agent is asked to &#39;clean up our stale documentation&#39;. Turn this into a goal with monitoring, and describe what you would put in place before letting it run.</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Refuse the vague objective: define what stale means operationally (not updated in N months, referencing removed APIs, failing link checks) and what cleanup means (flagged, edited, or archived).</li><li>Express the goal as a checkable end state with scope limits — which repositories, which document types, how many documents per run.</li><li>Decompose into sub-goals with checkpoints: identify candidates, verify staleness against evidence, propose changes, apply approved changes.</li><li>Define verification that is not the agent&#39;s own opinion: link checks, references to symbols that no longer exist, git history, test or build results.</li><li>Separate read from write: identification and proposal run autonomously; any edit or deletion requires review or is delivered as a pull request rather than a direct change.</li><li>Set budgets: documents per run, wall-clock, cost, and a cap on the number of changes proposed at once so review remains feasible.</li><li>Monitor for stagnation and drift — repeated candidates, edits outside scope, scope creep into rewriting rather than updating.</li><li>Report progress and partial results, and escalate ambiguity (is this document obsolete or just rarely changed?) instead of guessing.</li><li>Make everything reversible: version control, no destructive deletes, an audit trail of what changed and why.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> The first thing I would do is refuse the objective as stated, because &#39;stale&#39; and &#39;clean up&#39; are not checkable. Operationally, stale becomes a disjunction of evidence-backed conditions: the document references a symbol or endpoint that no longer exists, its links fail, its code samples do not run, or it has not been touched in a defined period while the code it documents has changed. Cleanup becomes one of three explicit outcomes — flag for a human, propose an edit, or archive — with archiving reserved for documents meeting the strictest criteria. The goal then reads as an end state: every document in the named scope has been assessed, each stale one has a proposed action with cited evidence, and no non-stale document has been modified. Scope limits are part of the goal — which repositories, which document types, and a cap on documents per run. I would decompose it into checkpointed sub-goals: identify candidates, verify staleness against evidence, propose changes, and only then apply. Verification is deliberately external to the agent: link checkers, symbol lookups against the current codebase, git history, and build or test results. If the agent&#39;s only evidence is its impression that a document feels old, that is not evidence. The write boundary is where I would be strictest: identification and proposal run autonomously, but nothing is edited or deleted directly. Changes arrive as a pull request with the evidence in the description, which turns an irreversible action into a reviewable one and also caps the blast radius of a misjudgment. Budgets cover documents per run, wall-clock, cost, and — importantly — the number of proposed changes, because a hundred-file pull request will not be reviewed and therefore has no safety value. During execution I monitor for stagnation, for repeated candidates, and for scope drift, since the characteristic failure here is an agent that starts updating documentation and ends up rewriting it. Progress is reported as it goes, ambiguous cases are escalated rather than guessed, and everything is under version control so the whole run can be reverted.</div>
+    </article>
+    <article class="sharepage__q" id="q9">
+      <h3><a href="#q9" class="sharepage__anchor">Q9</a> <span class="ds-chip">explain &amp; apply</span></h3>
+      <p>How would you detect that a running agent is making no real progress, and what should the system do about it?</p>
+      
+      <p><strong>Points a strong answer hits:</strong></p><ul class="sharepage__notes"><li>Define progress against the goal&#39;s sub-goals or state changes, not against step count or token spend.</li><li>Detect repetition: identical or near-identical tool calls and arguments, repeated retrieval of the same content, cycling between two actions.</li><li>Detect absence of state change: no new information gained, no verified sub-goal completed within a window of steps.</li><li>Track budget consumption relative to progress — a rate-of-progress signal rather than an absolute step count.</li><li>Watch for divergence: actions no longer related to the goal, or scope expanding beyond the original objective.</li><li>Responses in order of escalation: replan with the failure explained, change approach or tool, reduce scope, then escalate to a human with the trace and partial results.</li><li>Always terminate with a report rather than silence, distinguishing &#39;failed&#39; from &#39;partially completed&#39; and returning what was accomplished.</li><li>Log the pattern so recurring stagnation causes become evaluation cases and fixes rather than repeated incidents.</li></ul>
+      <div class="sharepage__model"><strong>Model answer:</strong> I would define progress in terms of the goal rather than activity, because an agent burning tokens looks busy either way. Concretely, progress means a sub-goal was verified complete, or new information entered the state that was not there before. Against that definition, the detectors are simple. Repetition: the same tool with near-identical arguments called more than once, or a cycle between two actions — that is the classic loop, and it is cheap to catch by hashing calls. Absence of state change: a window of N steps in which no sub-goal was verified and nothing new was learned. Rate of progress: budget consumed relative to sub-goals completed, which catches the slow-motion version where the agent does make progress but will clearly exhaust its budget before finishing. And divergence: steps whose targets no longer relate to the goal, or scope quietly widening beyond what was asked. The response should escalate rather than jump straight to failure. First, replan with the impasse stated explicitly — telling the agent &#39;this approach has failed twice, the tool returns empty&#39; is far more effective than letting it try a third time. Second, change approach: a different tool, a different query formulation, a smaller sub-goal. Third, reduce scope and deliver what is achievable. Fourth, escalate to a human with the full trace, the partial results, and a specific question rather than a generic failure. The rule I would hold to is that the run never ends silently: it terminates with a report that distinguishes completed, partially completed, and failed, and hands back whatever was accomplished so the work is not thrown away. Finally, every stagnation event gets logged with its signature, because the same impasse recurring across runs is a design bug — a missing tool, a bad description, an impossible sub-goal — and it belongs in the evaluation set, not in the incident channel.</div>
+    </article>
+  </section>
+
+  <section class="ds-section" id="score-code">
+    <h2>Reading the <code>s=</code> code</h2>
+    <p>If the URL you opened has an <code>s=</code> parameter, it is a result set: <strong>one character per question, in the order the questions appear on this page</strong>. Uppercase means credit, lowercase means no credit. The letter is the option index shown here — <code>A</code> is the first option listed.</p>
+    <table class="legend">
+      <thead><tr><th>Character</th><th>Meaning</th></tr></thead>
+      <tbody>
+      <tr><td><code>A B C D</code></td><td>multiple choice — picked this option, correct</td></tr>
+      <tr><td><code>a b c d</code></td><td>multiple choice — picked this option, wrong</td></tr>
+      <tr><td><code>Y</code></td><td>open / typed / fill-in — got it</td></tr>
+      <tr><td><code>p</code></td><td>open — partial credit</td></tr>
+      <tr><td><code>n</code></td><td>open / typed / fill-in — missed</td></tr>
+      <tr><td><code>-</code></td><td>not attempted</td></tr>
+      </tbody>
+    </table>
+    <p>One segment: every question on this page, in order.</p>
+    <p class="sharepage__note">The order of questions and options on this page is fixed and never changes, which is what makes position alone enough to identify a question. Nothing about the code is stored anywhere — it lives only in the URL its owner chose to share.</p>
+  </section>
+
+  <script type="application/json" id="drill-data">{"topic":"agentic-patterns","unit":"ch11","title":"Goal Setting and Monitoring","codeShape":["Q"],"sheets":[],"diagrams":[],"questions":[{"n":1,"type":"mc","prompt":"What distinguishes a goal from a task instruction in this pattern?","options":["A goal is longer and more detailed","A goal names a checkable end state — what must be true when the work is done — while an instruction only says what to do","A goal must be written by a human, an instruction by the model","A goal applies to multi-agent systems only"],"answer":1,"answerLetter":"B"},{"n":2,"type":"mc","prompt":"Why should success criteria be verifiable by something other than the agent itself?","options":["Because agents cannot read their own output","Because self-assessment inherits the same blind spots that produced the work — an agent that misunderstood the task will also judge itself as having completed it","Because external checks are always cheaper","Because providers require external validation"],"answer":1,"answerLetter":"B"},{"n":3,"type":"mc","prompt":"What does in-flight monitoring catch that a final check does not?","options":["Formatting errors in the final answer","Stagnation — repeating the same actions without progress — and divergence from the goal, both detectable long before the run ends","Token pricing changes","Retrieval index corruption"],"answer":1,"answerLetter":"B"},{"n":4,"type":"mc","prompt":"Why does decomposing a goal into sub-goals improve reliability?","options":["It reduces the number of tokens per call","It removes the need for tools","It creates intermediate checkpoints, so a failure is detected near its cause instead of surfacing as an unexplained bad result at the end","It guarantees the sub-goals can run in parallel"],"answer":2,"answerLetter":"C"},{"n":5,"type":"mc","prompt":"Which set of termination conditions should an autonomous loop define?","options":["Goal achieved; budget exhausted in steps, time, or cost; and unrecoverable failure — each with a defined follow-up rather than silent stopping","Only 'goal achieved', since anything else is a bug","Only a maximum number of steps","Termination should be left to the model's judgment"],"answer":0,"answerLetter":"A"},{"n":6,"type":"mc","prompt":"What is goal drift?","options":["The goal changing because the user edited it","The agent gradually optimizing for the most recent sub-problem in its context rather than the original objective, which recedes as the transcript grows","The success criteria becoming unverifiable over time","Latency increasing as context grows"],"answer":1,"answerLetter":"B"},{"n":7,"type":"mc","prompt":"Why does the pattern call for surfacing progress on long-running tasks?","options":["To satisfy audit requirements","Because streaming reduces token cost","Because an opaque agent working for minutes is indistinguishable from a stuck one — visible progress lets a user intervene, and gives the system a place to report partial results","Because users prefer longer responses"],"answer":2,"answerLetter":"C"},{"n":8,"type":"open","prompt":"An agent is asked to 'clean up our stale documentation'. Turn this into a goal with monitoring, and describe what you would put in place before letting it run.","points":["Refuse the vague objective: define what stale means operationally (not updated in N months, referencing removed APIs, failing link checks) and what cleanup means (flagged, edited, or archived).","Express the goal as a checkable end state with scope limits — which repositories, which document types, how many documents per run.","Decompose into sub-goals with checkpoints: identify candidates, verify staleness against evidence, propose changes, apply approved changes.","Define verification that is not the agent's own opinion: link checks, references to symbols that no longer exist, git history, test or build results.","Separate read from write: identification and proposal run autonomously; any edit or deletion requires review or is delivered as a pull request rather than a direct change.","Set budgets: documents per run, wall-clock, cost, and a cap on the number of changes proposed at once so review remains feasible.","Monitor for stagnation and drift — repeated candidates, edits outside scope, scope creep into rewriting rather than updating.","Report progress and partial results, and escalate ambiguity (is this document obsolete or just rarely changed?) instead of guessing.","Make everything reversible: version control, no destructive deletes, an audit trail of what changed and why."]},{"n":9,"type":"open","prompt":"How would you detect that a running agent is making no real progress, and what should the system do about it?","points":["Define progress against the goal's sub-goals or state changes, not against step count or token spend.","Detect repetition: identical or near-identical tool calls and arguments, repeated retrieval of the same content, cycling between two actions.","Detect absence of state change: no new information gained, no verified sub-goal completed within a window of steps.","Track budget consumption relative to progress — a rate-of-progress signal rather than an absolute step count.","Watch for divergence: actions no longer related to the goal, or scope expanding beyond the original objective.","Responses in order of escalation: replan with the failure explained, change approach or tool, reduce scope, then escalate to a human with the trace and partial results.","Always terminate with a report rather than silence, distinguishing 'failed' from 'partially completed' and returning what was accomplished.","Log the pattern so recurring stagnation causes become evaluation cases and fixes rather than repeated incidents."]}],"legend":[{"chars":"A B C D","meaning":"multiple choice — picked this option, correct"},{"chars":"a b c d","meaning":"multiple choice — picked this option, wrong"},{"chars":"Y","meaning":"open / typed / fill-in — got it"},{"chars":"p","meaning":"open — partial credit"},{"chars":"n","meaning":"open / typed / fill-in — missed"},{"chars":"-","meaning":"not attempted"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/agentic-patterns/ch11">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../sd/">System design</a>
+</footer>
+<script src="../../../js/share-page.js"></script>
+</body>
+</html>

@@ -204,6 +204,75 @@
         "So analytics runs in a separate column-oriented warehouse loaded via ETL, isolating OLAP scans from the live OLTP workload."
       ],
       "answer": "Because a column store keeps each column's values together, that aggregate reads only the 4 relevant columns instead of dragging every 200-column row off disk, and those contiguous same-type values compress heavily and scan in vectorized batches — that's an order-of-magnitude I/O and CPU win over a row store for wide scans. I wouldn't run it on the OLTP database because that engine is tuned for many small low-latency key lookups and writes, and a billion-row scan would contend for resources and hurt production latency. So analytics lives in a separate column-oriented warehouse fed by ETL, keeping OLAP scans off the live OLTP path."
+    },
+    {
+      "q": "Which property most distinguishes object storage from a filesystem or block device?",
+      "options": [
+        "Objects are addressed by key over an HTTP API and replaced whole, with no in-place partial update or append",
+        "Objects are guaranteed to be stored on SSDs rather than spinning disks",
+        "Object storage is strongly consistent while filesystems are eventually consistent",
+        "Objects can only be read sequentially, never with a byte-range request"
+      ],
+      "answer": 0,
+      "explain": "The immutable, whole-object replacement model is what shapes every design built on it — you version rather than edit, which is why log-structured and columnar formats fit it so well. Byte-range reads are in fact supported, which makes the last option the tempting-but-false one."
+    },
+    {
+      "q": "A storage engine built on object storage rather than local disk faces which characteristic difficulty?",
+      "options": [
+        "Object storage cannot store files larger than a few megabytes",
+        "Per-operation latency is far higher and there is no in-place update, so the engine must batch writes into larger immutable files and rely on aggressive caching",
+        "Object storage does not survive machine failure, so the engine must implement its own replication",
+        "Object storage cannot be read by more than one node at a time"
+      ],
+      "answer": 1,
+      "explain": "You trade single-digit-microsecond local IO for tens of milliseconds over the network, so the design response is fewer, larger, immutable writes plus caching — which is why LSM-shaped and columnar layouts dominate there. Durability and multi-reader access are among object storage's strengths, not its problems."
+    },
+    {
+      "q": "What defines an embedded database such as SQLite, DuckDB, or RocksDB?",
+      "options": [
+        "It stores all data in memory and loses it on restart",
+        "It runs only on mobile and edge devices, not on servers",
+        "It runs in the application's own process as a library, so queries involve no network hop and no separate server to operate",
+        "It supports only key-value access, not SQL"
+      ],
+      "answer": 2,
+      "explain": "In-process is the defining trait — it removes the network round-trip and the operational burden of a server, which is exactly why it fits edge, local-first and analytical-tooling use. The other options are each contradicted by at least one of the three named systems."
+    },
+    {
+      "q": "Why is a vector index for embedding search described as `approximate` nearest neighbor?",
+      "options": [
+        "Because the embeddings themselves are lossy representations of the original documents",
+        "Because it trades exact recall for sub-linear query time — it may miss some true nearest neighbors in exchange for not scanning every vector",
+        "Because floating-point arithmetic makes distance calculations imprecise",
+        "Because it returns results ranked by keyword overlap rather than true distance"
+      ],
+      "answer": 1,
+      "explain": "Exact search means comparing the query against every vector, which is linear in corpus size; ANN structures accept a measurable recall shortfall to get sub-linear lookup. Embeddings being lossy (the tempting distractor) is true but is a property of the representation, not of why the *index* is called approximate."
+    },
+    {
+      "q": "HNSW builds a hierarchical graph over the vectors. What does the hierarchy contribute?",
+      "options": [
+        "It guarantees that the true nearest neighbor is always found",
+        "It compresses vectors so the index fits in memory",
+        "It partitions vectors across machines for horizontal scaling",
+        "Upper layers hold sparse long-range links used to travel most of the distance quickly, with lower dense layers refining locally — giving logarithmic rather than linear search"
+      ],
+      "answer": 3,
+      "explain": "Coarse-to-fine navigation is the mechanism: long hops at the top get you into the right neighborhood, short hops at the bottom find the actual neighbors. It offers no exactness guarantee — that is precisely what the A in ANN concedes — and compression is a separate technique such as product quantization."
+    },
+    {
+      "type": "open",
+      "prompt": "You're choosing storage for a semantic-search feature over ten million documents. Walk through the decision, including what you'd push back on.",
+      "points": [
+        "Separate the two workloads first: the documents themselves (source of truth) and the embeddings (a derived index that can always be rebuilt).",
+        "That framing matters — if embeddings are derived, you can re-embed and rebuild after a model change without data loss, so the vector store need not be durable in the way the document store must be.",
+        "Size the problem before naming a product: ten million vectors at a typical dimensionality is a few tens of GB, which fits in memory on one large machine — so a distributed vector database may be unnecessary.",
+        "Name the real tradeoff dial as recall versus latency versus memory, tuned through the index parameters, rather than as a product choice.",
+        "Push back on the assumption that semantic search replaces keyword search — hybrid retrieval usually beats either alone, because exact-match terms (names, IDs, error codes) are where pure embedding search is weakest.",
+        "Raise the operational question that decides the architecture: how often do embeddings change, since a re-embedding pass is a full index rebuild and needs to be routine rather than an incident.",
+        "Note the chunking decision is upstream of all of this and affects quality more than the index choice does."
+      ],
+      "answer": "First I'd separate the document store from the embedding index, because the embeddings are derived data — I can always rebuild them, which changes the durability bar completely. Then I'd size it before naming a product: ten million vectors is tens of gigabytes, which fits in memory on one machine, so I'd want a good reason before reaching for a distributed vector database. The real dial is recall against latency and memory, tuned through index parameters rather than chosen by vendor. The thing I'd push back on is the premise that semantic search replaces keyword search — hybrid retrieval almost always wins, because exact identifiers and error codes are where pure embedding search is worst. And I'd want to know how often we re-embed, because a model change is a full rebuild and that needs to be a routine operation, not an incident."
     }
   ]
 }

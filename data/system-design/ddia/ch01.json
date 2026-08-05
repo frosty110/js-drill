@@ -202,6 +202,64 @@
         "The hybrid (fan-out-on-write for normal users, fan-out-on-read for celebrities) is the pragmatic answer Twitter actually adopted."
       ],
       "answer": "Fan-out-on-write pushes each new post into every follower's precomputed timeline, so reads are cheap lookups but writes are amplified by follower count; fan-out-on-read does the opposite, querying followees at read time. Since feeds are overwhelmingly read-heavy, I'd default to fan-out-on-write for the typical user. But a 30-million-follower account would make a single post trigger 30 million writes, so I'd special-case celebrities and merge their posts in at read time — the hybrid Twitter converged on."
+    },
+    {
+      "q": "Modern cost discussion treats elasticity as bidirectional. What does `scaling down` buy that scaling up does not?",
+      "options": [
+        "Lower tail latency, because fewer nodes means fewer opportunities for a slow replica",
+        "Cost proportional to actual load, because capacity provisioned for a peak is billed even while idle",
+        "Stronger consistency, because fewer replicas need to agree",
+        "Higher durability, because data is concentrated on fewer, better-maintained machines"
+      ],
+      "answer": 1,
+      "explain": "Under usage-based pricing, idle provisioned capacity is a direct and continuous cost, so releasing it is a first-class design goal rather than tidiness. The consistency and durability options invert the real relationship — fewer replicas generally weakens both."
+    },
+    {
+      "q": "A team moves from a self-managed database to a managed one. Which tradeoff is the real one?",
+      "options": [
+        "You trade operational control — version timing, tuning knobs, failover behavior — for someone else's operational expertise and on-call rota",
+        "You trade durability for availability, since managed services replicate asynchronously by default",
+        "You trade query expressiveness, since managed services restrict the query language",
+        "You trade cost for performance, since managed services are always slower than self-managed equivalents"
+      ],
+      "answer": 0,
+      "explain": "The exchange is about who operates the thing and how much of its behavior you can still reach — patch windows, failover timing, and tuning surface all narrow. The other options state properties that vary per product rather than the structural tradeoff of managing versus being managed."
+    },
+    {
+      "q": "Why does separating storage from compute change the scaling conversation, rather than just relocating the data?",
+      "options": [
+        "It removes the need for replication, since object storage is already durable",
+        "It makes queries faster, because network access to storage beats local disk",
+        "It lets you scale the two independently — add query capacity without moving data, or grow the dataset without adding compute",
+        "It guarantees elasticity, because compute nodes become stateless and therefore instantly replaceable"
+      ],
+      "answer": 2,
+      "explain": "The point is decoupling two resources that used to grow together on the same box, so each can follow its own demand curve. The stateless-compute option is close but overstated — the compute tier still holds caches and in-flight state, so replacement is cheaper, not instant."
+    },
+    {
+      "q": "A service is defining nonfunctional requirements. Which framing makes cost a genuine requirement rather than an afterthought?",
+      "options": [
+        "A total monthly budget ceiling for the service",
+        "A cost per unit of work — per request, per user, per GB processed — tracked alongside latency and availability",
+        "A commitment to use the cheapest available instance type",
+        "An annual review comparing spend against the previous year"
+      ],
+      "answer": 1,
+      "explain": "Normalizing cost per unit of work makes it comparable across load levels and directly tradeable against latency and availability, which is what a requirement has to be. A total ceiling (the tempting distractor) tells you nothing about whether the system got more or less efficient as it grew."
+    },
+    {
+      "type": "open",
+      "prompt": "Your service is provisioned for a peak that occurs two hours a day. Finance asks why the bill is flat. Explain the tradeoff space and what you'd actually change.",
+      "points": [
+        "Name the cause: capacity is provisioned for peak but billed continuously, so 22 hours a day you are paying for headroom you are not using.",
+        "The naive fix — provision for average — fails the peak, so the real question is how fast you can add capacity relative to how fast load arrives.",
+        "Autoscaling closes the gap only if the scale-up time is shorter than the ramp; if load spikes faster than nodes boot, you are back to pre-provisioning.",
+        "Warm-pool or over-provision-by-a-margin designs sit between the two: pay for a fraction of peak headroom continuously rather than all of it.",
+        "Name the counterweight from reliability: static stability argues for pre-provisioned capacity precisely so recovery does not depend on a control plane that may also be degraded.",
+        "Land on the framing — this is cost per unit of work versus availability risk, and the right answer depends on the cost of a dropped request during the two-hour peak.",
+        "Mention scale-to-zero as the extreme case: viable for spiky, latency-tolerant workloads, disqualifying where cold-start latency is user-visible."
+      ],
+      "answer": "The bill is flat because we provision for peak and pay continuously, so for twenty-two hours a day we're renting headroom we don't use. The naive fix — provision for average — just fails the peak, so the real question is whether we can add capacity faster than load arrives. If the ramp is gradual, autoscaling closes most of the gap; if load spikes faster than nodes boot, we're back to pre-provisioning and the honest answer is that the headroom is the price of the peak. There's also a reliability counterweight: static stability argues for pre-provisioned capacity so recovery doesn't depend on a control plane that might be degraded too. I'd frame the decision as cost per request against the cost of dropping requests during those two hours, and I'd only consider scale-to-zero if cold starts aren't user-visible."
     }
   ]
 }

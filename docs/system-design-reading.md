@@ -91,6 +91,11 @@ write-ups, indexed by problem type.
 This is the section you flagged. The handbook page (#25) names three patterns; these
 name the full ladder **and the selection rule**, which is the part that matters.
 
+> **Drilled** — this section is authored as
+> `data/system-design/interview-method/s09.json` (*Agentic Decision Patterns*, 14
+> questions). It complements the existing `s08` (*Agentic System Design Tradeoffs*),
+> which covers operating an agent; `s09` covers choosing its shape.
+
 | # | Post | What it actually teaches | → lands in |
 |---|---|---|---|
 | 32 | [Anthropic — Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) | **The canonical taxonomy.** Five *workflows* (prompt chaining · routing · parallelization {sectioning, voting} · orchestrator-workers · evaluator-optimizer) vs one *agent* (tool loop on environmental feedback). The decision rule: **workflow when you can predict the number of steps; agent when you can't hardcode the path.** Start with the simplest thing that works. | `NEW` |
@@ -136,17 +141,25 @@ before anything with a side effect runs.
 
 Cross-referenced with the DDIA 2e gap audit (2026-08-05):
 
-| Gap | Covered by |
-|---|---|
-| Vector DBs / embeddings / ANN | #28, #29 |
-| RAG / LLM workloads | #30, #31 |
-| Durable workflows | #24, #23, plus microservices.io saga/outbox |
-| GraphQL | #20 |
-| Materialized views / derived state | #19, #16 |
-| Cloud-native / storage-compute split | #13, #21 |
-| Scaling economics | #26, #27, #33 (token economics is the new cost model) |
-| Privacy / societal impact | **still uncovered** — no strong primary-source post found |
+| Gap | Sourced from | Drilled in |
+|---|---|---|
+| Vector DBs / embeddings / ANN | #28, #29 | `ddia/ch03` (+3 incl. HNSW) |
+| Cloud-native / managed services / storage-compute split | #13, #21 | `ddia/ch01` (+2), `ch03` (+2) |
+| Scaling economics (scale-down, cost per unit of work) | #26, #27, #33 | `ddia/ch01` (+3) |
+| GraphQL | #20 | `ddia/ch02` (+3, incl. federation) |
+| Embedded / edge databases | #21, catalog | `ddia/ch03` (+1) |
+| Local-first / CRDTs | — | `ddia/ch05` (+3) |
+| Durable workflows | #24, #23, microservices.io saga/outbox | `ddia/ch12` (+1) |
+| Privacy / regulation / accountability / bias | — | `ddia/ch12` (+5, incl. the erasure-vs-immutable-log conflict) |
+| Agentic decision patterns | #32–#38 | `interview-method/s09` (14) |
+| RAG / LLM serving economics | #26, #27, #30, #31 | **not yet drilled** |
 
-The last row is a real hole. The best material there is regulatory and academic rather
-than engineering-blog, so it may need to be authored from the DDIA 2e chapter directly
-rather than sourced.
+**Note on the privacy row.** No strong primary-source engineering post exists for it —
+the good material is regulatory and academic — so those questions were authored from the
+DDIA 2e chapter's subject matter directly rather than sourced from this list. The sharpest
+of them is the structural conflict between an append-only event log and a right-to-erasure
+request, which is a genuine architecture question rather than a compliance one.
+
+**Still open:** RAG pipeline design and LLM serving economics (#26, #27, #30, #31) have no
+drillable home yet. They don't belong in DDIA and they aren't interview-method either —
+they'd want their own topic.

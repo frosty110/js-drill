@@ -851,6 +851,7 @@ function sdCatalogIndexPage(topic, meta, catalog, edges) {
       ${list.map(c => {
         const n = usesOf(c.id);
         return `<li><a href="${up(3)}${esc(DrillRoutes.sharePath('sdComponent', { topic: topic.id, component: c.id }))}">${esc(c.title)}</a>` +
+          `${c.mechanism ? ' <span class="ds-chip">signature</span>' : ''}` +
           `${n ? ` <span class="ds-chip">${n} problem${n === 1 ? '' : 's'}</span>` : ''} — ${md(c.what)}</li>`;
       }).join('\n      ')}
     </ul>
@@ -893,6 +894,13 @@ function sdComponentPage(topic, meta, catalog, component, edges, dpMeta) {
     <p class="sharepage__crumb"><a href="${up(4)}sd/">System design</a> › <a href="${up(4)}sd/${esc(topic.id)}/">${esc(meta.title)}</a> › <a href="${up(4)}${esc(DrillRoutes.sharePath('sdComponentIndex', { topic: topic.id }))}">Component catalog</a></p>
     <h1>${esc(component.title)}</h1>
     <p class="sharepage__lede">${md(component.what)}</p>
+    <p class="sharepage__meta">
+      <span class="ds-chip">${esc(cat ? cat.title : 'Component')}</span>
+      ${component.mechanism
+        ? `<a class="ds-chip" href="${up(4)}${esc(DrillRoutes.sharePath('sdTag', { topic: 'design-problems', facet: 'mechanism', value: component.mechanism }))}">signature mechanism</a>`
+        : '<span class="ds-chip">supporting</span>'}
+      <span class="ds-chip">${uses.length} problem${uses.length === 1 ? '' : 's'}</span>
+    </p>
   </header>
   ${bullets('Reach for it when', component.reachFor)}
   ${bullets("Don't reach for it when", component.avoid)}

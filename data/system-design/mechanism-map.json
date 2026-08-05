@@ -4,6 +4,7 @@
     "load-balancer": {
       "p06": "Spreads long-lived socket connections across the chat fleet, where the stateless assumption breaks — a connection pinned for hours is not a request you can rebalance.",
       "p09": "Distributes driver and rider connections across the matching fleet, rebalancing only on reconnect since an open socket cannot be moved.",
+      "p10": "Distributes collaborator sockets across the edit fleet, with everyone on one document needing to reach the same session owner.",
       "p27": "Spreads viewer connections at broadcast start, when a million clients arrive inside the same few seconds rather than arriving smoothly.",
       "p32": "Fronts a stateless auth tier, which is what lets any node validate any session — and the reason session state lives in a shared store rather than server memory."
     },
@@ -17,6 +18,7 @@
       "p32": "Validates the session on every request so downstream services never re-implement auth, making it the single enforcement point."
     },
     "service-discovery": {
+      "p08": "Gateways have to agree on which node owns a client's counter, so ring membership is shared state rather than a local assumption.",
       "p12": "Tells clients which nodes are on the ring right now; a stale membership view means two clients hash the same key to different nodes.",
       "p19": "Lets producers and consumers find the current leader for a partition, which moves whenever an election happens.",
       "p21": "Propagates ring membership so every node agrees on who owns which key range — usually by gossip rather than a central registry."
@@ -34,6 +36,7 @@
       "p14": "Precomputed top-K completions per prefix, held in memory because the keystroke budget is tens of milliseconds and a rebuild is a batch job.",
       "p16": "Event and seat-map reads, which vastly outnumber bookings. Availability counts are cached loosely on purpose; the actual hold stays transactional.",
       "p22": "Prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving.",
+      "p23": "Embeddings and retrieval results for repeated queries, since embedding a query costs a model call every single time.",
       "p24": "Popular geo cells, whose query volume is wildly skewed toward a few dense urban areas. A short TTL absorbs most reads before the index sees them.",
       "p30": "The online store is a cache by another name: precomputed features in a low-latency store, because inference cannot wait for a batch job to finish.",
       "p32": "Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard.",
@@ -63,11 +66,16 @@
     },
     "kv-store": {
       "p01": "Holds the short-code → URL mapping. Every access is a lookup by key, which is the shape a KV store scales furthest on.",
+      "p08": "Holds per-client counters keyed by client and window, where the entire access pattern is read-modify-write on a single key.",
+      "p11": "Sorted sets are the leaderboard — score updates and top-N range reads are both native operations rather than queries.",
       "p20": "Stores per-job execution state keyed by job id, written and read far more often than it is queried.",
+      "p24": "Holds current entity locations keyed by id, overwritten on every ping rather than appended to.",
+      "p30": "The online store itself: features keyed by entity id, read at single-digit-millisecond latency on the inference path.",
       "p32": "Holds sessions and refresh tokens keyed by id, with TTL doing the expiry work the application would otherwise schedule itself."
     },
     "document-store": {
       "p03": "Holds photo metadata — a self-contained record read as a whole, with fields that vary by capture source.",
+      "p10": "Holds the document snapshot plus its recent operation log, read together whenever a client joins or reconnects.",
       "p13": "Holds the file manifest: chunk list, versions and sharing state for one file, all read together on every sync."
     },
     "wide-column-store": {
@@ -83,6 +91,7 @@
       "p03": "Holds the original photos and their derived sizes; the database stores only metadata and the object key that points at them.",
       "p04": "Stores raw uploads and every transcoded rendition, which is why storage cost multiplies by the size of the bitrate ladder.",
       "p13": "The backing store for content-addressed chunks, with the file manifest in a database pointing at each one.",
+      "p23": "Holds the source documents the citations point back at, because a retrieved passage without its original is not verifiable.",
       "p36": "The uploaded document is evidence with the same retention obligation as the decision, so the original is content-addressed and never replaced by anything derived from it."
     },
     "chunking": {
@@ -116,6 +125,7 @@
       "p21": "Assigns key ranges to nodes and defines the replica set as the next N nodes clockwise from the key's ring position."
     },
     "quorum": {
+      "p12": "Read and write acknowledgement counts decide whether a cached value may be stale — the tunable this design exposes to its callers.",
       "p15": "W and R are set so an acknowledged ledger write survives losing a replica; latency is spent deliberately to buy that guarantee.",
       "p21": "Tunable N/W/R is the interface through which this design exposes the consistency-availability tradeoff to its callers."
     },
@@ -129,11 +139,13 @@
       "p22": "Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.",
       "p31": "Content awaiting automated scoring and human review moves through queues, decoupling upload throughput from review capacity.",
       "p33": "Alerts arrive as an overnight batch and each investigation runs for minutes, so the queue is what decouples a 4K-alert dump from a fixed pool of concurrent investigations.",
+      "p34": "Bulk re-screening after a list change is queued rather than run inline, because the two workloads share a matcher but not a latency budget.",
       "p35": "The workers are people, so the queue hands out leases rather than assignments and reclaims anything a reviewer abandons without needing the client to cooperate.",
       "p36": "Verification hops have wildly different latencies, from a 2-second API call to a manual check taking days, so the work is queued per hop rather than held open per application."
     },
     "pubsub": {
       "p07": "One triggering event delivered to the email, push and SMS pipelines independently, so adding a channel never touches the producer.",
+      "p10": "Edit events fan out to every collaborator's session, decoupled from whichever client produced the change.",
       "p26": "Telemetry is published once and consumed by alerting, storage and dashboards separately, each at its own pace.",
       "p31": "An upload event reaches the scoring models, the audit log and the review queue without the uploader knowing any of them exist."
     },
@@ -168,13 +180,17 @@
     "outbox-cdc": {
       "p15": "The ledger write and its event commit in one transaction, so a payment can never be recorded without the event telling everyone else.",
       "p17": "Each workflow step announces completion from the same transaction that performed it, which is what makes the saga recoverable.",
-      "p25": "Index updates are driven from the document store's change log, so the index converges on the source of truth without a dual write."
+      "p25": "Index updates are driven from the document store's change log, so the index converges on the source of truth without a dual write.",
+      "p30": "Feature updates are driven from the source system's change log, so the online store converges on truth without a dual write."
     },
     "stream-processing": {
+      "p11": "Score events are folded into the ranking as they arrive, because recomputing from raw events per read would not survive the read volume.",
+      "p14": "Query logs are folded into completion counts continuously, so a term trending this hour surfaces before the next full rebuild.",
       "p18": "Windowed counting over the click firehose, where watermarks and late-event policy decide what a given 'minute' actually contains.",
       "p26": "Telemetry is enriched, sampled and aggregated in flight, because storing everything raw and querying later meets neither the cost nor latency bar.",
       "p30": "Real-time features are derived from event streams as they arrive — what makes an online feature fresher than a nightly batch job.",
-      "p31": "Uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule."
+      "p31": "Uploads flow through a scoring pipeline continuously, so moderation decisions land within seconds of publish rather than on a schedule.",
+      "p34": "List deltas are applied as they publish, so a newly designated party is screened without waiting for a nightly cycle."
     },
     "aggregation": {
       "p11": "Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.",
@@ -247,6 +263,7 @@
       "p29": "The delivery schedule itself — exponential, jittered and capped, because a receiver's outage must not become a retry storm."
     },
     "load-shedding": {
+      "p14": "Suggestions are the first thing dropped under load, because a missing dropdown degrades the product far less than a slow search box.",
       "p18": "Sampling the click stream under extreme load, accepting an estimate rather than losing the pipeline entirely.",
       "p22": "Rejects low-priority requests once queue depth implies they would time out anyway, freeing GPUs for work that can still land.",
       "p26": "Drops or samples telemetry when ingest saturates, on the principle that partial observability beats none."
@@ -280,6 +297,7 @@
     "bloom-filter": {
       "p01": "Answers 'has this short code been issued' without a lookup, turning most collision checks into a memory read.",
       "p05": "The seen-URL check — the canonical use, asked billions of times, where a false positive only costs a skipped page.",
+      "p12": "Avoids a network hop for keys a node certainly does not hold, which matters when the miss costs a round trip to the origin.",
       "p13": "Tests whether a chunk already exists before uploading it, so the dedup path avoids a round trip for genuinely new content.",
       "p21": "Sits in front of each SSTable so a read skips files that certainly do not hold the key."
     },
@@ -319,6 +337,7 @@
     "pagination": {
       "p02": "Cursor-based feed paging, so posts arriving mid-scroll do not shift the window and duplicate what the user just read.",
       "p06": "Scrollback through message history, keyed on message id so a long thread pages backwards at constant cost.",
+      "p24": "Results page outward by distance band, so 'more places near me' does not rescan the whole radius.",
       "p25": "Result paging, where deep pages are expensive by construction because every shard must produce the full prefix."
     },
     "transcoding": {
@@ -337,6 +356,7 @@
       "p15": "A double-entry ledger is the audit trail: the balance is derived from immutable entries rather than stored, so any figure can be re-proved from the entries that produced it.",
       "p18": "Raw events are kept in object storage and a nightly batch recompute is the authority, so the fast streaming number is always reconcilable against a durable record of what actually arrived.",
       "p33": "An examiner can ask years later why one alert was cleared, so the trace pins prompt, model snapshot, policy version and evidence hashes — everything whose change would change the answer.",
+      "p34": "Every screening decision records the list version it ran against, since 'we did not know' is only defensible with the evidence attached.",
       "p35": "A reviewer's decision is written as an immutable event with its reason and the lease that authorised it, and a correction references the original rather than overwriting it.",
       "p36": "Sources disagree routinely, so the record keeps what each one said and which precedence rule decided between them, rather than silently keeping the winner."
     },
@@ -349,6 +369,20 @@
       "p22": "GPU seconds are the scarce resource and the KV cache sets how many sequences fit, so admission is a spend decision per request rather than a queueing one.",
       "p33": "An agent choosing its own tools is spending money autonomously, so each case carries a hard budget and cost becomes an input to tool selection rather than a report afterwards.",
       "p36": "A full ownership walk can fire dozens of paid lookups, so checks are ordered by cost and information gain and results are cached per entity across applications."
+    },
+    "progressive-rollout": {
+      "p22": "New model versions take a slice of traffic before all of it, because quality regressions are only visible against real prompts.",
+      "p28": "A new ranker is exposed to a fraction of the feed first, since offline metrics routinely disagree with what people actually watch.",
+      "p30": "A changed feature definition rolls out gradually, because training/serving skew surfaces as slow quality drift rather than as an error.",
+      "p31": "A new moderation model runs in shadow before it can action anything, since a false positive here removes legitimate content.",
+      "p33": "A new agent version is scored against decisions humans already made before it is trusted to dispose of alerts on its own."
+    },
+    "tenant-isolation": {
+      "p22": "Per-tenant GPU pools and quotas, so one customer's batch job cannot consume the capacity another customer's interactive traffic depends on.",
+      "p26": "Per-tenant ingest partitions and query limits, so one customer instrumenting a hot loop cannot degrade everyone else's dashboards.",
+      "p33": "Each bank's policy, data and model configuration stay separate, because the same agents run against institutions that must never see each other's alerts.",
+      "p35": "Reviewer pools and queues are scoped per tenant, since someone cleared to see one institution's data usually is not cleared for another's.",
+      "p36": "Per-institution verification policy and vendor credentials, so 'sufficient evidence' can mean two different things in the same pipeline."
     }
   }
 }

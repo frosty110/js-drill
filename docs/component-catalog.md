@@ -189,9 +189,25 @@ connections break the stateless assumption). Authoring an edge everywhere the
 component technically appears would rebuild the link farm the annotations exist
 to prevent, just with more words in it.
 
-Current shape: **223 edges over 65 components** (63 mapped; `progressive-rollout` and
-`tenant-isolation` arrived with the governance category and have no edge yet), 3–10
-per problem, ~6 on average.
+Current shape: **253 edges over all 65 components**, 5–12 per problem, ~7 on average.
+No orphans: every component names at least one problem it does work in, and the
+probe asserts that so regressing is visible rather than only noted.
+
+### How the tagging is surfaced
+
+The distinction below is the catalog's only real taxonomy, so it has to be
+visible without opening anything:
+
+| Where | What it shows |
+|---|---|
+| Catalog card | a `signature` mark on every component backed by a registered mechanism |
+| Catalog head | a role filter — All / Signature / Supporting, with live counts, persisted in `progress.catalogRole` |
+| Component page | a chip row: category · signature (deep-linking to that mechanism's problem list) or supporting · usage count |
+| Problem page | signature components sorted first and marked, supporting ones behind them |
+| Static pages | the same marks, so a fetcher sees the taxonomy too |
+
+Categories are already headings, so the filter deliberately does NOT restate
+them — it exposes the one axis a heading cannot.
 
 ### Signature vs. supporting
 

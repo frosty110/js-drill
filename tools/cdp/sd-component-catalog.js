@@ -75,6 +75,50 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   const placeholders = await s.eval(`document.querySelectorAll('.cmp-card__uses--none').length`);
   s.assert(placeholders === unmapped.length,
     `${unmapped.length} unmapped component(s) render as such, got ${placeholders}`);
+  // The graph is currently whole. Stated as its own assertion so that going
+  // BACKWARDS — adding a component and leaving it unmapped — is visible, rather
+  // than only being caught if someone reads the validator's note.
+  s.assert(unmapped.length === 0, `no orphan components (found ${unmapped.length}: ${unmapped.join(',')})`);
+
+  // ── Tagging is surfaced ──────────────────────────────────────────────────
+  // A component's tagging used to be invisible here: the card carried a usage
+  // count and nothing else, so "registered mechanism or supporting block?" —
+  // the distinction driving the signature marker on every problem page — could
+  // only be found by opening it.
+  const SIG = COMPONENTS.filter(c => c.mechanism);
+  const sigMarks = await s.eval(`document.querySelectorAll('.cmp-card .cmp-sig').length`);
+  s.assert(sigMarks === SIG.length, `${SIG.length} signature components marked on the cards, got ${sigMarks}`);
+
+  const roleBtns = await s.eval(`
+    Array.from(document.querySelectorAll('[data-role]')).map(e => ({
+      role: e.dataset.role, on: e.classList.contains('is-on'),
+      n: Number((e.querySelector('b')||{}).textContent)
+    }))`);
+  s.assert(roleBtns.length === 3, `role filter offers all/signature/supporting, got ${roleBtns.length}`);
+  const byRole = Object.fromEntries(roleBtns.map(r => [r.role, r]));
+  s.assert(byRole.all.n === COMPONENTS.length, `"All" counts ${COMPONENTS.length}, got ${byRole.all.n}`);
+  s.assert(byRole.signature.n === SIG.length, `"Signature" counts ${SIG.length}, got ${byRole.signature.n}`);
+  s.assert(byRole.supporting.n === COMPONENTS.length - SIG.length,
+    `"Supporting" counts ${COMPONENTS.length - SIG.length}, got ${byRole.supporting.n}`);
+
+  // Filtering actually narrows, and empties a category rather than leaving a
+  // heading over nothing.
+  await s.eval(`document.querySelector('[data-role="signature"]').click()`);
+  await s.sleep(500);
+  await s.snap('02b-catalog-signature-only');
+  const sigCards = await s.eval(`document.querySelectorAll('.cmp-card').length`);
+  s.assert(sigCards === SIG.length, `signature filter shows ${SIG.length} cards, got ${sigCards}`);
+  const sigCats = await s.eval(`document.querySelectorAll('.part-head').length`);
+  const expectSigCats = new Set(SIG.map(c => c.category)).size;
+  s.assert(sigCats === expectSigCats, `only categories with matches keep a heading (${expectSigCats}), got ${sigCats}`);
+  // The filter is persisted, so it survives leaving and coming back.
+  await s.eval(`location.hash = '#/components'`); await s.sleep(500);
+  await s.eval(`location.hash = '#/components/catalog'`); await s.sleep(700);
+  s.assert(await s.eval(`document.querySelector('[data-role="signature"]').classList.contains('is-on')`),
+    'the role filter survives navigating away and back');
+  await s.eval(`document.querySelector('[data-role="all"]').click()`);
+  await s.sleep(500);
+  s.assert(await s.eval(`document.querySelectorAll('.cmp-card').length`) === COMPONENTS.length, 'clearing restores every card');
 
   // 3. Ordering — most-used first inside a category. The asymmetry IS the
   //    curriculum signal, so a flat alphabetical list would be a regression.
@@ -108,6 +152,16 @@ const TOTAL_EDGES = COMPONENTS.reduce((n, c) => n + usesOf(c.id), 0);
   }
   const altN = await s.eval(`document.querySelectorAll('.cmp-alts li').length`);
   s.assert(altN === CACHING.alternatives.length, `alternatives render (${altN}/${CACHING.alternatives.length})`);
+
+  // The detail page states its tagging as chips rather than burying the
+  // mechanism in a CTA button at the bottom of the page.
+  const chips = await s.eval(`
+    Array.from(document.querySelectorAll('.detail-tags .sd-chip')).map(e => e.textContent.trim())`);
+  s.assert(chips.some(x => /signature/i.test(x)), `a mechanism-backed component says so, got ${chips.join('|')}`);
+  s.assert(chips.some(x => x === `${usesOf('caching')} problems`),
+    `the chip row states the usage count, got ${chips.join('|')}`);
+  s.assert(await s.eval(`!!document.querySelector('.detail-tags a[href*="tag/mechanism/caching"]')`),
+    'the mechanism chip deep-links to its filtered problem list');
 
   // 5. The Used-in list matches the edge file exactly.
   const uses = await s.eval(`document.querySelectorAll('.cmp-use').length`);

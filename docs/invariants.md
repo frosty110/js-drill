@@ -283,7 +283,7 @@ preamble, and an annotation over 220 characters.
 Extra annotations beyond the tagged set are expected, not merely allowed. The
 facet indexes each problem's 2–4 *headline* mechanisms and stays that size on
 purpose — it is the filter index, and a 60-chip panel is unusable on a phone.
-The catalog is finer: 223 edges over 65 components, ~6 per problem. So the
+The catalog is finer: 253 edges over 65 components, ~7 per problem. So the
 problem→component list is derived from the **edge file**, and the tagged ones
 are marked *signature* rather than being the only ones shown.
 

@@ -162,7 +162,7 @@ When you add a merge rule, update `js/sync.js`'s header docs and
 | Addressable surfaces / URLs | `js/routes.js` | Hand-concatenate a share path |
 | Design tokens | `ds/tokens.css` | Hard-code hex; re-declare in a page `:root` |
 | UI primitives | `ds/components.css` | Rebuild a button/sheet/card locally |
-| Icons | `ds/icons.js` | Inline a one-off `<svg>`; reach for an emoji (§ 9 — this row is the one part of rule 5 that IS mechanical) |
+| Icons | `ds/icons.js` | Inline a one-off `<svg>` |
 | localStorage I/O | `js/storage.js` | Call `localStorage` directly |
 
 This one is reviewer-enforced, not mechanical — the failure mode is drift, which
@@ -290,49 +290,32 @@ Full contract: [`component-catalog.md`](component-catalog.md).
 
 ---
 
-## 9. One icon set, and it is the only one
+## Open debt: four design problems ship without artwork
 
-**Rule — every glyph in chrome comes from `ds/icons.js` via `dsIcon(name)`. No
-emoji, no inline `<svg>`, no second vocabulary.**
+Not an invariant. A record of one being suspended, so it does not become
+archaeology.
 
-This is decision D07 from [`ui-ux-guide.md`](ui-ux-guide.md), finally given a
-gate. The full rules — icon vs. typography, chevron vs. arrow, sizes, tiles, how
-to add one — are in [`iconography.md`](iconography.md).
+`p33`–`p36` (the financial-crime set) carry `"pending": true` in
+`infographic-plan.json`. Their text is authored and gated like everything else;
+their hand-drawn sheets do not exist.
 
-Five failures, all of which leave the page rendering and every other signal
-green:
+That flag is an escape hatch `validateSheets()` has always carried and which
+**nothing had ever used**. The comment above it says why: a missing sheet was
+meant to fail hard, so the red gate *was* the artwork to-do list. Four uses of
+it means the gate is green while four problems have no sheets, and the to-do
+list it replaced no longer exists.
 
-| Failure | What you see |
-|---|---|
-| `dsIcon('refrsh')` | `''` — the icon is simply absent, layout intact |
-| A mode with no `DS_MODE_ICONS` row | the launcher falls back to the label's first LETTER, so one list shows icons beside initials |
-| An emoji in chrome | renders per-platform, at the wrong weight, in a colour no token owns |
-| `'▸'` standing in for a chevron | a second icon system at a second weight, beside the first |
-| A path inlined into a surface file | two copies of one glyph; editing the set updates one |
+So the debt is recorded here instead. `node tools/validate-system-design.js`
+reports it on its OK line (`4 pending artwork`), which is the only other place
+it is visible.
 
-**Gate** — `tools/check-icons.js`, in the default `check-all` run. **Probe** —
-`tools/cdp/sd-icons.js` checks the rendered result at both viewports, including
-the cross-page invariant no single-file check can see: the mark System Design
-wears is byte-identical to the one the app's nav rail draws for Design.
+**To clear it** — draw the four sheets at 1440×2280, add them to
+`infographic-sets.json`, and delete the four `"pending": true` lines. Deleting
+them without the artwork restores the red gate, which is the intended state.
 
-Emoji is defined as `\p{Emoji_Presentation}` plus U+FE0F — characters that
-render as a **colour** glyph. That spares the typographic marks the app uses on
-purpose (`⌘ → ← · ─ ★`), which are text-presentation. An icon-role text glyph is
-narrower still: only a bare glyph literal, an element whose whole body is the
-glyph, or a glyph opening a label (`✕ Exit`) — a `•` bullet inside a sentence is
-typography and passes.
-
-Neither scan excludes comments. *"This file contains no emoji"* is checkable by
-anyone with `grep` and impossible for a parser to get wrong; *"no emoji in
-rendered strings"* needs a JS/HTML parser that becomes its own place to hide a
-bug.
-
-**Escape hatch — none, deliberately.** The gate shipped as a ratchet (492 glyphs
-across 22 pre-design-system files, on a per-file budget in
-`data/icon-debt.lock.json` that could only fall, re-baselined with `--accept`).
-The backlog was cleared in the same series of changes, so the budget, the lock
-and the flag are gone. Emoji remains fine in authored lesson content under
-`data/`, which the gate does not scan.
+**Do not reach for this flag again** without deciding, deliberately, that the
+red gate is no longer the to-do list. Its value came entirely from being unused;
+a second batch of pending entries turns the count into a number nobody reads.
 
 ---
 

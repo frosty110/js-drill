@@ -40,12 +40,12 @@ const HOME_AREAS = [
   {
     key: 'coding', label: 'Coding', icon: 'code',
     sub: 'Patterns + Applied — the interview problem set',
-    tracks: ['patterns', 'applied'],
+    tracks: tracksInArea('coding'),
   },
   {
     key: 'syntax', label: 'Syntax', icon: 'braces',
     sub: 'JavaScript fundamentals, toolbox and traps',
-    tracks: ['syntax'],
+    tracks: tracksInArea('syntax'),
   },
   {
     key: 'sysdesign', label: 'System Design', icon: 'sysdesign',
@@ -521,37 +521,30 @@ function _homeAreaCardHtml(area) {
     </div>`;
 }
 
-function _homeMoreHtml(sig) {
-  const rows = [
-    // audit F6 — one label, one surface. This row used to fire #today-home-btn
-    // (a PAGE) while the Practice launcher's identically-labelled row fired
-    // #today-btn (the MODAL); the modal is the full queue, so both point at it.
-    { btn: 'today-btn', icon: 'clock', label: "Today's plan", sub: 'The full due + path + weak queue' },
-    { btn: 'practice-launcher-btn', icon: 'zap', label: 'Practice', sub: 'Drills, streams, mock interview' },
-    { btn: 'dashboard-btn', icon: 'chart', label: 'Progress', sub: 'Activity, mastery, what to fix first' },
-  ];
-  const inner = rows.map(r => `
-    <div class="ds-row" data-home-mode="${r.btn}" role="button" tabindex="0">
-      <span class="ds-row__badge" aria-hidden="true">${dsIcon(r.icon, 16)}</span>
-      <div class="ds-row__main"><b>${escapeHtml(r.label)}</b><span>${escapeHtml(r.sub)}</span></div>
-      <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
-    </div>`).join('');
-  // audit F2 — this is also the never-taken case's single quiet OFFER: say what
-  // the 43 questions buy the user (they steer the chip above), rather than
-  // describing the page. Once taken, the row reports the signal's freshness so
-  // a stale reading is visible instead of silently steering.
-  const diagSub = sig && sig.takenAt
-    ? `Last taken ${_homeDiagAge(sig.takenAt)}${sig.score ? ` · scored ${sig.score.correct}/${sig.score.total}` : ''} — retake`
-    : '43 questions — they steer what this page puts first';
-  const diag = `
-    <a class="ds-row" href="diagnostic.html">
-      <span class="ds-row__badge" aria-hidden="true">${dsIcon('target', 16)}</span>
-      <div class="ds-row__main"><b>Diagnostic</b><span>${escapeHtml(diagSub)}</span></div>
-      <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
-    </a>`;
+// ── Sessions (D15 phase 3) ──────────────────────────────────────────────────
+// This replaced `_homeMoreHtml`, whose four rows were Today's plan · Practice ·
+// Progress · Diagnostic: two of them duplicated a nav rung, and two duplicated
+// a row inside the Practice sheet itself. A "More" list whose every entry
+// exists somewhere else is not a shortcut, it is a second map.
+//
+// What belongs here instead is the answer to Home's actual question — what do
+// I do right now. Practice is a VERB (docs/information-architecture.md §2), so
+// its SESSIONS live on this page and its ~17 drill families stay one tap
+// behind the launcher: a 17-item menu is the wrong front door for a user
+// PROFILE describes as needing one decision, on a phone.
+//
+// The rows are the launcher's own, asked for rather than restated
+// (PracticeLauncher.groupHtml) — one owner, two placements, no drift.
+function _homeSessionsHtml() {
+  if (!window.PracticeLauncher) return '';
+  const rows = PracticeLauncher.groupHtml('practice');
+  if (!rows) return '';
   return `
-    <p class="ds-label home-sectionlabel">More</p>
-    <div class="ds-card ds-card--flat home-more">${inner}${diag}</div>`;
+    <p class="ds-label home-sectionlabel">Sessions</p>
+    <div class="ds-card ds-card--flat home-sessions" data-home-sessions>${rows}</div>
+    <button class="ds-btn ds-btn--subtle home-moredrills" data-home-drills>
+      ${dsIcon('zap', 15)} All drills &amp; streams
+    </button>`;
 }
 
 function openHome() {
@@ -619,7 +612,7 @@ function openHome() {
       ${reviewAllHtml}
       <p class="ds-label home-sectionlabel">Tracks</p>
       ${HOME_AREAS.map(_homeAreaCardHtml).join('')}
-      ${_homeMoreHtml(diagSig)}
+      ${_homeSessionsHtml()}
     </div>`;
 
   // Lazy-enrich the hero with the lesson's one-line description (manifest
@@ -700,6 +693,20 @@ function _wireHome(root) {
     if (mode) {
       const btn = document.getElementById(mode.getAttribute('data-home-mode'));
       if (btn) btn.click();
+      return;
+    }
+    // The drill catalog stays behind the sheet — browsable, but never the
+    // first thing on the screen (D15 §4).
+    if (e.target.closest('[data-home-drills]')) {
+      if (window.PracticeLauncher) PracticeLauncher.open();
+      return;
+    }
+    // Session rows are the launcher's rows, so they get the launcher's tap
+    // semantics verbatim — shuffle picks, smart-pick routing, href rows and
+    // synthetic-click rows all behave identically in both placements because
+    // there is only one implementation of what tapping one means.
+    if (e.target.closest('[data-home-sessions]') && window.PracticeLauncher) {
+      PracticeLauncher.onRowTap(e);
     }
   });
   root.addEventListener('keydown', (e) => {

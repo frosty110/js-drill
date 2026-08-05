@@ -563,6 +563,35 @@ function designProblemsBlurb() {
     : 'DDIA · building blocks · canonical design problems';
 }
 
+// Turn one of the hidden launcher buttons into a menu row — {id, emoji, label,
+// desc} read off the button itself, so the canonical mode list has exactly one
+// definition and a row can never describe a button that no longer exists.
+//
+// This survived the removal of the topbar dropdown machinery it was written
+// for (D15 phase 2): the Practice launcher and Home's sessions list are its
+// consumers now. Losing it with the dropdowns broke Home's first paint, which
+// is how it came back.
+function _topbarItemFromButton(btn) {
+  if (!btn) return null;
+  if (btn.classList.contains('hidden')) return null;
+  if (btn.style.display === 'none') return null;
+  const cloned = btn.cloneNode(true);
+  // Strip count spans (e.g. <span id="review-count">0</span>) so the label
+  // doesn't carry "Review (0)" into the menu.
+  cloned.querySelectorAll('[id$="-count"]').forEach(el => el.remove());
+  // Collapse whitespace + strip empty parens left behind by the span removal.
+  const text = cloned.textContent.trim().replace(/\s*\(\s*\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  // The mark comes from DS_MODE_ICONS, keyed by button id — not from the label.
+  // It used to be parsed OUT of the label by a "first token contains a
+  // non-ASCII byte" heuristic, which made the button's TEXT the de-facto icon
+  // registry: every surface wanting a mode's glyph re-parsed it, and a label
+  // that merely began with a symbol grew a phantom icon. The label is now just
+  // the label, and the mark has one home (invariant 9).
+  const desc = (btn.getAttribute('title') || '').trim();
+  const icon = (typeof DS_MODE_ICONS === 'object' && DS_MODE_ICONS[btn.id]) || '';
+  return { id: btn.id, icon, label: text, desc };
+}
+
 const TOPBAR_MENU_TAXONOMY = {
   practice: {
     label: 'Practice',
@@ -582,8 +611,11 @@ const TOPBAR_MENU_TAXONOMY = {
       // (action:'href' — a plain link row). Diagnostic previously had ZERO
       // entry points after first run; System Design was palette-only on the
       // phone. Both rows die in P8 when page unification lands.
-      { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' },
-      { icon: 'sysdesign', label: 'System Design', get desc() { return designProblemsBlurb(); }, action: 'href', href: 'system-design.html' }
+      // Diagnostic is a standalone page with no nav rung of its own, so it
+      // needs this row. System Design used to sit beside it and no longer
+      // does: it is a primary destination (D15 §4), and a launcher row for a
+      // rail item is a second door onto one room.
+      { icon: 'clipboard-list', label: 'Diagnostic', desc: '43-question baseline — retake every few weeks', action: 'href', href: 'diagnostic.html' }
     ]
   },
   drills: {
@@ -652,379 +684,8 @@ function topbarPickSmartTarget() {
   return null;
 }
 
-// Pull display data from the sidebar button itself so the taxonomy stays
-// DRY: button label is the source of truth, descriptions come from the
-// `title` attribute the sidebar buttons already populate for hover-help.
-// Returns null when the button is missing OR currently unactionable. Three
-// hide channels exist, deliberately distinct:
-//
-// .hidden class            → dynamic empty-state hide (Review/Weak/At-Risk
-//                              while count=0). Filter out — the action would
-//                              launch into nothing.
-// inline style.display:none → context/capability hide (#haptic-btn on iOS,
-//                              cram-only buttons with no cram active). Filter
-//                              out — the surface genuinely can't act.
-// .sidebar-curation-hidden  → plan UX-focus hide. KEEP. The button is fully
-//                              actionable; the active plan only chose not to
-//                              clutter the sidebar with it. Activities are
-//                              modality, not corpus — Drill/Train/Reflect
-//                              menus should expose every recall direction
-//                              regardless of plan. See applySidebarCuration
-//                              in js/app/03-paths-cram.js for the contract.
-function _topbarItemFromButton(btn) {
-  if (!btn) return null;
-  if (btn.classList.contains('hidden')) return null;
-  if (btn.style.display === 'none') return null;
-  const cloned = btn.cloneNode(true);
-  // Strip count spans (e.g. <span id="review-count">0</span>) so the label
-  // doesn't carry "Review (0)" into the menu.
-  cloned.querySelectorAll('[id$="-count"]').forEach(el => el.remove());
-  // Collapse whitespace + strip empty parens left behind by the span removal.
-  const text = cloned.textContent.trim().replace(/\s*\(\s*\)\s*$/, '').replace(/\s+/g, ' ').trim();
-  // The mark comes from DS_MODE_ICONS, keyed by button id — not from the label.
-  // It used to be parsed OUT of the label by a "first token contains a
-  // non-ASCII byte" heuristic, which made the button's TEXT the de-facto icon
-  // registry: every surface wanting a mode's glyph re-parsed it, and a label
-  // that merely began with a symbol grew a phantom icon. The label is now just
-  // the label, and the mark has one home (invariant 9).
-  const desc = (btn.getAttribute('title') || '').trim();
-  const icon = (typeof DS_MODE_ICONS === 'object' && DS_MODE_ICONS[btn.id]) || '';
-  return { id: btn.id, icon, label: text, desc };
-}
-
-function renderTopbarMenuContents(menuKey) {
-  // iter 130 Phase 5: mobile-only "Browse" entry point. The 4 .topbar-menu
-  // buttons are hidden on mobile via the iter-127 media query, so this view
-  // exposes the categories as tappable rows. Clicking a row re-renders the
-  // dropdown with that category's items (delegated in initTopbarDropdowns).
-  if (menuKey === 'mobile-browse') {
-    const cats = ['practice', 'drills', 'train', 'insights'];
-    const blurb = `<div class="topbar-menu-blurb">Browse modes by category. (Or search by name, or open Settings for toggles.)</div>`;
-    const rows = cats.map(key => {
-      const cat = TOPBAR_MENU_TAXONOMY[key];
-      if (!cat) return '';
-      return `<button class="topbar-item-mobile-cat" role="menuitem" data-mobile-cat="${escapeHtml(key)}">
-        <div class="topbar-item-text">
-          <div class="topbar-item-name">${escapeHtml(cat.label)} <span class="topbar-item-caret" aria-hidden="true">${dsIcon('chevron-right', 13)}</span></div>
-          <div class="topbar-item-desc">${escapeHtml(cat.blurb)}</div>
-        </div>
-      </button>`;
-    }).join('');
-    return blurb + rows;
-  }
-  const cat = TOPBAR_MENU_TAXONOMY[menuKey];
-  if (!cat) {
-    return `<div class="topbar-dropdown-stub">Menu "${escapeHtml(menuKey)}" not configured.</div>`;
-  }
-  // 2026-05-29 hybrid dropdown: single-line items, descriptions move to the
-  // title attribute. Native browser tooltip shows the desc on desktop hover
-  // (touch devices have no hover, so descriptions are silently dropped on
-  // mobile — that's the intent, descriptions reappear on the destination
-  // modal). Cuts each row's height by ~2 lines and ~28px.
-  //
-  // Two row shapes:
-  //   - Sidebar-backed: `data-btn-id` synth-clicks the underlying button
-  //     (existing path, used by ~95% of items).
-  //   - Action-backed: `data-action="shuffle"` + `data-shuffle-ids` picks
-  //     a random member id and synth-clicks it. `data-action="pick-smart"`
-  //     runs the smart-routing cascade in initTopbarDropdowns().
-  // Both shapes share the same .topbar-item DOM + click delegation, so the
-  // dispatcher just checks data-action first and falls back to data-btn-id.
-  const _itemRow = (it) => {
-    if (it.action === 'shuffle') {
-      const ids = Array.isArray(it.ids) ? it.ids.join(',') : '';
-      return `
-        <button class="topbar-item" role="menuitem" data-action="shuffle" data-shuffle-ids="${escapeHtml(ids)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-          <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
-          <span class="topbar-item-name">${escapeHtml(it.label)}</span>
-        </button>`;
-    }
-    if (it.action === 'pick-smart') {
-      return `
-        <button class="topbar-item" role="menuitem" data-action="pick-smart"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-          <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
-          <span class="topbar-item-name">${escapeHtml(it.label)}</span>
-        </button>`;
-    }
-    // Plain page-link rows (nav-audit P1-2): a real anchor to another page
-    // (diagnostic.html / system-design.html). The delegated handler closes the
-    // dropdown and lets the browser navigate.
-    if (it.action === 'href') {
-      return `
-        <a class="topbar-item" role="menuitem" data-action="href" href="${escapeHtml(it.href)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-          <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
-          <span class="topbar-item-name">${escapeHtml(it.label)}</span>
-        </a>`;
-    }
-    // Concrete mode items render as ANCHORS pointing at #/m/<slug> (slug = the
-    // button id minus '-btn'). The href is what makes cmd+click / middle-click /
-    // right-click → "Open in New Tab" work natively; the delegated handler still
-    // owns plain left-click (preventDefault → in-place synth-click via data-btn-id).
-    const slug = it.id.replace(/-btn$/, '');
-    return `
-      <a class="topbar-item" role="menuitem" data-btn-id="${escapeHtml(it.id)}" href="#/m/${escapeHtml(slug)}"${it.desc ? ` title="${escapeHtml(it.desc)}"` : ''}>
-        <span class="topbar-item-emoji" aria-hidden="true">${it.icon ? dsIcon(it.icon, 17) : ''}</span>
-        <span class="topbar-item-name">${escapeHtml(it.label)}</span>
-      </a>`;
-  };
-  // Normalize an item entry: strings → resolved via _topbarItemFromButton (may
-  // return null if button hidden), objects → passed through. Centralizes the
-  // string-or-object branch so the two render code paths (groups + flat) share
-  // the same normalization.
-  const _resolveItem = (entry) => {
-    if (typeof entry === 'string') return _topbarItemFromButton(document.getElementById(entry));
-    if (entry && typeof entry === 'object') return entry;
-    return null;
-  };
-  // Grouped menus (Review's Progress / Share / Reference) render a labelled
-  // sub-header per group so the menu stays scannable when items grow.
-  if (Array.isArray(cat.groups)) {
-    const blurb = cat.blurb ? `<div class="topbar-menu-blurb">${escapeHtml(cat.blurb)}</div>` : '';
-    const groupsHtml = cat.groups.map(g => {
-      const gi = g.items.map(_resolveItem).filter(Boolean);
-      if (!gi.length) return '';
-      return `<div class="topbar-group-label">${escapeHtml(g.label)}</div>${gi.map(_itemRow).join('')}`;
-    }).join('');
-    return blurb + (groupsHtml || `<div class="topbar-dropdown-stub">Nothing here right now.</div>`);
-  }
-  const items = cat.items.map(_resolveItem).filter(Boolean);
-  if (!items.length) {
-    return `<div class="topbar-dropdown-stub">Nothing actionable in <b>${escapeHtml(cat.label)}</b> right now — try again once you've drilled a few lessons.</div>`;
-  }
-  const blurb = cat.blurb
-    ? `<div class="topbar-menu-blurb">${escapeHtml(cat.blurb)}</div>`
-    : '';
-  const rows = items.map(_itemRow).join('');
-  return blurb + rows;
-}
-
-function initTopbarDropdowns() {
-  const topbar = document.getElementById('topbar');
-  if (!topbar) return; // defensive — non-app pages won't have it
-  const dropdown = document.getElementById('topbar-dropdown');
-  const body = dropdown ? dropdown.querySelector('.topbar-dropdown-body') : null;
-  if (!dropdown || !body) return;
-
-  let openMenu = null;
-
-  function close() {
-    if (!openMenu) return;
-    openMenu.setAttribute('aria-expanded', 'false');
-    openMenu = null;
-    dropdown.classList.add('hidden');
-    dropdown.setAttribute('aria-hidden', 'true');
-    body.innerHTML = '';
-    dropdown.style.left = '';
-  }
-
-  // Anchor the dropdown under the trigger on desktop (traditional menu-bar
-  // style — narrow vertical panel under the button rather than a full-width
-  // mega-menu). Clamp so the panel never overflows the topbar's right edge.
-  // On mobile (≤767px) CSS pins the dropdown full-bleed via `left: 0
-  // !important`, so this inline left is harmless there.
-  function _anchorDropdown(menuButton) {
-    if (!window.matchMedia('(min-width: 768px)').matches) {
-      dropdown.style.left = '';
-      return;
-    }
-    const btnRect = menuButton.getBoundingClientRect();
-    const barRect = topbar.getBoundingClientRect();
-    const panelWidth = dropdown.offsetWidth || 280;
-    const desired = btnRect.left - barRect.left;
-    const maxLeft = barRect.width - panelWidth - 4;
-    const left = Math.max(4, Math.min(desired, maxLeft));
-    dropdown.style.left = left + 'px';
-  }
-
-  // show(): open or switch to a menu (no toggle). open(): click semantics —
-  // toggles closed when you click the already-open trigger.
-  function show(menuButton) {
-    if (openMenu && openMenu !== menuButton) openMenu.setAttribute('aria-expanded', 'false');
-    openMenu = menuButton;
-    menuButton.setAttribute('aria-expanded', 'true');
-    const menuKey = menuButton.getAttribute('data-menu') || menuButton.id.replace(/^topbar-/, '') || 'settings';
-    body.innerHTML = renderTopbarMenuContents(menuKey);
-    dropdown.classList.remove('hidden');
-    dropdown.setAttribute('aria-hidden', 'false');
-    _anchorDropdown(menuButton);
-  }
-
-  function open(menuButton) {
-    if (openMenu === menuButton) { close(); return; }
-    show(menuButton);
-  }
-
-  // Desktop hover-to-open: pointer-enter on a trigger opens/switches; the menu
-  // closes a beat after the pointer leaves BOTH the trigger and the panel (the
-  // delay lets you cross any gap between them). Guarded to hover-capable +
-  // fine-pointer devices so touch keeps click-to-open (and .topbar-menu is
-  // display:none on mobile regardless). When hover is active a trigger CLICK
-  // just (re)opens instead of toggling, so you never land in the "hover opened
-  // it, click closed it, now it's stuck while my cursor sits on it" trap.
-  const hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-  let hoverCloseTimer = null;
-  const cancelHoverClose = () => { if (hoverCloseTimer) { clearTimeout(hoverCloseTimer); hoverCloseTimer = null; } };
-  const scheduleHoverClose = () => { cancelHoverClose(); hoverCloseTimer = setTimeout(close, 220); };
-
-  const settingsBtn = document.getElementById('topbar-settings');
-  // `.topbar-menu-link` (e.g. Dashboard) is a direct-navigation link, NOT a
-  // dropdown trigger — exclude it or clicking/hovering it would open an empty
-  // "Menu 'dashboard' not configured" stub panel (it has no TOPBAR_MENU_TAXONOMY
-  // entry). It wires its own click handler in initDashboardModal().
-  const hoverTriggers = [...topbar.querySelectorAll('.topbar-menu:not(.topbar-menu-link)')];
-  // ⚙ Settings no longer opens the top-right dropdown (design-loop P6 / D11):
-  // it's the canonical launcher for the ds Settings sheet — the rail/bar
-  // Settings item, the #/m/ toggle routes, and the palette all synth-click it.
-  // Keeping it OUT of hoverTriggers means the legacy dropdown never fires for
-  // settings; a stopPropagation guards the document-level outside-close below.
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (typeof openSettings === 'function') openSettings();
-    });
-  }
-  hoverTriggers.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (hoverCapable) show(btn); else open(btn);
-    });
-    if (hoverCapable) {
-      btn.addEventListener('mouseenter', () => { cancelHoverClose(); if (openMenu !== btn) show(btn); });
-      btn.addEventListener('mouseleave', scheduleHoverClose);
-    }
-  });
-  if (hoverCapable) {
-    dropdown.addEventListener('mouseenter', cancelHoverClose);
-    dropdown.addEventListener('mouseleave', scheduleHoverClose);
-  }
-
-  // iter 130 Phase 5: mobile-only Browse button — opens the dropdown
-  // with menuKey='mobile-browse', which renders 4 category rows. The
-  // open() helper derives menuKey from `data-menu` || id.replace('topbar-',''),
-  // so this id 'topbar-mobile-menu' resolves to menuKey='mobile-menu'. We
-  // want 'mobile-browse' instead, so we set the data-menu attribute below
-  // OR special-case the open(). Cleanest: set data-menu on the button.
-  const mobileMenuBtn = document.getElementById('topbar-mobile-menu');
-  if (mobileMenuBtn) {
-    mobileMenuBtn.setAttribute('data-menu', 'mobile-browse');
-    mobileMenuBtn.addEventListener('click', (e) => { e.stopPropagation(); open(mobileMenuBtn); });
-  }
-
-  // iter 128 Phase 3: delegated click on .topbar-item → synth-click the
-  // sidebar button it references. Close the dropdown first so the synth
-  // click's downstream UI (e.g. a modal opening) isn't visually fighting
-  // the dropdown panel. Same pattern as iter-104 Cmd-K palette which also
-  // synth-clicks sidebar buttons — zero duplicate handlers.
-  body.addEventListener('click', (e) => {
-    // iter 130 Phase 5: mobile category-picker row → drill into that
-    // category's items WITHOUT closing the dropdown. Re-render body with
-    // the selected category's content; aria-expanded on the mobile-menu
-    // button stays true. Checked first because `.topbar-item-mobile-cat`
-    // doesn't have data-btn-id (the synth-click branch below would no-op).
-    // iter 133: prepend a dsIcon('chevron-left', 14) + ` Categories` back button so mobile users
-    // can return to the category picker without re-tapping the Browse
-    // button (1-tap instead of 2-tap).
-    // iter 137: also prepend a category-name heading between the back
-    // button and the blurb, so the user keeps visual orientation while
-    // scrolling items ("which category am I in?" — the back button hints
-    // it but a small bold heading is more readable when scrolled past).
-    const catRow = e.target.closest('.topbar-item-mobile-cat');
-    if (catRow) {
-      e.stopPropagation();
-      const key = catRow.dataset.mobileCat;
-      if (key) {
-        const cat = TOPBAR_MENU_TAXONOMY[key];
-        const heading = cat
-          ? `<div class="topbar-cat-heading" data-cat-heading="${escapeHtml(key)}">${escapeHtml(cat.label)}</div>`
-          : '';
-        body.innerHTML = `
-          <button class="topbar-cat-back" data-cat-back type="button">${dsIcon('chevron-left', 14)} Categories</button>
-          ${heading}
-          ${renderTopbarMenuContents(key)}
-        `;
-      }
-      return;
-    }
-    // iter 133: back-to-categories button reopens the mobile-browse picker.
-    const backBtn = e.target.closest('[data-cat-back]');
-    if (backBtn) {
-      e.stopPropagation();
-      body.innerHTML = renderTopbarMenuContents('mobile-browse');
-      return;
-    }
-    const item = e.target.closest('.topbar-item');
-    if (!item) return;
-    // Plain page-link rows (action:'href') navigate natively — close the
-    // panel and let the anchor's default click do the rest (no preventDefault,
-    // so modifier-clicks open a new tab too).
-    if (item.dataset.action === 'href') { close(); return; }
-    // Anchor items carry href="#/m/<mode>". On a modifier/middle click, bail
-    // WITHOUT preventDefault/stopPropagation so the browser opens that hash in a
-    // NEW TAB natively (right-click "Open in New Tab" needs no JS at all). Plain
-    // left-click falls through to the in-place synth-click path below; we
-    // preventDefault so it doesn't ALSO navigate the current tab's hash.
-    if (item.tagName === 'A' && (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1)) return;
-    if (item.tagName === 'A') e.preventDefault();
-    e.stopPropagation();
-    // 2026-05-29: action-backed rows (shuffle / pick-smart) are dispatched
-    // here before the legacy data-btn-id synth-click path. Each action
-    // resolves to ONE underlying sidebar button to click.
-    const action = item.dataset.action;
-    if (action === 'shuffle') {
-      const ids = (item.dataset.shuffleIds || '').split(',').filter(Boolean);
-      const pick = ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
-      const target = pick ? document.getElementById(pick) : null;
-      if (!target) return;
-      close();
-      target.click();
-      return;
-    }
-    if (action === 'pick-smart') {
-      const picked = topbarPickSmartTarget();
-      if (!picked) return;
-      close();
-      picked.click();
-      return;
-    }
-    const btnId = item.dataset.btnId;
-    const target = btnId ? document.getElementById(btnId) : null;
-    if (!target) return;
-    close();
-    target.click();
-  });
-
-  // Help icon — opens the existing help-modal (same as `?` keypress).
-  const helpBtn = document.getElementById('topbar-help');
-  if (helpBtn) {
-    helpBtn.addEventListener('click', () => {
-      const helpModal = document.getElementById('help-modal');
-      if (helpModal) helpModal.style.display = 'block';
-    });
-  }
-
-  // Click anywhere outside the dropdown + menu strip closes it.
-  document.addEventListener('click', (e) => {
-    if (!openMenu) return;
-    if (dropdown.contains(e.target)) return;
-    if (e.target.closest('.topbar-menu')) return;
-    if (e.target.id === 'topbar-settings') return;
-    close();
-  });
-
-  // ESC closes (only if a topbar menu is the open thing — don't fight other ESC handlers).
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && openMenu) close();
-  });
-
-  // Re-anchor (or close) on resize — the desktop dropdown is positioned via
-  // an inline `left` computed from the trigger's getBoundingClientRect(); a
-  // resize invalidates that math. Cheapest fix: close so the next open
-  // recomputes from the current layout.
-  window.addEventListener('resize', () => { if (openMenu) close(); });
-}
 
 // Defer-loaded scripts run after DOM parse, so wiring synchronously is safe.
 // Wrapped in a try/catch so a single missing element doesn't block init().
-try { initTopbarDropdowns(); } catch (e) { console.warn('[topbar] init failed:', e); }
 try { initSurfaceToggle(); } catch (e) { console.warn('[surface] init failed:', e); }
 try { initSessionChrome(); } catch (e) { console.warn('[session-chrome] init failed:', e); }

@@ -39,13 +39,14 @@ the reference it points at.
 4. **One page frame.** Every full-page destination is
    `.ds-page` → `.ds-page__head` → `.ds-section`. No page invents its own column
    width, title row, or rhythm.
-5. **One navigation model.** The nav is closed: 5 destinations + 2 rail-aux
-   items. A new mode is a *launcher entry*, never a new nav rung.
-   → **Superseded by D15**, which closes the nav at **3** destinations and moves
-   Progress into the header. The 5 above is what ships *today*; the target and
-   its migration are [`information-architecture.md`](information-architecture.md).
-   Either way the closed-nav rule itself is unchanged: a new mode is never a new
-   rung.
+5. **One navigation model.** The nav is closed: **3 destinations**
+   (Home · Library · Design) + 2 rail-aux items, and progress lives in the
+   **header**, scoped to wherever you are (D15). A new mode is a *launcher
+   entry*, never a new nav rung. The chrome is `ds/shell.js`, mounted by every
+   page — a destination declares a **route**, never a DOM id, and anything
+   page-local is a capability the page passes in. Gated by
+   `tools/check-shell-contract.js`. Full model:
+   [`information-architecture.md`](information-architecture.md).
 6. **Every launchable surface has a hidden `#<slug>-btn`** — that single contract
    gives it the palette, the launcher, and the `#/m/<slug>` deep link for free.
 7. **Every state is designed:** first-run, loading (skeleton), empty (honest),

@@ -1,5 +1,5 @@
 // tools/cdp/ds-page-frame.js — page-frame + nav invariants across the three
-// full-page destinations (Home · Browse · Progress), at both viewports.
+// full-page destinations (Home · Library · Progress), at both viewports.
 //
 // This is the executable half of docs/ui-ux-guide.md § 3 (Page frame) and
 // § 2 (Navigation model). Every full-page surface must:
@@ -23,16 +23,30 @@ const OUT = process.argv[2] || '/tmp/jsdrill-ds-page-frame';
 //
 // `['today', '#today-home-btn', 'today']` used to lead this list and was the
 // probe's one red assertion on both viewports: Today-home rendered a page but
-// 16-ds-nav.js mapped it to the `home` nav key, so aria-current could never
-// say "today" (audit F5). That page is retired — #today-home-btn now delegates
-// to Home — so Today is no longer a distinct destination and Home takes the
-// row. Every other assertion below is unchanged and now runs over the app's
-// actual front door.
+// the nav mapped it to the `home` key, so aria-current could never say "today"
+// (audit F5). That page is retired — #today-home-btn now delegates to Home.
+//
+// D15 phase 2 renamed and re-rooted the rest. The nav closes at THREE
+// destinations (Home · Library · Design), so:
+//   · Browse is the `library` key — same page, the name the IA settled on.
+//   · Progress is no longer a destination at all. It is the header's scoped
+//     meter, opened from wherever you are, so the surface at #/m/dashboard is
+//     an appMode — and every appMode is launched from Home and returns there,
+//     which is why Home stays lit while one is open. Asserting `home` here is
+//     asserting that rule, not conceding a miss.
+// Both keys are DERIVED from the route registry's `parent` chain now
+// (ds/shell.js currentKey), not from sniffing page classes, which is what
+// makes the same nav correct on system-design.html too.
 const PAGES = [
   ['home', '#home-btn', 'home'],
-  ['browse', '#browse-btn', 'browse'],
-  ['progress', '#dashboard-btn', 'progress'],
+  ['browse', '#browse-btn', 'library'],
+  ['progress', '#dashboard-btn', 'home'],
 ];
+
+// The nav is closed at three destinations plus the aux items the page can
+// service (docs/information-architecture.md §4). A fourth rung appearing is a
+// regression whichever direction it came from.
+const NAV_DESTINATIONS = 3;
 
 // A returning user with reps, so the pages render populated and the first-run
 // welcome modal never covers the surface under test.
@@ -134,7 +148,7 @@ const PROBE = `(() => {
       s.assert(r.maxWidth === r.pageWidthToken,
         `${at}: column = --ds-page-w (${r.pageWidthToken}), got ${r.maxWidth}`);
       s.assert(r.overflow <= 0, `${at}: no horizontal overflow (got ${r.overflow}px)`);
-      s.assert(r.navMounted && r.navItems >= 5, `${at}: nav mounted with its destinations (${r.navItems})`);
+      s.assert(r.navMounted && r.navItems >= NAV_DESTINATIONS, `${at}: nav mounted with its destinations (${r.navItems})`);
       s.assert(r.navSmallTargets === 0, `${at}: every nav target ≥44px (${r.navSmallTargets} too small)`);
       s.assert(r.ariaCurrent === navKey, `${at}: aria-current="${navKey}" (got ${r.ariaCurrent})`);
       s.assert(r.unlabeledSections === 0,

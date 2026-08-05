@@ -12,6 +12,42 @@ const {
 const { formatArg, runCode, runCodeBudgeted } = window.DrillRunner;
 
 // ──────────────────────────────────────────────────────────────────────────
+//  THE TRACK REGISTRY — one definition of what the corpus is made of
+// ──────────────────────────────────────────────────────────────────────────
+// A lesson's `track` is the top of the content hierarchy, and it was declared
+// in nine different places with three different labels for the same thing
+// ("Syntax", "Syntax Fundamentals", "Track A — Syntax Fundamentals"), plus the
+// pair `l.track === 'patterns' || l.track === 'applied'` open-coded in eight
+// files. That is how Home came to group the corpus as Coding / Syntax while
+// Browse grouped the same lessons as Syntax / Patterns / Applied — two answers
+// to "what is this app made of", on two screens, one tap apart.
+//
+// AREAS are the user-facing grouping (docs/information-architecture.md §2):
+// Coding is Patterns + Applied, because "which of those two is Two Sum in?" is
+// a question about our authoring, not about the user's work.
+//
+// Legacy label tables in 04/09/10/14f/20 still restate their own copies; each
+// is a display concern inside one surface, and they are listed in the IA doc's
+// open items rather than migrated blind at the end of a large change.
+const TRACKS = [
+  { key: 'syntax',   label: 'Syntax',   area: 'syntax' },
+  { key: 'patterns', label: 'Patterns', area: 'coding' },
+  { key: 'applied',  label: 'Applied',  area: 'coding' }
+];
+
+// The tracks that make up one area, in registry order.
+function tracksInArea(areaKey) {
+  return TRACKS.filter(t => t.area === areaKey).map(t => t.key);
+}
+
+// "Is this lesson one of the interview problems?" — the predicate that was
+// `l.track === 'patterns' || l.track === 'applied'` in eight files, so adding a
+// fourth problems track means editing one line rather than finding all of them.
+function isProblemsTrack(track) {
+  return tracksInArea('coding').includes(track);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 //  LESSON LANGUAGE ('js' | 'ts')
 //  A lesson body may declare `"lang": "ts"`, meaning every code string it
 //  owns — reference, L2 templates, L3 canonical, and whatever the user types

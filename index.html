@@ -63,8 +63,10 @@
   <script src="js/sharecode.js"></script>
   <script src="js/routes.js"></script>
   <!-- The derived breadcrumb (D15 phase 1). Reads the `parent` chain in
-       routes.js; js/app/25-breadcrumb.js supplies this page's title resolver. -->
+       routes.js; the shell mounts it, js/app/16-ds-shell.js resolves titles. -->
   <script src="js/breadcrumb.js"></script>
+  <!-- The app shell — nav + header, mounted by BOTH pages (D15 phase 2). -->
+  <script src="ds/shell.js" defer></script>
   <!-- Pure leaf utilities extracted from app.js (Phase 1 of the modularization). -->
   <script src="js/core/util.js"></script>
   <script src="js/core/runner.js"></script>
@@ -92,6 +94,7 @@
   <link rel="stylesheet" href="css/11-ds-home.css">
   <link rel="stylesheet" href="css/12-ds-share.css">
   <link rel="stylesheet" href="css/14-breadcrumb.css">
+  <link rel="stylesheet" href="css/15-ds-shell.css">
   <!-- Stroke line-icon set (D07) — must load before the js/app slices that
        render chrome (nav, launcher, Today home). -->
   <script src="ds/icons.js" defer></script>
@@ -101,76 +104,28 @@
   <button id="hamburger" class="hamburger" aria-label="Toggle sidebar" data-icon="menu" data-icon-size="20"></button>
   <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
-  <!-- iter 127: top-bar shell.
-       Wordmark + 4 browsable dropdown menus (Practice / Drills / Train / Insights)
-       + right-side icon strip (Cmd-K, Shortcuts, Settings). The dropdowns
-       host the ~30 mode-launchers that currently live as a flat button-grid in the
-       sidebar — moving them here makes them BROWSABLE by category (vs Cmd-K's
-       search-only discovery) and frees the sidebar to be just the lesson list.
-       On mobile (≤700px) the menus collapse into a single ☰-style "Menu" sheet
-       on the right. The existing #hamburger toggles the sidebar drawer (lesson
-       list) on mobile, unchanged. Dropdown items are wired in Phase 3 (iter 128) —
-       this phase is the shell only; the existing sidebar buttons remain live so
-       nothing breaks until Phase 4 (iter 129) removes them. -->
+  <!-- The app header (D15 phase 2). Everything in it is rendered by
+       ds/shell.js from the route registry — breadcrumb on the left, scoped
+       progress + what's due on the right — so system-design.html gets the
+       identical header from the identical code.
+
+       What used to live here, and why it is gone: a complete PREVIOUS
+       navigation system (Practice/Drills/Train/Review dropdowns, a Dashboard
+       link, a System Design link, a Plan button, a Problems/Reference toggle),
+       most of it display:none since D08/D11 but all of it still in the DOM as
+       synthetic-click targets. Every one of them duplicated a rail destination
+       or a launcher entry. The capabilities all survive — via Home, the
+       launcher, the command palette and #/m/<slug> (D05's reachability
+       contract); only the second nav is gone. -->
   <header id="topbar" class="topbar" role="banner">
     <div class="topbar-left">
       <span class="topbar-wordmark">JS Drill</span>
-      <!-- Derived breadcrumb (D15 phase 1) — painted by js/breadcrumb.js from
-           the route registry's `parent` chain. Empty (and hidden) at the root. -->
-      <nav id="ds-crumbs" class="ds-crumbs" hidden></nav>
-      <div class="surface-toggle" role="tablist" aria-label="Problems or Reference">
-        <button class="surface-seg" data-surface="problems" role="tab" aria-selected="false" title="Problems — Patterns + Applied (the problems you work)" aria-label="Problems"><span aria-hidden="true" data-icon="code" data-icon-size="15"></span><span class="surface-seg-label"> Problems</span></button>
-        <button class="surface-seg" data-surface="reference" role="tab" aria-selected="false" title="Reference — Syntax fundamentals + quick refs (always available)" aria-label="Reference"><span aria-hidden="true" data-icon="book-open" data-icon-size="15"></span><span class="surface-seg-label"> Reference</span></button>
-      </div>
-      <button id="topbar-plan" class="topbar-navlink" title="Your plan — progress, what's next, and quick-starts" aria-label="Plan"><span aria-hidden="true" data-icon="clipboard-list" data-icon-size="15"></span><span class="topbar-plan-label"> Plan</span></button>
-      <button id="topbar-cram-progress" hidden style="background:none;border:none;display:flex;align-items:center;gap:8px;cursor:pointer;font:inherit;color:#c4c9cf;padding:0 8px;margin-left:8px;border-left:1px solid #262930;" title="Open Cram Home"><span id="topbar-cram-day" style="font-size:12px;font-weight:600;letter-spacing:0.01em;"></span><span style="display:inline-block;width:80px;height:6px;background:#262930;border-radius:3px;overflow:hidden;"><span id="topbar-cram-bar" style="display:block;height:100%;background:linear-gradient(90deg,#f5b62b,#34d399);width:0%;"></span></span><span id="topbar-cram-count" style="font-size:11px;color:#9aa0aa;font-variant-numeric:tabular-nums;"></span></button>
+      <div id="ds-shellbar" class="ds-shellbar"></div>
     </div>
-    <nav class="topbar-menus" role="menubar" aria-label="Main">
-      <button class="topbar-menu" data-menu="practice" aria-haspopup="true" aria-expanded="false">
-        <span class="topbar-menu-label">Practice</span><span class="topbar-menu-caret" data-icon="chevron-down" data-icon-size="13"></span>
-      </button>
-      <button class="topbar-menu" data-menu="drills" aria-haspopup="true" aria-expanded="false">
-        <span class="topbar-menu-label">Drills</span><span class="topbar-menu-caret" data-icon="chevron-down" data-icon-size="13"></span>
-      </button>
-      <button class="topbar-menu" data-menu="train" aria-haspopup="true" aria-expanded="false">
-        <span class="topbar-menu-label">Train</span><span class="topbar-menu-caret" data-icon="chevron-down" data-icon-size="13"></span>
-      </button>
-      <!-- Direct-action link (no dropdown): opens the unified Dashboard.
-           href makes cmd+click / right-click → "Open in New Tab" work. -->
-      <a id="topbar-dashboard" class="topbar-menu topbar-menu-link" href="#/m/dashboard" role="menuitem" title="Dashboard — daily progress, activity, and mastery in one place">
-        <span class="topbar-menu-label">Dashboard</span>
-      </a>
-      <!-- Standalone system-design memorization drill (DDIA, etc.) — separate page, own storage. -->
-      <a id="topbar-system-design" class="topbar-menu topbar-menu-link" href="system-design.html" role="menuitem" title="System Design — multiple-choice memorization drill (Designing Data-Intensive Applications)">
-        <span class="topbar-menu-label">System Design</span>
-      </a>
-      <button class="topbar-menu" data-menu="insights" aria-haspopup="true" aria-expanded="false">
-        <span class="topbar-menu-label">Review</span><span class="topbar-menu-caret" data-icon="chevron-down" data-icon-size="13"></span>
-      </button>
-    </nav>
     <div class="topbar-right">
-      <!-- iter 130 — Phase 5 of the topbar nav refactor epic: mobile-only
-           Browse button. The 4 desktop .topbar-menu buttons (Practice /
-           Drills / Train / Insights) are `display: none` on mobile per
-           iter-127's media query. This Browse button gives mobile users
-           the BROWSE-by-category access path that Cmd-K (search-only)
-           doesn't cover. Tapping it opens a single dropdown listing the
-           4 category names; tapping a category re-renders the dropdown
-           with that category's items. -->
-      <!-- Mobile-only Dashboard icon: the desktop "Dashboard" nav link lives in
-           .topbar-menus, which is display:none ≤767px. This keeps the merged
-           Dashboard reachable for the 80%-phone user (PROFILE.md). -->
-      <button id="topbar-dashboard-mobile" class="topbar-icon topbar-icon-mobile-only" aria-label="Dashboard" title="Dashboard — daily progress, activity, and mastery" data-icon="chart" data-icon-size="19"></button>
-      <button id="topbar-mobile-menu" class="topbar-icon topbar-icon-mobile-only" aria-label="Browse modes by category" title="Browse modes by category — Practice / Drills / Train / Insights" aria-haspopup="true" aria-expanded="false" data-icon="grid" data-icon-size="19"></button>
       <button id="palette-trigger" class="topbar-icon" aria-label="Command palette (⌘K)" title="Command palette · ⌘K / Ctrl-K · search modes, lessons, sections" data-icon="search" data-icon-size="19"></button>
       <button id="topbar-help" class="topbar-icon" aria-label="Keyboard shortcuts" title="Keyboard shortcuts · press ?" data-icon="help" data-icon-size="19"></button>
       <button id="topbar-settings" class="topbar-icon" aria-label="Settings" title="Settings — toggles, data, reset" aria-haspopup="true" aria-expanded="false" data-icon="sliders" data-icon-size="19"></button>
-    </div>
-    <!-- Dropdown panels. Hidden by default; opened by clicking a topbar-menu
-         button or the Settings icon. Phase 3 (iter 128) fills these with the
-         actual mode-launchers. -->
-    <div id="topbar-dropdown" class="topbar-dropdown hidden" role="menu" aria-hidden="true">
-      <div class="topbar-dropdown-body"></div>
     </div>
   </header>
 
@@ -418,7 +373,12 @@
       </div>
       <div class="p-4 border-b border-slate-800">
         <div class="flex items-baseline justify-between">
-          <h1 class="text-xl font-bold text-white tracking-tight">JS Drill</h1>
+          <!-- Not an <h1>: this sits in the retired sidebar, which stays in the
+               DOM only as synthetic-click targets (D05). It is display:none, so
+               a screen reader never saw it — but "how many h1s does this page
+               have" should have one answer, not one that depends on knowing
+               that. The page's real <h1> is the rendered surface's title. -->
+          <p class="text-xl font-bold text-white tracking-tight">JS Drill</p>
           <span class="text-xs text-slate-500">v1</span>
         </div>
         <div class="mt-3">
@@ -592,9 +552,15 @@ index.html#/&lt;lesson-id&gt;/L2   →   p/&lt;lesson-id&gt;/  (every level is o
   <script src="js/app/12b-l2.js" defer></script>
   <script src="js/app/12c-l3.js" defer></script>
   <script src="js/app/13-mechanics-modal.js" defer></script>
-  <script src="js/app/14-init-core.js" defer></script>
+  <script src="js/app/14a-init-palette.js" defer></script>
+  <script src="js/app/14b-bootstrap-launchers.js" defer></script>
+  <script src="js/app/14c-settings-input.js" defer></script>
+  <script src="js/app/14d-risk-streak.js" defer></script>
+  <script src="js/app/14e-audio.js" defer></script>
+  <script src="js/app/14f-stats-dashboard.js" defer></script>
+  <script src="js/app/14g-plan-modals.js" defer></script>
   <script src="js/app/15-init-features-boot.js" defer></script>
-  <script src="js/app/16-ds-nav.js" defer></script>
+  <script src="js/app/16-ds-shell.js" defer></script>
   <script src="js/app/17-today-home.js" defer></script>
   <script src="js/app/18-practice-launcher.js" defer></script>
   <script src="js/app/19-browse.js" defer></script>
@@ -603,7 +569,6 @@ index.html#/&lt;lesson-id&gt;/L2   →   p/&lt;lesson-id&gt;/  (every level is o
   <script src="js/app/22-home.js" defer></script>
   <script src="js/app/23-review.js" defer></script>
   <script src="js/app/24-share.js" defer></script>
-  <script src="js/app/25-breadcrumb.js" defer></script>
   <script>
     // iter 113: Offline Drill Pack — register the service worker that
     // pre-caches the app shell + manifest + 143 lesson JSONs so subsequent

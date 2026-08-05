@@ -286,7 +286,6 @@ function renderSidebar() {
   const tracksToRender = state.surface === 'problems'
     ? _problemsTracks()
     : _allTracks.filter(t => t.id === 'syntax');
-  updateSurfaceToggle();
   // Faceted tag filter panel — only over the merged Problems list. Inserted at
   // the top of the nav (above the lesson list / any Plan-View track row).
   if (state.surface === 'problems') renderTagFacets(nav);
@@ -528,7 +527,20 @@ function _lessonIsRenderedSurface() {
   return !!(shell && shell.querySelector('[data-lesson-root], [data-lesson-loading]'));
 }
 
-function _updateHash() {
+// `push` = this was a NAVIGATION (a different place); everything else is view
+// state on the place you are already at.
+//
+// docs/information-architecture.md §5 rule 3. Every write here used to be a
+// replaceState, which is why the browser's own Back button could not retrace
+// the hierarchy — the single affordance the phone-first user reaches for most.
+// A measured walk went five levels into System Design and one Back left the
+// site, because the whole excursion had collapsed into one history entry.
+//
+// A tab is deliberately NOT a navigation: it is one lesson seen six ways (the
+// url-contract calls it view state and the static twin carries it as an
+// anchor), so tapping through tabs must not bury the screen you came from
+// under six entries you have to press Back through.
+function _updateHash(push) {
   if (!state.currentLessonId) return;
   // audit F10: _updateHash used to write the current lesson's hash whenever
   // state.currentLessonId was set, regardless of what was actually on screen.
@@ -548,7 +560,10 @@ function _updateHash() {
     h += '/' + state.currentTab;
   }
   if (window.location.hash !== h) {
-    try { history.replaceState(null, '', h); } catch (_) { window.location.hash = h; }
+    try {
+      if (push) history.pushState(null, '', h);
+      else history.replaceState(null, '', h);
+    } catch (_) { window.location.hash = h; }
   }
 }
 
@@ -598,7 +613,15 @@ function _handleHashChange() {
   if (!parsed) return;
   if (parsed.mode) { _dispatchModeRoute(parsed.mode, parsed.modeArg); return; }
   if (showLessonNotFoundIfDeadLink(parsed)) return;   // audit F12
-  if (state.currentLessonId !== parsed.lessonId) {
+  // The question is "am I SHOWING this lesson?", not "is this a different
+  // lesson?". They diverge whenever another surface owns the shell while
+  // state.currentLessonId still names the resume target — which is the state
+  // the app boots into: Home is rendered, currentLessonId is already the
+  // CONTINUE lesson, so navigating to that lesson's hash matched the old
+  // guard, skipped selectLesson, and left Home on screen under a URL claiming
+  // otherwise. _lessonIsRenderedSurface() reads the DOM, so it cannot drift
+  // (the same fix audit F10 applied to _updateHash for the same reason).
+  if (state.currentLessonId !== parsed.lessonId || !_lessonIsRenderedSurface()) {
     selectLesson(parsed.lessonId);
   }
   if (parsed.tab && state.currentTab !== parsed.tab) {
@@ -634,7 +657,7 @@ function selectLesson(id) {
   saveProgress();
   renderSidebar();
   renderLesson();
-  _updateHash();
+  _updateHash(true);
   if (window.matchMedia('(max-width: 767px)').matches) {
     document.body.classList.remove('sidebar-open');
   }
@@ -663,7 +686,6 @@ function renderLesson() {
   const shell = document.getElementById('lesson-shell');
   shell.innerHTML = '';
   document.body.classList.remove('l2-mobile-active');
-  if (typeof updateCramProgressStrip === 'function') updateCramProgressStrip();
   if (!state.currentLessonId) {
     const subbed = typeof getSubscribedPath === 'function' ? getSubscribedPath() : null;
     if (subbed && subbed.kind === 'cram' && Array.isArray(subbed.days) && subbed.days.length) {

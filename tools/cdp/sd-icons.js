@@ -34,8 +34,10 @@ const EMOJI_SCAN = `((root) => (root.innerText.match(/\\p{Emoji_Presentation}|\\
   // somebody edits one of them.
   const app = await connect({ url: BASE, viewport: { width: 1280, height: 900 }, outDir: OUT });
   await app.sleep(1200);
+  // The rail's Design destination. Keyed `sysdesign` until D15 phase 2 closed
+  // the nav at three routed destinations and renamed it to match its route.
   const railMark = await app.eval(
-    `document.querySelector('[data-nav="sysdesign"] svg')?.innerHTML.trim() || ''`);
+    `document.querySelector('[data-nav="design"] svg')?.innerHTML.trim() || ''`);
   const railIcons = await app.eval(
     `[...document.querySelectorAll('.ds-appnav svg')].filter(s => s.classList.contains('ds-icon')).length`);
   const railTotal = await app.eval(`document.querySelectorAll('.ds-appnav svg').length`);

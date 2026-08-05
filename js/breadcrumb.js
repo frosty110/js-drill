@@ -79,8 +79,7 @@
 
   function href(c) {
     if (!c.appHref) return null;
-    // appHash() returns a page-relative URL ('index.html#/…'). Same-page links
-    // stay bare fragments so following one never reloads the app.
+    // Shared with ds/shell.js via the registry — see DrillRoutes.hrefFrom.
     const [page, hash] = String(c.appHref).split('#');
     return page === CFG.page ? '#' + hash : c.appHref;
   }

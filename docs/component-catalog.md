@@ -189,7 +189,9 @@ connections break the stateless assumption). Authoring an edge everywhere the
 component technically appears would rebuild the link farm the annotations exist
 to prevent, just with more words in it.
 
-Current shape: **196 edges over 60 components**, 3–10 per problem, ~6 on average.
+Current shape: **223 edges over 65 components** (63 mapped; `progressive-rollout` and
+`tenant-isolation` arrived with the governance category and have no edge yet), 3–10
+per problem, ~6 on average.
 
 ### Signature vs. supporting
 

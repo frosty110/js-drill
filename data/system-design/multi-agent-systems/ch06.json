@@ -1,0 +1,140 @@
+{
+  "id": "ch06",
+  "chapter": 6,
+  "part": "Part II: Building Multi-Agent Systems from Scratch",
+  "title": "Building Multi-Agent Workflows",
+  "summary": "Composing several agents into a deterministic flow: typed state passed between steps, branching and parallel fan-out expressed in code, checkpoints that make a long run resumable, and streaming observability that follows the task across every participant. Workflows are the predictable half of multi-agent design and should be the default wherever the sequence is knowable.",
+  "keyTakeaways": [
+    "In a workflow, code owns the control flow, so the trajectory is knowable, testable, and reproducible before any model runs.",
+    "Typed state between steps is what makes composition safe: each step declares what it consumes and produces, and violations fail at the seam instead of downstream.",
+    "Branching and fan-out belong in code where they can be reasoned about; the model's judgment is used inside steps, not to decide the shape of the flow.",
+    "Checkpointing turns a long workflow into something resumable — a failure at step seven should not re-run steps one through six, especially when they had side effects.",
+    "Streaming must be threaded through the whole workflow, not just the final step, so progress across agents is visible as it happens.",
+    "Each step is independently testable and evaluable, which is the largest practical advantage over an autonomous topology.",
+    "Idempotency and side-effect placement matter: steps that write should be idempotent, and irreversible actions belong late in the flow behind validation.",
+    "Workflows still need budgets and failure policy per step — retry, skip, degrade, or abort — decided deliberately rather than inherited from a framework default."
+  ],
+  "questions": [
+    {
+      "q": "What is the defining property of a multi-agent workflow?",
+      "options": [
+        "It uses more than one model provider",
+        "Code determines which agent runs when, so the sequence is known before execution",
+        "Agents communicate only through a shared database",
+        "Each agent runs in a separate process"
+      ],
+      "answer": 1,
+      "explain": "Control flow ownership is the distinction. Because the path is fixed in code, the workflow can be tested, reasoned about, cost-estimated, and resumed — none of which holds when a model decides each next step."
+    },
+    {
+      "q": "Why is typed state between steps important?",
+      "options": [
+        "Because types reduce token cost",
+        "Because frameworks require type annotations",
+        "Because each step declares what it consumes and produces, so a mismatch fails at the seam with a clear error instead of silently corrupting later steps",
+        "Because typed state enables parallel execution"
+      ],
+      "answer": 2,
+      "explain": "The handoff is where multi-agent systems break. A declared schema turns a prose summary into a checkable contract, and the failure surfaces at the boundary that caused it rather than three steps later as a bad answer."
+    },
+    {
+      "q": "Where should branching logic live in a workflow?",
+      "options": [
+        "In code, informed by model output where judgment is needed — so the flow's shape is explicit and testable",
+        "Entirely in the model, which decides its own next step",
+        "In the prompt, as instructions about what to do next",
+        "In the tool definitions"
+      ],
+      "answer": 0,
+      "explain": "A model can classify or decide within a step; code should act on that decision. Keeping the branch explicit means every path can be enumerated, tested, and monitored, which is the point of choosing a workflow at all."
+    },
+    {
+      "q": "What does checkpointing provide?",
+      "options": [
+        "Lower token usage per step",
+        "Resumability — a failure or restart continues from the last completed step rather than re-running earlier steps and repeating their side effects",
+        "Guaranteed determinism of model outputs",
+        "Automatic parallelization"
+      ],
+      "answer": 1,
+      "explain": "Long workflows fail partway for boring reasons: a timeout, a deploy, a rate limit. Persisting state after each step makes recovery cheap and prevents duplicate emails, duplicate charges, and duplicate writes."
+    },
+    {
+      "q": "Why must streaming be threaded through the entire workflow?",
+      "options": [
+        "Because providers require it for multi-step calls",
+        "Because otherwise the user sees nothing until the last step finishes, and long multi-agent runs become opaque waits with no way to intervene",
+        "Because streaming reduces cost",
+        "Because parallel steps cannot complete without it"
+      ],
+      "answer": 1,
+      "explain": "Progress has to be emitted by every participant and aggregated into one stream the interface can render. Retrofitting this onto a workflow that only returns a final value is substantially harder than designing it in."
+    },
+    {
+      "q": "What is the largest practical advantage of a workflow over an autonomous topology?",
+      "options": [
+        "It uses fewer agents",
+        "It cannot fail",
+        "Each step is independently testable and evaluable, so failures are attributable and regressions are catchable",
+        "It requires no prompts"
+      ],
+      "answer": 2,
+      "explain": "Per-step evaluation converts 'the output was bad' into 'the extraction step dropped the date'. Autonomous systems make the same diagnosis far harder because the trajectory differs every run."
+    },
+    {
+      "q": "How should side effects be positioned within a workflow?",
+      "options": [
+        "As early as possible, so failures happen sooner",
+        "Spread evenly across steps",
+        "Late, after validation, with writes made idempotent — so a retried or resumed run cannot duplicate them",
+        "Only in the first step"
+      ],
+      "answer": 2,
+      "explain": "Retry and resumption are normal, and neither is safe around non-idempotent writes. Deferring irreversible actions until the reversible work has validated also means most failures cost nothing but compute."
+    },
+    {
+      "q": "What must be decided per step rather than inherited from a framework default?",
+      "options": [
+        "The failure policy — retry, skip, degrade, or abort — along with the step's timeout and budget",
+        "The model's temperature",
+        "The serialization format",
+        "The logging library"
+      ],
+      "answer": 0,
+      "explain": "Steps differ: a flaky enrichment call should be skipped with a degraded result, while a failed policy check must abort. A single global retry policy gets both cases wrong, and framework defaults are rarely what your flow needs."
+    },
+    {
+      "type": "open",
+      "prompt": "Design a multi-agent workflow that ingests support tickets, enriches them with customer and order data, drafts a reply, and routes for approval. Cover state, failure policy, and observability.",
+      "points": [
+        "Define typed state that accumulates: ticket, classification, enrichment, draft, approval decision — each step declaring inputs and outputs.",
+        "Steps: classify and extract, enrich in parallel from independent sources, retrieve relevant policy and history, draft, self-check, route.",
+        "Parallelize the independent enrichment calls; keep drafting sequential since it needs everything.",
+        "Per-step failure policy: enrichment failures degrade with a noted gap; policy retrieval failure aborts to human; draft failure retries once then escalates.",
+        "Checkpoint after each step so a restart resumes rather than re-runs, and make any write idempotent.",
+        "Validate at each seam against the schema, with clear errors naming the step that failed.",
+        "Keep the irreversible action — sending the reply — last, behind approval and preview.",
+        "Stream progress with attribution so a reviewer sees which stage is running and what each produced.",
+        "Trace everything under one ticket id: prompts, retrieved context, tool calls, tokens, timings, and decisions.",
+        "Evaluate per step with its own labelled set, plus an end-to-end set for resolution quality, with cost and latency reported alongside."
+      ],
+      "answer": "I would model the workflow as an accumulating typed state: the ticket comes in, classification and extraction add structure, enrichment adds customer and order records, retrieval adds the relevant policy and prior interactions, and drafting adds a proposed reply plus its citations. Each step declares what it needs and what it contributes, so a missing field fails at the boundary that produced it rather than surfacing as a strange reply three steps later. The shape is mostly linear with one fan-out: enrichment calls to the customer system, the order system, and the ticket history are independent, so they run in parallel with individual timeouts, while drafting stays sequential because it needs all of them. Failure policy is decided per step rather than globally, which is the part teams usually get wrong. An enrichment source being down should degrade — draft the reply with a noted gap and flag it for the reviewer — because a partial reply is useful. Policy retrieval failing should abort to a human, because a reply that ignores refund policy is worse than no reply. Drafting failures retry once and then escalate. Every step checkpoints its state so a restart resumes at the failure point, and any write is idempotent, since resumption and retries are routine. Structurally, the one irreversible action — sending — sits last, after validation and behind an approval step with a preview of the exact message. Everything before it is reversible compute, so most failures cost nothing but tokens. Observability threads through the whole flow: progress streams with attribution so the reviewer can see which stage is running and what each produced, and a single trace keyed to the ticket id records prompts, retrieved context, tool calls with arguments, token counts, timings, and each decision. For evaluation, every step gets its own labelled set — classification accuracy, enrichment correctness, retrieval recall, draft quality given fixed context — alongside an end-to-end set measuring resolution, with cost and p95 latency reported in the same table so a quality gain bought with triple the spend is visible as the tradeoff it is.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "When does a workflow stop being the right structure, and what are the signs you should move part of it to an autonomous agent?",
+      "points": [
+        "The flow requires steps that cannot be enumerated in advance because they depend on intermediate findings.",
+        "Branch count explodes — the code accumulates conditionals for cases nobody anticipated, and coverage keeps slipping.",
+        "Inputs are far more varied than the flow assumed, so the fixed path handles a shrinking share of real traffic.",
+        "Recovery from unexpected states is being hand-coded case by case, which is where an agent's adaptability genuinely helps.",
+        "Signs it is NOT time: the flow is long but predictable, or the team simply wants more sophistication.",
+        "Preferred move: keep the deterministic skeleton and make one step autonomous, rather than replacing the whole workflow.",
+        "Add bounds when you do: step budgets, tool scoping, verification, and human gates on consequential actions.",
+        "Measure before and after on the same evaluation set, including cost, latency, and variance."
+      ],
+      "answer": "A workflow stops fitting when the steps genuinely cannot be enumerated in advance — when what to do next depends on what the previous step found, and the space of findings is open. The clearest symptom is branch explosion: the code grows conditionals for cases nobody anticipated, each new customer or document type adds another, and the team is effectively hand-coding the judgment a model could exercise. A related symptom is that the fixed path handles a shrinking share of real traffic while an ever-larger tail falls through to a default that does nothing useful. And a third is that most of the recent commits are recovery logic for unexpected states, which is exactly the work agents are good at absorbing. What is not a sign: a long but predictable flow, or a wish for a more impressive architecture. Length is not variability, and a twelve-step deterministic pipeline that works is a good system. The move I would make is surgical rather than wholesale. Keep the deterministic skeleton — the parts that are stable, that have side effects, and that carry risk — and make one step autonomous: the step that has to interpret something unpredictable. That preserves the testability, resumability, and cost predictability of the workflow everywhere except where the variance actually lives. When I do that, the autonomous step gets bounds it did not need as code: a step budget, a narrow tool set, verification of its output against the schema the next step expects, and no direct access to irreversible actions. And I would treat it as an experiment — same evaluation set before and after, comparing not just quality but cost, p95 latency, and run-to-run variance, because the honest cost of autonomy is usually paid in the last two and only shows up if you measure them."
+    }
+  ]
+}

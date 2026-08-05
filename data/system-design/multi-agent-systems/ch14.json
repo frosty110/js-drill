@@ -1,0 +1,141 @@
+{
+  "id": "ch14",
+  "chapter": 14,
+  "part": "Part V: Real-World Applications",
+  "title": "Case Study: Business Questions from Unstructured Data",
+  "summary": "A production case study: answering analytical questions over a corpus of documents that were never designed to be queried. The lesson is that the winning architecture is mostly deterministic — extract structure once, query the structure many times — with model calls concentrated where judgment is genuinely required, and cost controlled by a cheap-scan-then-expensive-analysis tier.",
+  "keyTakeaways": [
+    "Analytical questions over documents are not a retrieval problem: 'how many suppliers raised prices last quarter' cannot be answered by fetching the top five chunks.",
+    "The durable pattern is extract-then-query: convert documents into structured records once, then answer questions with ordinary queries over that structure.",
+    "Extraction is where quality is won — a defined schema, per-field confidence, and provenance back to the source span make every downstream answer auditable.",
+    "Tiering controls cost: a cheap model scans and filters at corpus scale, and an expensive model handles only the documents or fields that need judgment.",
+    "Deterministic aggregation beats asking a model to count: once records exist, sums and counts should be computed in code, not generated.",
+    "Provenance is the trust mechanism — every number in an answer should be traceable to the records and documents that produced it.",
+    "Incremental processing matters: corpora grow and documents get revised, so extraction must be re-runnable per document with versioned outputs.",
+    "Evaluate extraction per field against a labelled sample, separately from end-to-end answer quality, because a field-level error silently poisons every aggregate."
+  ],
+  "questions": [
+    {
+      "q": "Why is a naive RAG pipeline a poor fit for analytical questions over a document corpus?",
+      "options": [
+        "Because embeddings cannot represent business documents",
+        "Because retrieval returns a handful of relevant passages, while questions like 'how many' or 'which suppliers' require completeness over the whole corpus",
+        "Because documents are too long to embed",
+        "Because analytical questions require finetuning"
+      ],
+      "answer": 1,
+      "explain": "Retrieval optimizes relevance, not completeness. An aggregate computed from the top-k chunks is an aggregate over a biased sample, and it will be confidently wrong in a way that looks authoritative."
+    },
+    {
+      "q": "What is the extract-then-query pattern?",
+      "options": [
+        "Retrieve documents, then ask the model to summarize them",
+        "Convert each document into structured records once, then answer questions with ordinary queries over that structure",
+        "Query a database first and use documents only as a fallback",
+        "Extract embeddings and query them by similarity"
+      ],
+      "answer": 1,
+      "explain": "It moves the expensive, error-prone model work to ingest time, where it happens once per document and can be verified, and makes question answering a cheap, deterministic query — which is also repeatable and auditable."
+    },
+    {
+      "q": "What should each extracted record carry beyond its values?",
+      "options": [
+        "The full document text",
+        "The embedding used for retrieval",
+        "Per-field confidence and provenance — the source document and the span the value came from",
+        "The model's reasoning trace"
+      ],
+      "answer": 2,
+      "explain": "Provenance is what makes an aggregate checkable: a surprising number can be traced to the records and then to the sentences behind them. Confidence lets low-certainty fields be routed to review rather than silently averaged in."
+    },
+    {
+      "q": "How does tiering control cost at corpus scale?",
+      "options": [
+        "By processing documents in batches overnight",
+        "By compressing documents before extraction",
+        "By using a cheap model to scan and filter every document, and reserving an expensive model for the subset needing real judgment",
+        "By caching identical documents"
+      ],
+      "answer": 2,
+      "explain": "Most documents in a corpus are irrelevant to a given question or trivially handled. Spending frontier-model tokens on all of them is the common cost mistake; a cheap first pass usually cuts spend by an order of magnitude."
+    },
+    {
+      "q": "Why should aggregation be computed in code rather than by the model?",
+      "options": [
+        "Because models cannot read numbers",
+        "Because generated arithmetic is approximate and unverifiable, while a query over extracted records is exact, reproducible, and auditable",
+        "Because code is faster to write",
+        "Because providers charge extra for arithmetic"
+      ],
+      "answer": 1,
+      "explain": "Counting and summing are exactly where token-by-token generation is weakest and where confident errors are least detectable. Once records exist, the aggregate is a database operation with a definite answer."
+    },
+    {
+      "q": "What makes provenance the trust mechanism in this architecture?",
+      "options": [
+        "It reduces hallucination by improving the prompt",
+        "Every figure in an answer can be traced back through records to source spans, so a surprising result can be verified rather than believed",
+        "It allows the system to skip evaluation",
+        "It compresses the corpus"
+      ],
+      "answer": 1,
+      "explain": "Analysts do not accept numbers they cannot check. A drill-down path from the answer to the contributing records to the original sentence is what turns the output from a claim into evidence."
+    },
+    {
+      "q": "Why must extraction be re-runnable per document with versioned outputs?",
+      "options": [
+        "Because corpora grow and documents get revised, and because improving the extractor requires reprocessing without redoing everything or losing the prior results",
+        "Because providers deprecate models",
+        "Because storage is cheap",
+        "Because versioning is required for embeddings"
+      ],
+      "answer": 0,
+      "explain": "Ingest is continuous and the schema evolves. Per-document, versioned extraction supports incremental processing, targeted reprocessing after an extractor improvement, and comparison between extractor versions."
+    },
+    {
+      "q": "Why evaluate extraction per field rather than only end to end?",
+      "options": [
+        "Because end-to-end evaluation is impossible here",
+        "Because a systematically wrong field silently poisons every aggregate that uses it, and only field-level measurement against labelled samples surfaces that",
+        "Because field-level evaluation is cheaper",
+        "Because aggregates cannot be evaluated"
+      ],
+      "answer": 1,
+      "explain": "An answer can look plausible while resting on a field that is wrong 30% of the time. Labelled field-level accuracy, sliced by document type and format, is what catches that before it reaches a decision."
+    },
+    {
+      "type": "open",
+      "prompt": "Design a system that answers questions like 'which vendors changed their terms in the last two quarters, and by how much' over thousands of contracts and emails.",
+      "points": [
+        "Reject the pure-RAG approach: the questions are analytical and need completeness, not top-k relevance.",
+        "Define a schema for the entities and facts that matter — vendor, contract, term type, value, effective date — driven by the questions the business asks.",
+        "Ingest pipeline: classify document type, route to a type-specific extractor, produce records with per-field confidence and provenance spans.",
+        "Tier for cost: a cheap model filters and classifies at corpus scale; an expensive model extracts only from documents that matter.",
+        "Normalize and resolve entities so the same vendor across documents maps to one identity — the hardest and most valuable step.",
+        "Store records in a queryable database; answer questions with deterministic queries plus a model layer only for interpreting the question and phrasing the answer.",
+        "Provenance drill-down from every figure to its records and source spans.",
+        "Handle low-confidence extractions with human review queues rather than silently including them.",
+        "Incremental, versioned reprocessing as documents arrive or extractors improve.",
+        "Evaluate per field against a labelled sample and end to end on real business questions, with cost per document tracked."
+      ],
+      "answer": "The first decision is to stop treating this as retrieval. 'Which vendors changed terms and by how much' is an aggregate over the whole corpus, and any answer built from the top-k most similar chunks is an answer over a biased sample. So I design an extract-then-query system. I start from the questions the business actually asks and derive a schema: vendor, contract, term type, value, currency, effective date, and the change events relating them. The schema comes from the questions, not from the documents, or you extract a lot of things nobody queries. Ingest classifies each document by type and routes it to a type-specific extractor, because a signed contract, an amendment, and an email announcing a price change need different handling. Cost is controlled by tiering: a cheap model classifies and filters every document, and only the ones that plausibly contain a term change go to the strong extractor. At thousands of documents that difference is an order of magnitude. Every extracted record carries per-field confidence and a provenance span pointing back to the exact sentence, which is what makes the whole thing trustworthy later. Entity resolution is the step teams underestimate: the same vendor appears as three legal names and two abbreviations, and if that is not resolved, every aggregate is wrong in a way nobody notices. I would treat it as a first-class component with its own review queue. Records land in an ordinary database, and questions are answered by deterministic queries over them — the model interprets the question into a query and phrases the result, but it never does the counting, because generated arithmetic is unverifiable. Every figure in an answer drills down to its records and then to the source sentences. Low-confidence extractions go to a human review queue rather than being quietly included, so the analyst sees 'twelve confirmed changes, three pending review' rather than a false-precision number. Extraction is per document and versioned, so new documents process incrementally and an improved extractor can reprocess a subset without redoing everything. And evaluation runs at both levels: field-level accuracy against a labelled sample sliced by document type, plus end-to-end evaluation on real business questions, with cost per document tracked alongside.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "What are the failure modes of document-extraction pipelines that only appear at scale, and how do you guard against them?",
+      "points": [
+        "Long-tail document formats: scanned images, unusual layouts, tables split across pages, and languages the pipeline was not tested on.",
+        "Silent extraction failures — empty or defaulted fields that flow into aggregates as if they were real values.",
+        "Entity resolution errors that fragment or merge entities, corrupting every grouped aggregate.",
+        "Duplicate documents and near-duplicates double-counting facts.",
+        "Temporal errors: superseded documents, amendments, and effective-date confusion producing stale answers.",
+        "Cost blowouts from processing everything with the expensive path, or from reprocessing loops.",
+        "Drift as new document types enter the corpus after the extractor was validated.",
+        "Guards: per-field confidence with review queues, completeness checks and reconciliation totals, deduplication, versioned records with effective dating, sampling audits, and monitoring of extraction rates per field and per document type.",
+        "Alert on distribution shifts — a sudden drop in a field's fill rate usually means a format changed, not that reality changed."
+      ],
+      "answer": "At small scale you look at the outputs; at large scale you cannot, so the failures become silent. The first is the long tail of formats: scanned PDFs, tables split across pages, unusual layouts, and languages nobody tested. The extractor does not crash on these — it returns empty or partial records, which flow into aggregates as though the facts did not exist, so the answer is quietly incomplete rather than visibly broken. Guarding against it means treating empty as suspicious: monitor fill rates per field and per document type, and alert when a field's extraction rate drops, because that almost always means a format changed rather than that reality changed. Second is entity resolution. At a hundred documents you see that two vendor names are the same company; at fifty thousand you do not, and the aggregate silently fragments one supplier into three or merges two. That needs its own evaluation, a review queue for ambiguous merges, and reconciliation against an authoritative vendor list where one exists. Third, duplicates and near-duplicates: the same contract attached to four emails becomes four price changes. Content hashing plus fuzzy deduplication at ingest handles it, and it must run across the corpus, not just within a batch. Fourth, time. Amendments supersede contracts, documents are revised, and effective dates differ from signature dates — get this wrong and the system confidently reports terms that no longer apply. Versioned records with explicit effective dating and supersession links are the fix. Fifth, cost: processing everything with the expensive extractor, or reprocessing loops triggered by a schema change, produce bills that arrive a month later. Per-document cost tracking and tiering with hard budgets keep that bounded. Underneath all of it I would run continuous sampling audits — a human checking a random sample of records against their sources every week — because that is the only mechanism that catches the failure nobody predicted, and at scale it is the difference between a system that is trusted and one that is trusted incorrectly."
+    }
+  ]
+}

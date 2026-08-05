@@ -1,0 +1,141 @@
+{
+  "id": "ch11",
+  "chapter": 11,
+  "part": "Part III: Evaluating and Optimizing",
+  "title": "Optimizing Multi-Agent Systems",
+  "summary": "Making a working multi-agent system fast and affordable enough to run. The levers are the same ones that made it slow: how many agents participate, how much context each carries, how many turns and handoffs a task takes, which model each role uses, and how much work is repeated. Optimization starts with attribution — measuring where the tokens and seconds actually go — because intuition about agent cost is reliably wrong.",
+  "keyTakeaways": [
+    "Measure before optimizing: attribute cost and latency per agent, per step, and per phase, since the expensive part is rarely the one the team assumes.",
+    "The largest structural saving is usually collapsing the topology — removing agents and turns that do not change outcomes — not tuning the ones that remain.",
+    "Context discipline is the second lever: filtered views, structured summaries instead of full transcript replay, and retrieving less but better.",
+    "Right-size the model per role: extraction, classification, and formatting rarely need the strongest model, while one or two roles genuinely do.",
+    "Parallelize what is independent and cut serial handoffs, since in a multi-agent system latency is dominated by the number of sequential model calls.",
+    "Cache aggressively at three levels: shared prompt prefixes, repeated tool and retrieval results within a run, and whole responses for genuinely repeated requests.",
+    "Bound the pathological tail — loops, retries, runaway turn counts — because a small fraction of runs typically consumes a large share of total spend.",
+    "Re-run the evaluation set per slice after every optimization, because these changes trade quality in ways aggregates hide."
+  ],
+  "questions": [
+    {
+      "q": "Why does optimization start with attribution rather than with a known technique?",
+      "options": [
+        "Because providers require cost reporting",
+        "Because the expensive component is frequently not the one the team expects — cost and latency must be attributed per agent, step, and phase before anything is changed",
+        "Because attribution reduces cost by itself",
+        "Because techniques only work on measured systems"
+      ],
+      "answer": 1,
+      "explain": "In multi-agent systems, spend hides in unexpected places: transcript replay between turns, a verification agent that never changes the outcome, retries invisible in the happy path. Guessing produces optimizations that save nothing."
+    },
+    {
+      "q": "What is typically the largest structural saving available?",
+      "options": [
+        "Switching to a cheaper provider",
+        "Compressing prompts with an encoder",
+        "Removing agents and turns that do not change outcomes — collapsing the topology rather than tuning it",
+        "Reducing the output token limit"
+      ],
+      "answer": 2,
+      "explain": "Every agent and every turn is a model call plus its context. If the ablation shows a role does not change results, deleting it saves more than any prompt tuning, and it simplifies debugging at the same time."
+    },
+    {
+      "q": "How does context policy affect cost in a multi-agent system?",
+      "options": [
+        "It has no effect once caching is enabled",
+        "Sharing the full transcript with every agent makes context grow with each turn, so cost rises superlinearly — filtered views and structured summaries cut it dramatically",
+        "Context only affects latency, not cost",
+        "Longer context is always cheaper than more calls"
+      ],
+      "answer": 1,
+      "explain": "Everyone reading everything is the default in conversational topologies and the single biggest cost driver. Passing a structured state object and role-relevant material instead of the whole transcript often reduces spend several-fold with no quality loss."
+    },
+    {
+      "q": "What does right-sizing models per role mean in practice?",
+      "options": [
+        "Using the same model everywhere for consistency",
+        "Using the largest model for every agent to maximize quality",
+        "Assigning cheaper models to extraction, classification, and formatting roles while reserving strong models for the roles where judgment quality drives the outcome",
+        "Rotating models per request to avoid rate limits"
+      ],
+      "answer": 2,
+      "explain": "Roles differ enormously in difficulty. The saving is large because the cheap roles are usually the high-volume ones, and the requirement is measuring quality per role rather than assuming the downgrade was free."
+    },
+    {
+      "q": "Why is the number of sequential model calls the key latency metric?",
+      "options": [
+        "Because each call has a fixed network cost only",
+        "Because in an agent system wall-clock time is dominated by the chain of dependent calls — parallelizing independent work and removing handoffs matters more than making any single call faster",
+        "Because providers throttle sequential calls",
+        "Because parallel calls are always free"
+      ],
+      "answer": 1,
+      "explain": "Shaving 20% off one call barely registers when a task takes twelve sequential calls. Cutting the chain — fan out what is independent, merge roles that always run in sequence — is where the seconds are."
+    },
+    {
+      "q": "Which caching layers apply to multi-agent runs?",
+      "options": [
+        "Only whole-response caching",
+        "Shared prompt prefixes, repeated tool and retrieval results within a run, and full responses for genuinely repeated requests",
+        "Only vector index caching",
+        "Caching is not applicable because every run differs"
+      ],
+      "answer": 1,
+      "explain": "Even when the overall task is unique, agents re-fetch the same documents, re-run the same searches, and share the same long preamble. Caching those is usually the cheapest available win."
+    },
+    {
+      "q": "Why is bounding the pathological tail such a high-leverage optimization?",
+      "options": [
+        "Because tail runs are the slowest to log",
+        "Because a small fraction of runs — loops, retry storms, runaway turn counts — often consumes a disproportionate share of total spend, and capping them costs no quality",
+        "Because providers charge more for long runs",
+        "Because the tail determines the average"
+      ],
+      "answer": 1,
+      "explain": "Agent cost distributions are heavily skewed. Loop detection, step caps, and global retry budgets remove spend that produced nothing useful, which makes them the rare optimization with no quality tradeoff."
+    },
+    {
+      "q": "What must accompany every optimization?",
+      "options": [
+        "A re-run of the evaluation set per slice, since these changes trade quality in ways an aggregate score hides",
+        "A rollback plan only",
+        "A provider negotiation",
+        "An increase in the retry budget"
+      ],
+      "answer": 0,
+      "explain": "Downgrading a model, trimming context, or cutting a verification step can be free on most traffic and damaging on one slice. Slice-level measurement is what distinguishes a saving from a silent regression."
+    },
+    {
+      "type": "open",
+      "prompt": "A multi-agent research system costs four times its target per task and takes 90 seconds. Plan the optimization work.",
+      "points": [
+        "Instrument first: cost and latency attributed per agent, per turn, and per phase, with the distribution rather than the mean.",
+        "Identify tail runs — loops, excessive turns, retries — and cap them, since this is usually quality-neutral spend.",
+        "Ablate the topology: determine which agents and turns change outcomes, and remove the ones that do not.",
+        "Fix context policy: stop replaying full transcripts, pass structured state, give each agent only role-relevant material.",
+        "Cut sequential calls: parallelize independent research, merge roles that always run back to back, and reduce handoffs.",
+        "Right-size models per role, measuring quality per role after each downgrade.",
+        "Cache prefixes, tool results, and retrieval within and across runs.",
+        "Control output length and stop generating material nobody reads.",
+        "Improve perceived latency with streaming and partial results while absolute latency work continues.",
+        "Re-run the evaluation set per slice after each change and keep cost-per-task and p95 latency as monitored SLOs."
+      ],
+      "answer": "I would start by instrumenting rather than guessing, because in multi-agent systems the intuition about where the money goes is usually wrong. Cost and latency get attributed per agent, per turn, and per phase, and I look at the distribution rather than the average — agent spend is heavily skewed, and often a small percentage of runs consumes a large share of the budget through loops and retries. Capping that tail with loop detection, turn limits, and a global retry budget is the first change, because it removes spend that produced nothing and costs no quality. Next, the topology itself, which is where the structural savings are. I would run the ablation: does each agent change outcomes on the evaluation set? A verification agent that agrees 98% of the time is paying full price for nothing, and a specialist that duplicates another's research is worse than nothing. Collapsing those is usually the single biggest reduction available. Third, context. Conversational topologies default to sharing the whole transcript, which makes cost grow superlinearly with turns. Replacing that with a structured state object plus role-relevant material, and summarizing rather than replaying, commonly cuts spend several-fold without touching quality. Fourth, latency specifically: 90 seconds is a chain-length problem, not a per-call problem. I would fan out the independent research rather than running it serially, merge roles that always execute back to back, and cut handoffs. In parallel I would ship streaming and partial results, because perceived latency improves immediately even while the absolute number is still coming down. Then the routine levers: right-size the model per role with quality measured per role after each downgrade, cache the shared preamble and repeated tool and retrieval results, and rein in output length. Every one of these changes goes through the evaluation set with results per slice, since trimming context or downgrading a model is typically free on easy traffic and damaging on the hard slice. Finally I would leave cost-per-task and p95 latency behind as monitored SLOs with alerts, so the gains do not quietly erode.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "Explain why adding agents often degrades both cost and quality, and how to tell whether a given agent is earning its place.",
+      "points": [
+        "Each agent adds a model call plus its context, so cost and latency grow with participation regardless of contribution.",
+        "Information is lost at every handoff, so more agents means more opportunities for the task to be misunderstood.",
+        "Agents influence one another; an early wrong claim can be adopted, producing confident collective error.",
+        "Redundant work appears when ownership is unclear, with several agents deriving the same facts differently.",
+        "Context bloat degrades reasoning as transcripts fill with other agents' deliberation.",
+        "Test by ablation: remove the agent and compare on the same evaluation set, per slice, with variance.",
+        "Check contribution metrics: how often its output changes the final answer, how often it is overridden or ignored.",
+        "Check whether its role is distinguished by tools, permissions, or context — or only by name.",
+        "Keep it if it changes outcomes on a slice that matters or enforces a real boundary; otherwise fold it back in."
+      ],
+      "answer": "Because each additional agent adds cost unconditionally and adds quality only conditionally. The unconditional part is mechanical: another model call, another context to fill, another handoff to serialize. The conditional part is where it usually goes wrong. Every handoff is a lossy translation — the receiving agent gets a summary rather than the full picture, and constraints stated upstream quietly disappear. Agents also influence each other: in shared-context topologies an early confident claim gets adopted by everyone downstream, so the system produces collective errors a single agent would not have made, and the agreement reads as corroboration. Ownership ambiguity produces redundancy, with two researchers running the same searches and returning slightly different answers that then have to be reconciled. And context bloat degrades reasoning directly, because the transcript fills with other agents' deliberation and buries the task. To tell whether a specific agent earns its place, I run the ablation: remove it, run the same evaluation set with several runs per input, and compare per slice with variance reported. That is the honest test. Alongside it I look at contribution metrics from production traces — how often this agent's output actually changes the final answer, how often the manager overrides or ignores it, how often it produces something no other agent produced. A critic that agrees almost always is not verifying, it is billing. Then a design check: is this role distinguished by something real — different tools, different permissions, different context scope — or only by a name in a prompt? Roles that differ only in title are prompt sections that have been given their own model call. I keep an agent when it demonstrably changes outcomes on a slice that matters, or when it enforces a boundary I want structurally, such as separating the role that reads untrusted content from the one that can act. Everything else gets folded back into a single agent, which is almost always cheaper, faster, and easier to debug."
+    }
+  ]
+}

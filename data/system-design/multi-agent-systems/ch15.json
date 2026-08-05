@@ -1,0 +1,141 @@
+{
+  "id": "ch15",
+  "chapter": 15,
+  "part": "Part V: Real-World Applications",
+  "title": "Case Study: A Software Engineering Agent",
+  "summary": "Building an agent that works in a real codebase: managing a workspace, locating relevant code without reading the whole repository, making edits, and — the defining feature — using the build and test suite as a ground-truth feedback signal. Coding is the domain where verification is cheapest and most objective, which is why it is the most successful agent application and the best template for the rest.",
+  "keyTakeaways": [
+    "Executable feedback is the reason coding agents work: tests, compilers, and linters give an objective verdict that no judge model can override.",
+    "Workspace management is core infrastructure — an isolated checkout per run, deterministic setup, and cleanup — so runs cannot interfere with each other or with production.",
+    "Context selection is the hard problem: the repository does not fit, so the agent must find the relevant files through search, structure, and dependency traversal rather than bulk retrieval.",
+    "Edits should be applied as precise patches to specific locations, with the result verified by running something, rather than as wholesale file rewrites.",
+    "The loop is act-verify: change, run tests, read the failure, revise — with the test output as the observation that drives the next step.",
+    "Sandboxing is mandatory: the agent executes code it wrote from instructions that may include untrusted content, so it runs without production credentials or network access it does not need.",
+    "The deliverable should be a reviewable artifact — a branch and a pull request with a description and the test evidence — not a direct push.",
+    "Evaluate on real tasks with objective criteria (does it build, do tests pass, does the change fix the issue) plus cost, wall-clock, and human review time."
+  ],
+  "questions": [
+    {
+      "q": "Why are coding agents the most successful category of agent application?",
+      "options": [
+        "Because code is easier to generate than prose",
+        "Because the environment supplies objective feedback — compilers, type checkers, linters, and tests give a verdict that is checkable rather than judged",
+        "Because codebases are small enough to fit in context",
+        "Because developers are more tolerant of errors"
+      ],
+      "answer": 1,
+      "explain": "Verification is the scarce resource in agent design, and code provides it for free. That single property turns an unreliable generator into a system that can iterate toward a correct answer."
+    },
+    {
+      "q": "Why is workspace management treated as core infrastructure?",
+      "options": [
+        "Because agents need disk space for models",
+        "Because each run needs an isolated checkout with deterministic setup and cleanup, so concurrent runs cannot interfere and nothing touches production",
+        "Because git operations are slow",
+        "Because the model requires a filesystem to reason"
+      ],
+      "answer": 1,
+      "explain": "Agents make destructive changes and run arbitrary commands. An isolated, reproducible workspace per run is what makes those changes cheap to discard and impossible to leak into other work."
+    },
+    {
+      "q": "What is the central context problem for a coding agent?",
+      "options": [
+        "Code cannot be embedded",
+        "Repositories exceed any context window, so the agent must locate the relevant files through search, structure, and dependency traversal rather than loading everything",
+        "Models cannot read multiple files at once",
+        "Comments confuse the model"
+      ],
+      "answer": 1,
+      "explain": "Effectiveness is largely determined by context selection: finding the right handful of files. Symbol search, import graphs, test-to-source mapping, and reading only what is needed beat bulk similarity retrieval in a codebase."
+    },
+    {
+      "q": "Why should edits be applied as precise patches rather than whole-file rewrites?",
+      "options": [
+        "Because patches use fewer tokens and preserve unrelated code, making changes reviewable and reducing the chance of silently dropping code the model did not attend to",
+        "Because git cannot handle full-file changes",
+        "Because patches are always more accurate",
+        "Because full files exceed the output limit"
+      ],
+      "answer": 0,
+      "explain": "Rewriting a file asks the model to reproduce everything it did not intend to change, and it will occasionally drop or alter something. Targeted edits keep the diff small, which is both safer and far easier for a human to review."
+    },
+    {
+      "q": "What does the act-verify loop look like in a coding agent?",
+      "options": [
+        "Generate the full change, then ask a model to review it",
+        "Plan every edit up front, then apply them all and run tests once at the end",
+        "Make a change, run the relevant tests or build, read the actual failure output, and revise based on it",
+        "Generate several candidate patches and pick the longest"
+      ],
+      "answer": 2,
+      "explain": "The failure output is the observation that makes the next step informed. Running the build or tests after each meaningful change catches errors close to their cause rather than at the end of a large speculative edit."
+    },
+    {
+      "q": "Why is sandboxing mandatory for a coding agent?",
+      "options": [
+        "Because compilers are resource-intensive",
+        "Because it executes code it generated, in response to instructions that may include untrusted content — so it must run without production credentials or unnecessary network access",
+        "Because sandboxes make tests run faster",
+        "Because sandboxes prevent hallucination"
+      ],
+      "answer": 1,
+      "explain": "Running generated code is arbitrary code execution by definition, and issue text or dependency content can carry injected instructions. Isolation, scoped credentials, and restricted network are what bound the consequences."
+    },
+    {
+      "q": "What should a coding agent produce as its deliverable?",
+      "options": [
+        "A direct commit to the main branch, to minimize latency",
+        "A branch and a pull request with a description and the evidence that tests pass — a reviewable artifact rather than an applied change",
+        "A patch file emailed to the developer",
+        "A summary of what it would have changed"
+      ],
+      "answer": 1,
+      "explain": "The pull request is the natural human-approval boundary and already carries review tooling, CI, and history. It converts an irreversible action into a proposal with evidence attached."
+    },
+    {
+      "q": "How should a coding agent be evaluated?",
+      "options": [
+        "By the length and readability of its explanations",
+        "On real tasks with objective criteria — does it build, do the tests pass, does it resolve the issue — plus cost, wall-clock time, and the human review time it consumes",
+        "By the number of files it changes",
+        "By comparing its output to a reference implementation string"
+      ],
+      "answer": 1,
+      "explain": "Objective outcomes are available here, so use them. Human review time belongs in the metric because an agent that produces sprawling diffs a reviewer must untangle can cost more than it saves even when the tests pass."
+    },
+    {
+      "type": "open",
+      "prompt": "Design a coding agent that takes an issue from a tracker and produces a pull request. Cover context, the loop, safety, and quality.",
+      "points": [
+        "Workspace: isolated checkout per run with deterministic environment setup, dependency install, and teardown.",
+        "Context selection: locate relevant code by symbol and text search, import/dependency traversal, and test-to-source mapping rather than bulk retrieval.",
+        "Understand before editing: reproduce the issue with a failing test where possible, which also gives the success criterion.",
+        "Plan at a coarse level, then act-verify per change: apply a targeted patch, run the relevant tests, read the real failure output, revise.",
+        "Bound the loop: iteration cap, wall-clock and cost budgets, and stop-and-report when stuck rather than thrashing.",
+        "Safety: sandboxed execution with no production credentials, restricted network, and no ability to push to protected branches.",
+        "Treat issue text and third-party content as untrusted input that may contain injected instructions.",
+        "Deliverable: a branch and pull request with a clear description, the diff kept minimal, and test evidence included.",
+        "Quality gates: run the full suite plus linters and type checks, and keep the change scoped to the issue rather than opportunistically refactoring.",
+        "Evaluate on real historical issues with objective criteria, and track cost, latency, and reviewer time; feed rejected PRs back as evaluation cases."
+      ],
+      "answer": "The run starts with an isolated workspace: a fresh checkout at a known commit, deterministic environment setup, dependencies installed, and teardown afterwards, so concurrent runs cannot collide and nothing the agent does escapes the sandbox. Then context, which is where most of the quality comes from. The repository will not fit in the window, so the agent locates relevant code the way an engineer does — search for the symbols and strings named in the issue, follow imports and callers, and map from tests to the code they exercise — rather than embedding the codebase and retrieving by similarity, which in code returns superficially similar functions rather than the right one. Before editing, the agent tries to reproduce the problem, ideally by writing a failing test. That is the highest-value step in the whole design: it converts a vague issue into an objective success criterion, and it gives the loop something real to verify against. Then the loop is act-verify at small granularity: apply a targeted patch to a specific location, run the relevant tests, read the actual failure output, and revise from it. Small diffs and frequent verification keep errors close to their cause and keep the final diff reviewable. The loop is bounded — an iteration cap, wall-clock and cost budgets — and when it is stuck it stops and reports with what it tried, rather than thrashing through twenty speculative rewrites. Safety is structural: execution is sandboxed with no production credentials and no network beyond the package registry, and the agent cannot push to protected branches. Issue text, comments, and third-party content are treated as untrusted input, because an issue body is an attacker-writable channel into a system that executes code. The deliverable is a branch and a pull request with a description of the change, the reasoning, and the test evidence — never a direct push — so the existing review process is the approval gate. Before opening it, the full suite, linters, and type checks run, and the change is kept scoped to the issue rather than including opportunistic refactoring, which is the fastest way to make a diff unreviewable. For evaluation I would use real historical issues with objective criteria — builds, tests pass, issue resolved — and track cost, wall-clock, and especially reviewer time, since an agent whose PRs take an hour to review is not saving anything. Every rejected pull request becomes an evaluation case.",
+      "crux": true
+    },
+    {
+      "type": "open",
+      "prompt": "What generalizes from coding agents to other domains, and what does not?",
+      "points": [
+        "Generalizes: the act-verify loop — take an action, get objective feedback, revise — is the core pattern wherever verification exists.",
+        "Generalizes: investing in the environment (tools, feedback signals, sandboxes) rather than only in prompts.",
+        "Generalizes: small, reviewable, reversible units of change, delivered as proposals rather than applied actions.",
+        "Generalizes: context selection as the main quality lever, and bounded loops with honest stop-and-report.",
+        "Does not generalize: the availability of cheap, objective, automated verification — most domains have no test suite.",
+        "Consequence: other domains must manufacture verification — schema validation, cross-checking against sources, deterministic computation, human review — or accept weaker feedback.",
+        "Does not generalize: cheap reversibility, since a sent email or a payment cannot be discarded the way a branch can.",
+        "Consequence: where actions are irreversible, the human approval gate carries the weight that tests carry in coding.",
+        "Lesson: before building an agent in a new domain, ask what plays the role of the test suite — and if nothing does, build it or narrow the scope."
+      ],
+      "answer": "What generalizes is the loop and the mindset around the environment. Act, get objective feedback, revise — that structure is why coding agents work, and it applies anywhere feedback exists. So does the priority: the biggest wins come from investing in the environment the agent operates in, its tools, its feedback signals, its sandbox, rather than from another round of prompt tuning. So does the delivery model: small, scoped, reversible units of change offered as proposals with evidence attached, which is what the pull request pattern really is. And so does context selection as the dominant quality lever, along with bounded loops that stop and report honestly instead of thrashing. What does not generalize is the thing that makes all of it work: cheap, objective, automated verification. Code has compilers and tests; a marketing email, a customer reply, a financial analysis, and a medical summary have nothing comparable. The consequence is that in other domains you must manufacture verification rather than assume it — schema validation on outputs, entailment checks against retrieved sources, deterministic recomputation of anything numeric, cross-checks between independent methods, and human review where none of those reach. Teams that skip this step build a coding-agent-shaped system in a domain with no test suite and discover that their loop is iterating against its own opinion. The second thing that does not generalize is cheap reversibility. A bad branch is discarded for free; a sent email, a submitted filing, or a transferred payment is not. Where actions are irreversible, the human approval gate has to carry the weight that tests carry in coding, which changes the interaction design and the economics substantially. So the question I would ask before building an agent in a new domain is simply: what plays the role of the test suite here? If the answer is nothing, then the first project is building that — and if it cannot be built, the honest move is to narrow the agent's scope to proposing rather than acting."
+    }
+  ]
+}

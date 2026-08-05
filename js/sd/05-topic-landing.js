@@ -15,7 +15,7 @@ async function renderTopics() {
     const s = topicStats(t.id);
     html += `
       <button class="topic-card" data-topic="${t.id}">
-        <span class="topic-icon">${t.icon || '📘'}</span>
+        <span class="topic-icon sd-badge" aria-hidden="true">${icon(t.icon || 'book', 24)}</span>
         <span class="topic-body">
           <span class="topic-title">${esc(t.title)}</span>
           <div class="topic-kind">${esc(t.kind || '')}</div>
@@ -24,7 +24,7 @@ async function renderTopics() {
             <span class="ch-frac">${s.mastered}/${s.total}</span>
             ${workLabel(s)}</div>
         </span>
-        <span class="ch-chevron">›</span>
+        <span class="ch-chevron" aria-hidden="true">${icon('chevron-right', 17)}</span>
       </button>`;
   }
   app.innerHTML = html;

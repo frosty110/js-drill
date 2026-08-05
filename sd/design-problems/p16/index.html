@@ -33,6 +33,18 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">6</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — Event and seat-map reads, which vastly outnumber bookings. Availability counts are cached loosely on purpose; the actual hold stays transactional.</li>
+      <li><a href="../../../sd/components/c/idempotency/">Idempotency</a> <span class="ds-chip">signature</span> — Booking requests carry a key, so a double-tap or a lost response does not leave one user holding two seats for the same show.</li>
+      <li><a href="../../../sd/components/c/reservation/">Reservation / Hold</a> <span class="ds-chip">signature</span> — Seats are held for the duration of checkout with an expiry — the mechanism that prevents overselling without locking for the whole session.</li>
+      <li><a href="../../../sd/components/c/relational-db/">Relational Database</a> — Enforces seat uniqueness transactionally; overselling is the specific failure this store is chosen to make impossible.</li>
+      <li><a href="../../../sd/components/c/distributed-lock/">Distributed Lock</a> — Guards the seat-hold critical section under flash-sale contention, where optimistic retry alone would thrash.</li>
+      <li><a href="../../../sd/components/c/rest-api/">REST</a> — The booking surface, where PUT/POST semantics and idempotency keys decide whether a double-tap books two seats.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Browse events, view a seat map with availability, hold seats, pay, receive a confirmed booking; cancel/refund.</li><li>No seat may ever be double-booked — strong consistency on inventory.</li><li>Clarify: reserved seating vs general admission, hold duration, one event or global scale.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>Averages mislead — the system is defined by the on-sale burst</li><li>A 100K-seat stadium with 1M+ fans arriving in the first minute</li><li>Seat-map and availability reads spike to hundreds of thousands per second</li><li>The dangerous number is contention, not raw TPS: thousands of requests converge on the same few hot seat rows</li><li>Total inventory is tiny (100K seats) yet brutally hammered — size for the peak and throttle admission to what booking can safely serialize</li></ul>

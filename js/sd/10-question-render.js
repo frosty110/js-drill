@@ -65,7 +65,7 @@ function renderQuestion() {
       <span class="q-tag open">Explain &amp; apply</span>
       <p class="q-stem">${fmt(q.prompt)}</p>
       ${briefHtml(it, ch)}
-      <p class="open-hint">🗣️ <b>Say your answer out loud</b> as if in the interview — then reveal the model answer and grade yourself honestly.</p>
+      <p class="open-hint">${icon('mic', 15)}<b>Say your answer out loud</b> as if in the interview — then reveal the model answer and grade yourself honestly.</p>
       <textarea class="open-scratch" placeholder="(optional) jot key points…"></textarea>
       <div id="explain-slot"></div>
       <div class="action-bar" id="action-bar"><button class="cta ds-btn ds-btn--primary" id="reveal-btn">Reveal model answer</button></div>`;
@@ -89,7 +89,7 @@ function renderQuestion() {
     <div id="progress-wrap"><div id="progress-bar" style="width:${pct}%"></div></div>
     <div class="sess-meta">
       <span>${esc(session.title)} — ${session.pos + 1}/${total}${session.mixed ? '' : ` · <span class="q-tag" style="margin:0;padding:1px 6px">${tag}</span>`}</span>
-      <span>${session.streak >= 3 ? `<span class="streak">🔥 ${session.streak} streak</span>` : `${session.right} correct`}<button class="q-link" id="q-link" title="Copy a link to this question" aria-label="Copy a link to this question">🔗</button></span>
+      <span>${session.streak >= 3 ? `<span class="streak">${icon('flame', 13)}${session.streak} streak</span>` : `${session.right} correct`}<button class="q-link" id="q-link" title="Copy a link to this question" aria-label="Copy a link to this question">${icon('link', 15)}</button></span>
     </div>
     ${bodyHtml}
     <p class="kbd-hint">${hint}</p>`;
@@ -105,8 +105,13 @@ function renderQuestion() {
     const n = (ch.questions || []).indexOf(q) + 1;
     if (!n || !window.DrillRoutes) return;
     const url = DrillRoutes.shareUrl('sdUnit', { topic: it.topic, unit: it.chId }, null, { anchor: `q${n}` });
-    qLink.textContent = (await copyText(url)) ? '✓' : '✕';
-    setTimeout(() => { qLink.textContent = '🔗'; }, 1400);
+    const ok = await copyText(url);
+    qLink.innerHTML = icon(ok ? 'check' : 'x', 15);
+    qLink.classList.add(ok ? 'is-ok' : 'is-bad');
+    setTimeout(() => {
+      qLink.innerHTML = icon('link', 15);
+      qLink.classList.remove('is-ok', 'is-bad');
+    }, 1400);
   });
 
   session.answered = false;
@@ -137,7 +142,7 @@ function selectAnswer(choice) {
     else el.classList.add('is-muted');
   });
   document.getElementById('explain-slot').innerHTML =
-    `<div class="explain ${correct ? 'correct' : 'wrong'}"><span class="verdict ${correct ? 'correct' : 'wrong'}">${correct ? '✓ Correct.' : '✗ Not quite.'}</span>${fmt(q.explain)}</div>`
+    `<div class="explain ${correct ? 'correct' : 'wrong'}"><span class="verdict ${correct ? 'correct' : 'wrong'}">${correct ? icon('check-circle', 15) + ' Correct.' : icon('x-circle', 15) + ' Not quite.'}</span>${fmt(q.explain)}</div>`
     + (diagrams.length ? `<div id="mc-diag"></div>` : '');
   if (diagrams.length) renderDiagramDeck(document.getElementById('mc-diag'), diagrams, 'Answer visual');
   showNext();

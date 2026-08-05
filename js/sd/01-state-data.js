@@ -118,17 +118,53 @@ function componentEdges(id) {
   const byProblem = (EDGES && EDGES[id]) || {};
   return Object.keys(byProblem).sort().map(pid => ({ problem: pid, note: byProblem[pid] }));
 }
-// The reverse lookup a design problem needs: its mechanisms, resolved to
-// components, carrying the same annotation the component page shows.
+// The reverse lookup a design problem needs. The EDGE FILE is the graph's
+// source of truth here, NOT `tags.mechanism`: the facet indexes each problem's
+// 2–4 HEADLINE mechanisms and has to stay small enough to work as a filter (60
+// chips would be unusable on a phone), while the catalog is deliberately finer
+// — a problem leans on ~6 components, not 3. Deriving this from the tags would
+// have hidden most of the parts list behind a filter-sizing decision.
+//
+// The tagged ones are still distinguished: they are what an interviewer probes,
+// so they sort first and carry a marker. Iteration order is the catalog's
+// authored order, so the list is stable between renders.
 function problemComponents(pid, mechanisms) {
-  return (mechanisms || []).map(m => {
-    const cid = componentForMechanism(m);
-    const c = cid ? componentById(cid) : null;
-    return c ? { component: c, note: ((EDGES && EDGES[cid]) || {})[pid] || '' } : null;
-  }).filter(Boolean);
+  const signature = new Set((mechanisms || []).map(componentForMechanism).filter(Boolean));
+  const out = [];
+  for (const [cid, byProblem] of Object.entries(EDGES || {})) {
+    const note = byProblem[pid];
+    if (!note) continue;
+    const c = componentById(cid);
+    if (c) out.push({ component: c, note, signature: signature.has(cid) });
+  }
+  return out.sort((a, b) => (b.signature ? 1 : 0) - (a.signature ? 1 : 0));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+// Every glyph on this page comes through here (invariant 9). It exists for the
+// default size — 15px is the in-button size and most calls want it — and for the
+// unknown-name guard below; alignment already rides along on .ds-icon.
+//
+// A name that isn't in DS_ICONS makes dsIcon return '' — an icon that silently
+// isn't there, on a page that still renders. That failure is what
+// tools/check-icons.js exists to catch at build time, so the throw here is the
+// same rule enforced at the other end: loud in dev, and unreachable once the
+// gate is green.
+function icon(name, size = 15) {
+  if (typeof dsIcon !== 'function') return '';
+  const svg = dsIcon(name, size);
+  if (!svg) console.error(`[icons] unknown ds icon: ${name}`);
+  return svg;
+}
+
+// Static header markup can't call icon() inline, so it declares the name and
+// this fills it once at boot — the same shape as the app's upgradeTopbarIcons().
+function mountChromeIcons() {
+  document.querySelectorAll('[data-icon]').forEach(el => {
+    el.innerHTML = icon(el.dataset.icon, +el.dataset.iconSize || 15);
+  });
+}
 function fmt(s) { return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'); }
 function shuffle(a) { const r = a.slice(); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[r[i], r[j]] = [r[j], r[i]]; } return r; }

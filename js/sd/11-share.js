@@ -114,7 +114,7 @@ function openShareSheet(t, ch) {
     <div class="ds-sheet ds-sheet--scroll" role="dialog" aria-modal="true" aria-label="Share this unit">
       <div class="share-head">
         <h2 class="ds-h2">Share</h2>
-        <button class="ds-iconbtn" data-share-close aria-label="Close share">✕</button>
+        <button class="ds-iconbtn" data-share-close aria-label="Close share">${icon('x', 20)}</button>
       </div>
       <p class="share-lede">A link to <strong>${esc(ch.title)}</strong>${hasCode ? ` carrying your results — ${s.full} solid, ${s.partial} partial, ${s.missed} missed` : ''}. Paste it to an AI to be drilled on exactly what you're shaky on.</p>
       <input class="ds-field share-url" data-share-url readonly value="${esc(url)}" aria-label="Share URL" spellcheck="false">
@@ -135,20 +135,23 @@ function openShareSheet(t, ch) {
   const field = scrim.querySelector('[data-share-url]');
   field.addEventListener('focus', () => field.select());
 
-  const flash = (btn, msg) => {
-    const original = btn.textContent;
-    btn.textContent = msg; btn.disabled = true;
-    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1600);
+  // The confirmation carries an icon, so it restores innerHTML rather than
+  // textContent — the latter would strip the button's own glyphs on the way back.
+  const flash = (btn, ok) => {
+    const original = btn.innerHTML;
+    btn.innerHTML = ok ? icon('check', 15) + ' Copied' : icon('alert', 15) + ' Copy failed';
+    btn.disabled = true;
+    setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 1600);
   };
   scrim.querySelector('[data-share-copy]').addEventListener('click', async e => {
     const btn = e.currentTarget;
     if (navigator.share && matchMedia('(pointer: coarse)').matches) {
       try { await navigator.share({ title: ch.title, url }); return; } catch (_) {}
     }
-    flash(btn, await copyText(url) ? '✓ Copied' : '✗ Copy failed');
+    flash(btn, await copyText(url));
   });
   scrim.querySelector('[data-share-ai]').addEventListener('click', async e => {
-    flash(e.currentTarget, await copyText(buildUnitAiPayload(t, ch)) ? '✓ Copied' : '✗ Copy failed');
+    flash(e.currentTarget, await copyText(buildUnitAiPayload(t, ch)));
   });
 }
 

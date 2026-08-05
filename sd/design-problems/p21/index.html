@@ -33,6 +33,19 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">7</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/sharding/">Sharding</a> <span class="ds-chip">signature</span> — The core mechanic. The keyspace is divided across nodes by ring position, and every other feature in the design is built on top of that division.</li>
+      <li><a href="../../../sd/components/c/replication/">Replication</a> <span class="ds-chip">signature</span> — N replicas per key range with tunable W and R — where this problem&#39;s entire consistency-versus-availability conversation actually lives.</li>
+      <li><a href="../../../sd/components/c/consistent-hashing/">Consistent Hashing</a> <span class="ds-chip">signature</span> — Assigns key ranges to nodes and defines the replica set as the next N nodes clockwise from the key&#39;s ring position.</li>
+      <li><a href="../../../sd/components/c/conflict-resolution/">Conflict Resolution</a> <span class="ds-chip">signature</span> — Concurrent writes accepted by different replicas are reconciled with version vectors, since a quorum permits them by construction.</li>
+      <li><a href="../../../sd/components/c/service-discovery/">Service Discovery</a> — Propagates ring membership so every node agrees on who owns which key range — usually by gossip rather than a central registry.</li>
+      <li><a href="../../../sd/components/c/quorum/">Quorum (N/W/R)</a> — Tunable N/W/R is the interface through which this design exposes the consistency-availability tradeoff to its callers.</li>
+      <li><a href="../../../sd/components/c/bloom-filter/">Bloom Filter</a> — Sits in front of each SSTable so a read skips files that certainly do not hold the key.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li><code>get(key)</code>, <code>put(key, value)</code>, <code>delete(key)</code> over opaque values. No joins, secondary indexes, or multi-key transactions.</li><li>An AP store: always writable, tolerating temporary inconsistency — not a CP store that refuses writes during a partition.</li><li>Survive f simultaneous node failures (which sets the replication factor N); no single point of failure.</li><li>Out of scope: range scans over arbitrary keys, strong multi-key transactions, rich queries.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100 TB logical at N=3 → 300 TB physical; LSM compaction wants headroom, so provision ~450 TB</li><li>At 4–8 TB usable per node → roughly 60–110 nodes</li><li>1M ops/s spread over that is only ~10K per node — this cluster is storage-bound, not CPU-bound</li><li>Quorum reads at R=2 roughly double the internal request rate, so network fan-out is part of sizing</li><li>128–256 virtual nodes per physical node so ownership is even and a failed node rebuilds from many peers</li><li>Single-digit-millisecond p99 for reads and writes</li></ul>

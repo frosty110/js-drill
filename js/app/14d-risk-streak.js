@@ -2,7 +2,7 @@
 //  AT-RISK MODAL — decay-radar union of dueAt + weakness + revealed flags
 // ──────────────────────────────────────────────────────────────────────────
 function initAtRiskModal() {
-  // iter 60: 📡 At Risk — opens decay-radar modal with union-of-3-signals
+  // iter 60: At Risk — opens decay-radar modal with union-of-3-signals
   // list. Closes iter-59 roadmap entry #1. The modal lists up to 7 rows;
   // each row is tap-to-jump to that lesson at the appropriate tab.
   const atRiskModal = document.getElementById('at-risk-modal');
@@ -10,7 +10,7 @@ function initAtRiskModal() {
     const rows = _atRiskRows(7);
     const body = document.getElementById('at-risk-body');
     if (!rows.length) {
-      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons! 🎉</div>`;
+      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">All clear — no wobbly or revealed lessons.</div>`;
     } else {
       // iter 33 (refine): urgency-shape inventory above the cards. ADHD/phone
       // user sees the distribution upfront ("2 DUE NOW · 1 SOON · 1 NO-SR")
@@ -37,7 +37,7 @@ function initAtRiskModal() {
           ? `<span style="color:#fdba74; font-size:11px;">⚠ ${r.weaknessCount}×</span>`
           : '';
         const revealDot = r.revealedLevels.length > 0
-          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(255,206,90,0.12); border:1px solid rgba(255,206,90,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">🃏 ${escapeHtml(r.revealedLevels.join('+'))}</span>`
+          ? `<span style="color:#e9d5ff; font-size:11px; background:rgba(255,206,90,0.12); border:1px solid rgba(255,206,90,0.3); border-radius:999px; padding:2px 8px;" title="Mastered with reveal — drill clean to clear">${dsIcon('cards', 15)}${escapeHtml(r.revealedLevels.join('+'))}</span>`
           : '';
         return `<button data-lesson-id="${escapeHtml(r.lessonId)}" style="text-align:left; padding:12px 14px; border-radius:8px; background:#262930; border:1px solid #363a43; color:#eef0f2; cursor:pointer; display:flex; flex-direction:column; gap:6px;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -77,7 +77,7 @@ function initAtRiskModal() {
 // ──────────────────────────────────────────────────────────────────────────
 //  STREAK MAP MODAL — 60-day calendar density heatmap
 // ──────────────────────────────────────────────────────────────────────────
-// iter 62: 📅 Streak Map — 60-day calendar density heatmap. Renders a 9-column
+// iter 62: Streak Map — 60-day calendar density heatmap. Renders a 9-column
 // grid of 60 day-cells (oldest top-left → today bottom-right); cell color depth
 // reflects events that day; tooltip shows date + breakdown on hover/tap, and a
 // tap on a day with misses surfaces drill-route buttons. Extracted from the old
@@ -105,8 +105,8 @@ function renderActivityInto(rootEl, closeFn) {
   const rateStr = rate >= 10 ? String(Math.round(rate)) : rate.toFixed(1);
   const successRate = (wkPass + wkMiss) > 0 ? Math.round(wkPass / (wkPass + wkMiss) * 100) : null;
   const streakLine = streak > 0
-    ? `🔥 <strong style="color:#f5b62b;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
-    : `<span style="color:#9aa0aa;">No streak yet — one solve today starts it 🔥</span>`;
+    ? `${dsIcon('flame', 15)}<strong style="color:#f5b62b;">${streak}-day streak</strong>${todayActive ? '' : ` · <span style="color:#fca5a5;">drill today to keep it</span>`}`
+    : `<span style="color:#9aa0aa;">No streak yet — one solve today starts it.</span>`;
   const chip = (label, value, color) =>
     `<div style="flex:1; background:#17181c; border:1px solid #262930; border-radius:8px; padding:8px 10px; text-align:center;">
        <div style="font-size:18px; font-weight:700; color:${color};">${value}</div>

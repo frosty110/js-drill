@@ -4,7 +4,7 @@
 //  on click. Some force a render on flip to engage/disengage immediately.
 // ──────────────────────────────────────────────────────────────────────────
 function initSettingsToggles() {
-  // iter 117: 🎤 Clarify-First Ritual — opt-in toggle (default OFF).
+  // iter 117: Clarify-First Ritual — opt-in toggle (default OFF).
   // ON state painted sky-200 (matches button hover color). Toggling resets
   // the in-memory per-session completion set so flipping ON immediately
   // gates the current lesson's L3 (no need to re-navigate).
@@ -25,7 +25,7 @@ function initSettingsToggles() {
     });
   }
 
-  // iter 118: 🔥 Hot-Seat Follow-Up — opt-in toggle (default OFF).
+  // iter 118: Hot-Seat Follow-Up — opt-in toggle (default OFF).
   // Rose-200 hover when ON. No re-render needed on flip — only affects
   // the next L3-pass moment.
   const hotseatBtn = document.getElementById('hotseat-btn');
@@ -85,7 +85,7 @@ function initSettingsToggles() {
     });
   }
 
-  // iter 141: 📳 Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
+  // iter 141: Haptic Tap-Pulse — opt-in toggle (default OFF). Fuchsia-200
   // hover when ON. Auto-hides on platforms without the Vibration API (iOS
   // Safari, desktop without vibration motor) so the user never sees a toggle
   // that does nothing. The capability check is at MOUNT time, not click time
@@ -113,7 +113,7 @@ function initSettingsToggles() {
     }
   }
 
-  // 🖍 ADHD Mode — opt-in toggle (default OFF). Purple-200 hover when ON.
+  // ADHD Mode — opt-in toggle (default OFF). Purple-200 hover when ON.
   // Restyles the Conversation tab with bionic word-heads + marker highlight
   // on backtick code terms + looser spacing. The body.adhd-mode class drives
   // the CSS for marker + spacing; bionic markup is render-time gated, so we
@@ -136,10 +136,10 @@ function initSettingsToggles() {
     });
   }
 
-  // 🔠 Font scale — cycles md (1.0×) → lg (1.125×, default) → xl (1.25×) → md.
+  // Font scale — cycles md (1.0×) → lg (1.125×, default) → xl (1.25×) → md.
   // The --font-scale CSS variable on :root drives html font-size so every
   // rem-based value scales uniformly. Button label reflects the current step
-  // ("🔠 Font: M / L / XL") so users see the state without opening a menu.
+  // (dsIcon('type', 15) + " Font: M / L / XL") so users see the state without opening a menu.
   // No re-render needed — CSS picks up the variable change instantly.
   const fontBtn = document.getElementById('font-size-btn');
   if (fontBtn) {
@@ -149,7 +149,7 @@ function initSettingsToggles() {
     function _applyFontScale() {
       const k = state.fontScale in FONT_SCALE_FACTOR ? state.fontScale : 'lg';
       document.documentElement.style.setProperty('--font-scale', FONT_SCALE_FACTOR[k]);
-      fontBtn.textContent = '🔠 Font: ' + FONT_SCALE_LABEL[k];
+      fontBtn.innerHTML = dsIcon('type', 15) + ' Font: ' + FONT_SCALE_LABEL[k];
       fontBtn.classList.toggle('text-teal-200', k !== 'md');
       fontBtn.classList.toggle('text-slate-500', k === 'md');
     }
@@ -166,7 +166,7 @@ function initSettingsToggles() {
 //  PWA INSTALL — beforeinstallprompt capture + button + appinstalled cleanup
 // ──────────────────────────────────────────────────────────────────────────
 function initPwaInstall() {
-  // iter 145: 📲 PWA Install button. Hidden by default (.hidden class on
+  // iter 145: PWA Install button. Hidden by default (.hidden class on
   // the HTML element). Listens for the browser's `beforeinstallprompt` event
   // (fires on Chrome/Edge/Android when the PWA install criteria are met:
   // manifest present + service worker registered + valid scope). When the
@@ -309,7 +309,7 @@ function initSearchAndKeyboard() {
 //  to the palette DOM (input, overlay click, trigger button, Cmd-K binding).
 // ──────────────────────────────────────────────────────────────────────────
 function initCommandPalette() {
-  // iter 104: 🗺 Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
+  // iter 104: Command Palette — Cmd-K / Ctrl-K opens overlay with fuzzy
   // search across sidebar buttons + lessons + sections. Closes the 33-button
   // discoverability decay the recent ship-spree caused. First REORGANIZE-not-
   // ADD surface. Results ranked by recent-use frequency from state.commandUsage.

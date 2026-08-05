@@ -77,7 +77,7 @@ function _renderCalibrationTile() {
   const formatSec = (s) => s >= 60 ? `${Math.round(s/60)}m` : `${Math.round(s)}s`;
   return `
     <div data-calibration-tile style="margin-top: 18px;">
-      <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏱ Calibration · top ${top.length} miscalibrated mechanic${top.length === 1 ? '' : 's'}</div>
+      <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">${dsIcon('clock', 15)} Calibration · top ${top.length} miscalibrated mechanic${top.length === 1 ? '' : 's'}</div>
       <div style="font-size: 11px; color: #9aa0aa; margin-bottom: 8px;">Median |actual − estimate| per mechanic from your L3-pass history. Higher = bigger gap between your time bucket and actual seconds.</div>
       ${top.map(r => `
         <div data-cal-row data-mech-id="${escapeHtml(r.id)}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #262930; border-radius: 6px; margin-bottom: 4px;">
@@ -89,7 +89,7 @@ function _renderCalibrationTile() {
   `;
 }
 
-// iter 155: ⏳ Time-Invested Section Ledger. Walks state.history per lesson;
+// iter 155: Time-Invested Section Ledger. Walks state.history per lesson;
 // each consecutive event pair within TIME_INVESTED_GAP_MS counts as session
 // time (capped at TIME_INVESTED_INTERVAL_CAP_MS per pair so an "I left the
 // tab open overnight" doesn't poison the sum). Groups ms-spent by
@@ -141,8 +141,8 @@ function _renderTimeInvestedTile() {
   };
   return `
     <div data-time-invested-tile style="margin-top: 18px;">
-      <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">⏳ Time invested · top ${topN.length} section${topN.length === 1 ? '' : 's'} <span style="color:#4a4f58;">· ${formatMs(totalMs)} total</span></div>
-      <div style="font-size: 11px; color: #9aa0aa; margin-bottom: 8px;">Inferred from event timestamps — consecutive events within 5min count as session time (capped at 5min per gap). Effort-allocation complement to 🧭 Track Balance above.</div>
+      <div style="font-size: 11px; color: #6b7079; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">${dsIcon('clock', 15)} Time invested · top ${topN.length} section${topN.length === 1 ? '' : 's'} <span style="color:#4a4f58;">· ${formatMs(totalMs)} total</span></div>
+      <div style="font-size: 11px; color: #9aa0aa; margin-bottom: 8px;">Inferred from event timestamps — consecutive events within 5min count as session time (capped at 5min per gap). Effort-allocation complement to Track Balance above.</div>
       ${topN.map(r => {
         const pct = Math.round((r.ms / maxMs) * 100);
         return `
@@ -473,7 +473,7 @@ async function generateCheatsheet() {
   return md;
 }
 
-// iter 126: 📦 Cheatsheet → Printable PDF / Native-Phone Save (iter-124
+// iter 126: Cheatsheet → Printable PDF / Native-Phone Save (iter-124
 // roadmap #2 SHIPPED). Differentiator vs iter-113 Offline Drill Pack: Pack
 // keeps the corpus drillable INSIDE the app offline; this surface gets the
 // corpus OUT of the app entirely into a user-owned native-OS PDF — readable
@@ -860,12 +860,12 @@ function markPassed(lessonId, level) {
   // this clean pass, so the user understands the dot just demoted from
   // ringed-green to plain green.
   if (clearedRevealFlag) _showRevealClearedToast(lessonId, level);
-  // iter 114: ☁️ Sync Onboarding — first L3 pass on a desktop user-agent
+  // iter 114: ☁Sync Onboarding — first L3 pass on a desktop user-agent
   // surfaces the one-time hint banner promoting the existing top-right
   // Sync chip. _maybeShowSyncHint() guards all conditions internally so
   // calling unconditionally on every L3 pass is safe.
   if (level === 'L3' && typeof _maybeShowSyncHint === 'function') _maybeShowSyncHint();
-  // iter 118: 🔥 Hot-Seat Follow-Up — opt-in post-L3-pass modal with an
+  // iter 118: Hot-Seat Follow-Up — opt-in post-L3-pass modal with an
   // interviewer follow-up. _maybeShowHotseat() guards all conditions
   // (toggle on, Patterns/Applied track, content loaded, mock bypass).
   if (level === 'L3' && typeof _maybeShowHotseat === 'function') _maybeShowHotseat(lessonId);
@@ -921,10 +921,10 @@ function updateReviewBadge() {
     replayBtn.classList.toggle('hidden', q.length === 0);
     if (replayCnt) replayCnt.textContent = q.length;
   }
-  // iter 60: 📡 At Risk button visibility + count. Joins weakness ∪ revealed
+  // iter 60: At Risk button visibility + count. Joins weakness ∪ revealed
   // sets (the surface includes due lessons via the row data but the button-
   // visibility gate uses the same union, since pure-due lessons are already
-  // surfaced by the existing 🕒 Review badge).
+  // surfaced by the existing Review badge).
   const atRiskBtn = document.getElementById('at-risk-btn');
   const atRiskCnt = document.getElementById('at-risk-count');
   if (atRiskBtn) {
@@ -932,7 +932,7 @@ function updateReviewBadge() {
     atRiskBtn.classList.toggle('hidden', rows.length === 0);
     if (atRiskCnt) atRiskCnt.textContent = rows.length;
   }
-  // iter 65: 💀 Resurrect button visibility + count. Auto-hides when no
+  // iter 65: Resurrect button visibility + count. Auto-hides when no
   // lesson is past 2× its SR interval.
   const resBtn = document.getElementById('resurrect-btn');
   const resCnt = document.getElementById('resurrect-count');
@@ -941,7 +941,7 @@ function updateReviewBadge() {
     resBtn.classList.toggle('hidden', ids.length === 0);
     if (resCnt) resCnt.textContent = ids.length;
   }
-  // iter 94: 🧠 Bridge button visibility + count. Auto-hides when MECHANIC_INDEX
+  // iter 94: Bridge button visibility + count. Auto-hides when MECHANIC_INDEX
   // hasn't been built yet (first paint) OR no cross-track transfer gaps exist.
   // Lazy-kicks the index build on first call so subsequent updateReviewBadge
   // calls paint the populated count.
@@ -977,15 +977,22 @@ function updateLessonHeaderInPlace() {
     const lv = btn.dataset.level;
     if (lv !== 'L1' && lv !== 'L2' && lv !== 'L3') return;
     const passed = levelStatus(lesson.id, lv) === 'passed';
-    const baseLabel = btn.textContent.replace(/\s*✓\s*$/, '').trim();
-    btn.innerHTML = passed ? `${baseLabel} <span class="text-emerald-400 ml-1">✓</span>` : baseLabel;
+    // The label is the text; the pass mark is an icon appended beside it. Reading
+    // textContent gets the label back whether or not the mark is currently on,
+    // because an svg element contributes no text (it used to be a tick that
+    // had to be stripped by regex — one spelling of the mark in the DOM,
+    // another here).
+    const baseLabel = btn.textContent.trim();
+    btn.innerHTML = passed
+      ? `${baseLabel} <span class="text-emerald-400 ml-1">${dsIcon('check', 13)}</span>`
+      : baseLabel;
   });
   // Mastered pill (header)
   const pillRow = document.querySelector('#lesson-shell .pill')?.parentElement;
   if (pillRow && overall === 'mastered' && !pillRow.querySelector('.pill-mastered')) {
     const m = document.createElement('span');
     m.className = 'pill pill-mastered ml-2';
-    m.textContent = '✓ Mastered';
+    m.innerHTML = dsIcon('check', 14) + ' Mastered';
     pillRow.appendChild(m);
   }
   // Next-CTA row — when the lesson transitions to mastered we want the same
@@ -1006,14 +1013,14 @@ function updateLessonHeaderInPlace() {
           ? `<button class="secondary" data-action="goto-next">Next: ${escapeHtml(nextLessonObj.title)}</button>`
           : '';
         ctaHtml = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row>
-          <button class="primary" data-action="goto-due-review">🕒 Review ${due.length} due →</button>
+          <button class="primary" data-action="goto-due-review">${dsIcon('clock', 15)} Review ${due.length} due →</button>
           ${secondary}
-          <button class="secondary" data-action="shuffle-here">🎲 Shuffle</button>
+          <button class="secondary" data-action="shuffle-here">${dsIcon('dice', 15)} Shuffle</button>
         </div>`;
       } else if (nextLessonObj) {
         ctaHtml = `<div class="mt-3 flex items-center gap-2" data-cta-row>
           <button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button>
-          <button class="secondary" data-action="shuffle-here">🎲 Shuffle review</button>
+          <button class="secondary" data-action="shuffle-here">${dsIcon('dice', 15)} Shuffle review</button>
         </div>`;
       }
       if (ctaHtml) {
@@ -1059,7 +1066,7 @@ function pickShuffleReview() {
   if (!pool.length) return null;
   return pool[Math.floor(Math.random() * pool.length)].id;
 }
-// iter 108: 🍀 Lucky — random not-yet-fully-mastered authored lesson.
+// iter 108: Lucky — random not-yet-fully-mastered authored lesson.
 // Decision-fatigue antidote for the open-app-and-freeze moment; pool is the
 // complement of pickShuffleReview's (unmastered, not mastered). Falls back to
 // any authored lesson when 0 unmastered exist (mastered everything — rare).
@@ -1134,7 +1141,7 @@ function initSurfaceToggle() {
 }
 
 // Phase E: union the "needs work" signals into one ranked index, consumed by the
-// sidebar inline icons + the 🛠 Repair filter. Resurrect (overdue) > due > weak >
+// sidebar inline icons + the  Repair filter. Resurrect (overdue) > due > weak >
 // reveal. Bridge is an opportunity signal with its own surface — excluded here.
 // `unscoped: true` sources the due signal from allDueReviewIds() instead of
 // the Starter-Plan-filtered dueReviewIds(). Home and the scoped review
@@ -1150,10 +1157,10 @@ function buildRepairIndex({ unscoped = false } = {}) {
     if (!cur || rank < cur.rank) idx.set(id, { rank, icon, title });
   };
   const dueIds = () => (unscoped ? allDueReviewIds() : dueReviewIds());
-  try { (resurrectIds() || []).forEach(id => consider(id, 0, '💀', 'Overdue — mastered but past 2× its review interval')); } catch (_) {}
-  try { (dueIds() || []).forEach(id => consider(id, 1, '🕒', 'Due for review (' + formatDueRelative(id) + ')')); } catch (_) {}
-  try { Object.keys(state.weakness || {}).forEach(id => { if (state.weakness[id]) consider(id, 2, '⚠️', 'Weak spot — recurring L1 miss'); }); } catch (_) {}
-  try { Object.keys(state.revealed || {}).forEach(id => { if (wasRevealed(id, 'L2') || wasRevealed(id, 'L3')) consider(id, 3, '🃏', 'Mastered with a reveal — retry clean to clear'); }); } catch (_) {}
+  try { (resurrectIds() || []).forEach(id => consider(id, 0, 'history', 'Overdue — mastered but past 2× its review interval')); } catch (_) {}
+  try { (dueIds() || []).forEach(id => consider(id, 1, 'clock', 'Due for review (' + formatDueRelative(id) + ')')); } catch (_) {}
+  try { Object.keys(state.weakness || {}).forEach(id => { if (state.weakness[id]) consider(id, 2, 'alert', 'Weak spot — recurring L1 miss'); }); } catch (_) {}
+  try { Object.keys(state.revealed || {}).forEach(id => { if (wasRevealed(id, 'L2') || wasRevealed(id, 'L3')) consider(id, 3, 'cards', 'Mastered with a reveal — retry clean to clear'); }); } catch (_) {}
   return idx;
 }
 

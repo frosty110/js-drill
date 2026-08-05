@@ -63,9 +63,9 @@ function renderDiagramDeck(el, diagrams, label = 'Visual models') {
     <div class="diagram-slot"></div>
     <p class="diagram-deck__takeaway"></p>
     <div class="diagram-deck__controls">
-      <button class="ds-btn ds-btn--ghost diagram-prev" type="button" aria-label="Previous diagram">‹</button>
+      <button class="ds-btn ds-btn--ghost diagram-prev" type="button" aria-label="Previous diagram">${icon('chevron-left', 17)}</button>
       <button class="ds-btn ds-btn--ghost diagram-recall" type="button" aria-pressed="false">Hide labels</button>
-      <button class="ds-btn ds-btn--ghost diagram-next" type="button" aria-label="Next diagram">›</button>
+      <button class="ds-btn ds-btn--ghost diagram-next" type="button" aria-label="Next diagram">${icon('chevron-right', 17)}</button>
     </div>`;
   const eyebrow = el.querySelector('.diagram-deck__eyebrow');
   const title = el.querySelector('.diagram-deck__title');

@@ -33,6 +33,24 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">12</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — Prompt-prefix and KV-cache reuse across requests, so a shared system prompt is not recomputed per call — the dominant saving in LLM serving.</li>
+      <li><a href="../../../sd/components/c/work-queue/">Work Queue</a> <span class="ds-chip">signature</span> — Inference requests wait for scarce GPU capacity rather than being rejected outright, with queue depth feeding the admission decision.</li>
+      <li><a href="../../../sd/components/c/backpressure/">Backpressure</a> <span class="ds-chip">signature</span> — Queue depth signals the admission controller to reject or shed, rather than accumulating requests that will time out before a GPU frees up.</li>
+      <li><a href="../../../sd/components/c/resource-scheduling/">Resource Scheduling</a> <span class="ds-chip">signature</span> — GPU allocation across requests, where continuous batching and priority classes decide whether very expensive hardware sits idle.</li>
+      <li><a href="../../../sd/components/c/cost-metering/">Cost Metering</a> <span class="ds-chip">signature</span> — GPU seconds are the scarce resource and the KV cache sets how many sequences fit, so admission is a spend decision per request rather than a queueing one.</li>
+      <li><a href="../../../sd/components/c/api-gateway/">API Gateway</a> — Enforces auth, per-tenant quota and admission before a request reaches a GPU, which is the last point where rejecting is still cheap.</li>
+      <li><a href="../../../sd/components/c/load-shedding/">Load Shedding</a> — Rejects low-priority requests once queue depth implies they would time out anyway, freeing GPUs for work that can still land.</li>
+      <li><a href="../../../sd/components/c/bulkhead/">Bulkhead Isolation</a> — Separate GPU pools per priority class, so a batch job cannot consume the capacity interactive requests depend on.</li>
+      <li><a href="../../../sd/components/c/sse/">Server-Sent Events</a> — Streams generated tokens back as they are produced, which is what makes a slow model feel responsive.</li>
+      <li><a href="../../../sd/components/c/grpc/">gRPC</a> — Carries requests to the model servers, with streaming built in rather than layered on.</li>
+      <li><a href="../../../sd/components/c/progressive-rollout/">Progressive Rollout</a> — New model versions take a slice of traffic before all of it, because quality regressions are only visible against real prompts.</li>
+      <li><a href="../../../sd/components/c/tenant-isolation/">Tenant Isolation</a> — Per-tenant GPU pools and quotas, so one customer&#39;s batch job cannot consume the capacity another customer&#39;s interactive traffic depends on.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Accept a prompt plus sampling parameters, stream generated tokens back (SSE or WebSocket), support multiple models and versions, cancel in-flight requests.</li><li>Two distinct latency SLOs: time-to-first-token (perceived responsiveness) and time-per-output-token (reading speed). Conflating them is a design error.</li><li>Multi-tenant fair sharing and per-tenant rate limits — one 8K-token request can monopolize a worker.</li><li>Ask about the mix: interactive chat vs offline batch justify different clusters.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>A 70B model in bf16 is 140 GB of weights alone → doesn&#39;t fit one 80 GB GPU; tensor parallelism across 2–4 is forced</li><li>On a 4×80 GB node roughly 160 GB is left, and almost all of it goes to KV cache</li><li>Per-token KV is ~2.6 MB with multi-head attention, ~0.3 MB with grouped-query attention</li><li>That&#39;s ~15 vs ~130 concurrent 4K-token sequences — GQA is a serving decision, not just a modeling one</li><li>Decode is memory-bandwidth-bound; the objective is tokens/sec/dollar subject to the latency SLOs</li><li>Prompt lengths vary by orders of magnitude and output length isn&#39;t known until generation stops</li></ul>

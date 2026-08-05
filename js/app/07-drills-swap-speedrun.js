@@ -78,8 +78,8 @@ async function startSwapBenchSession() {
     shell.innerHTML = `
       <div class="recognize-shell swap-shell">
         <div class="recognize-header">
-          <span>🔀 Swap-Bench · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-swap">✕ Exit</button>
+          <span>${dsIcon('swap', 15)} Swap-Bench · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-swap">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="swap-title">${escapeHtml(card.title || '')}</div>
         <div class="swap-pair">
@@ -94,8 +94,8 @@ async function startSwapBenchSession() {
           </div>
         </div>
         <div class="swap-options">
-          <button class="recognize-opt swap-opt" data-pick="same">✓ Same behavior</button>
-          <button class="recognize-opt swap-opt" data-pick="diff">✗ Different behavior</button>
+          <button class="recognize-opt swap-opt" data-pick="same">${dsIcon('check', 14)} Same behavior</button>
+          <button class="recognize-opt swap-opt" data-pick="diff">${dsIcon('alert', 14)} Different behavior</button>
         </div>
         <div class="recognize-feedback" data-swap-feedback></div>
       </div>
@@ -157,13 +157,13 @@ async function startSwapBenchSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell swap-shell">
-        <div class="recognize-header"><span>🔀 Swap-Bench · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('swap', 15)} Swap-Bench · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} idiom pairs judged correctly</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.swapBench.correct} / ${state.swapBench.attempts} (${state.swapBench.attempts > 0 ? Math.round(state.swapBench.correct / state.swapBench.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="swap-again">🔀 Another bench</button>
+            <button class="primary" data-action="swap-again">${dsIcon('swap', 15)} Another bench</button>
             <button class="secondary" data-action="swap-done">Done</button>
           </div>
         </div>
@@ -175,7 +175,7 @@ async function startSwapBenchSession() {
   renderCard();
 }
 
-// iter 79: 📐 Smell-Test Complexity-Claim drill — §9B Code Evaluation Skills.
+// iter 79: Smell-Test Complexity-Claim drill — §9B Code Evaluation Skills.
 // Loads a small curated map (data/complexity-claims.json) of {lessonId: {actual,
 // distractor}}; each card shows the canonical + a randomly-chosen claim (50/50
 // actual vs distractor); user 2-taps "correct" or "wrong"; reveal shows the
@@ -251,15 +251,15 @@ async function startClaimSession() {
     shell.innerHTML = `
       <div class="recognize-shell claim-shell">
         <div class="recognize-header">
-          <span>📐 Claim · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-claim">✕ Exit</button>
+          <span>${dsIcon('gauge', 15)} Claim · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-claim">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="claim-meta">${escapeHtml(card.sectionName)} · <span class="claim-lesson">${escapeHtml(card.lessonTitle)}</span></div>
         <pre class="crystal-code cm-s-dracula" data-claim-code></pre>
         <div class="claim-stated">Claimed time complexity: <code class="claim-stated-val">${escapeHtml(card.claim)}</code></div>
         <div class="claim-options">
-          <button class="recognize-opt claim-opt" data-pick="correct">✓ Correct</button>
-          <button class="recognize-opt claim-opt" data-pick="wrong">✗ Wrong</button>
+          <button class="recognize-opt claim-opt" data-pick="correct">${dsIcon('check', 14)} Correct</button>
+          <button class="recognize-opt claim-opt" data-pick="wrong">${dsIcon('alert', 14)} Wrong</button>
         </div>
         <div class="recognize-feedback" data-claim-feedback></div>
       </div>
@@ -308,13 +308,13 @@ async function startClaimSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell claim-shell">
-        <div class="recognize-header"><span>📐 Claim · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('gauge', 15)} Claim · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} complexity claims judged correctly</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Lifetime: ${state.claim.correct} / ${state.claim.attempts} (${state.claim.attempts > 0 ? Math.round(state.claim.correct / state.claim.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="claim-again">📐 Another session</button>
+            <button class="primary" data-action="claim-again">${dsIcon('gauge', 15)} Another session</button>
             <button class="secondary" data-action="claim-done">Done</button>
           </div>
         </div>
@@ -326,7 +326,7 @@ async function startClaimSession() {
   renderCard();
 }
 
-// iter 77: 🔮 Predict-the-Output — Crystal Ball mental-execution drill. Show
+// iter 77: Predict-the-Output — Crystal Ball mental-execution drill. Show
 // a patterns canonical + 4 expected-output options (correct + 3 same-type
 // distractors from other lessons' L3.expectedOutput); user picks which the
 // code produces WITHOUT running it. Trains mental simulation — the
@@ -382,7 +382,7 @@ function _crystalBuildDeck() {
     const sameType = (byType[target.type] || []).filter(p =>
       p.lessonId !== target.lessonId && p.output !== target.output
     );
-    if (sameType.length < 3) continue; // need ≥3 distractors
+    if (sameType.length < 3) continue; // need 3 distractors
     const distractors = sameType.sort(() => Math.random() - 0.5).slice(0, 3).map(p => p.output);
     const options = [target.output, ...distractors];
     // Shuffle option order.
@@ -429,8 +429,8 @@ async function startCrystalSession() {
     shell.innerHTML = `
       <div class="recognize-shell crystal-shell">
         <div class="recognize-header">
-          <span>🔮 Predict · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-crystal">✕ Exit</button>
+          <span>${dsIcon('eye', 15)} Predict · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-crystal">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="crystal-meta">${escapeHtml(card.sectionName)} · <span class="crystal-lesson">${escapeHtml(card.lessonTitle)}</span></div>
         <div class="crystal-hint">Read the code. Don't run it. Pick the output.</div>
@@ -476,8 +476,8 @@ async function startCrystalSession() {
         });
         const fb = shell.querySelector('[data-crystal-feedback]');
         if (fb) fb.innerHTML = wasCorrect
-          ? `<span class="recognize-good">✓</span>`
-          : `<span class="recognize-bad">✗ Was ${escapeHtml(card.correct)}</span>`;
+          ? `<span class="recognize-good">${dsIcon('check', 14)}</span>`
+          : `<span class="recognize-bad">${dsIcon('alert', 14)} Was ${escapeHtml(card.correct)}</span>`;
         setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 800 : 1700);
       });
     });
@@ -486,13 +486,13 @@ async function startCrystalSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell crystal-shell">
-        <div class="recognize-header"><span>🔮 Predict · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('eye', 15)} Predict · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} outputs predicted correctly</div>
           <div class="recognize-summary-line recognize-summary-lifetime">Mental-sim lifetime: ${state.crystal.correct} / ${state.crystal.attempts} (${state.crystal.attempts > 0 ? Math.round(state.crystal.correct / state.crystal.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="crystal-again">🔮 Another session</button>
+            <button class="primary" data-action="crystal-again">${dsIcon('eye', 15)} Another session</button>
             <button class="secondary" data-action="crystal-done">Done</button>
           </div>
         </div>
@@ -504,7 +504,7 @@ async function startCrystalSession() {
   renderCard();
 }
 
-// iter 76: 🎯 Reverse Problem-ID — §9B code-evaluation surface (sibling to
+// iter 76: Reverse Problem-ID — §9B code-evaluation surface (sibling to
 // Recognize but inverted: Recognize shows prompt → pick section; Reverse
 // shows input/output trace → pick problem). Forward-from-output reasoning
 // — a common interview unblock pattern. Closes iter-75 § Next iter pick.
@@ -654,8 +654,8 @@ async function startReverseSession() {
     shell.innerHTML = `
       <div class="recognize-shell reverse-shell">
         <div class="recognize-header">
-          <span>🎯 Reverse · ${idx + 1} of ${deck.length}</span>
-          <button class="recognize-exit" data-action="exit-reverse">✕ Exit</button>
+          <span>${dsIcon('target', 15)} Reverse · ${idx + 1} of ${deck.length}</span>
+          <button class="recognize-exit" data-action="exit-reverse">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="reverse-trace">
           <div class="reverse-trace-line"><span class="reverse-trace-label">in</span><code class="reverse-trace-code">${escapeHtml(card.invocation)}</code></div>
@@ -716,8 +716,8 @@ async function startReverseSession() {
             }
           }
           fb.innerHTML = wasCorrect
-            ? `<span class="recognize-good">✓</span>${tellHtml}`
-            : `<span class="recognize-bad">✗ Correct shown above</span>${distHtml}${tellHtml}`;
+            ? `<span class="recognize-good">${dsIcon('check', 14)}</span>${tellHtml}`
+            : `<span class="recognize-bad">${dsIcon('alert', 14)} Correct shown above</span>${distHtml}${tellHtml}`;
         }
         // Hold longer when a tell or distractor explanation is shown so
         // the user has time to read.
@@ -733,13 +733,13 @@ async function startReverseSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="recognize-shell reverse-shell">
-        <div class="recognize-header"><span>🎯 Reverse · Session done</span></div>
+        <div class="recognize-header"><span>${dsIcon('target', 15)} Reverse · Session done</span></div>
         <div class="recognize-summary">
           <div class="recognize-summary-pct">${pct}%</div>
           <div class="recognize-summary-line">${correct} of ${deck.length} correct</div>
-          <div class="recognize-summary-line recognize-summary-lifetime">Diagnose lifetime (incl. 🔎 Recognize): ${state.recognize.correct} / ${state.recognize.attempts} (${state.recognize.attempts > 0 ? Math.round(state.recognize.correct / state.recognize.attempts * 100) : 0}%)</div>
+          <div class="recognize-summary-line recognize-summary-lifetime">Diagnose lifetime (incl. Recognize): ${state.recognize.correct} / ${state.recognize.attempts} (${state.recognize.attempts > 0 ? Math.round(state.recognize.correct / state.recognize.attempts * 100) : 0}%)</div>
           <div class="recognize-summary-actions">
-            <button class="primary" data-action="reverse-again">🎯 Another session</button>
+            <button class="primary" data-action="reverse-again">${dsIcon('target', 15)} Another session</button>
             <button class="secondary" data-action="reverse-done">Done</button>
           </div>
         </div>
@@ -837,7 +837,7 @@ async function startRapidFireSession() {
     _drillEmptyState('Rapid-Fire', "Couldn't build a deck — not enough lesson content loaded yet.", { retry: startRapidFireSession });
     return;
   }
-  return _runRapidFireWithDeck(deck, { label: '⚡ Rapid', againFn: startRapidFireSession });
+  return _runRapidFireWithDeck(deck, { label: dsIcon('zap', 15) + ' Rapid', againFn: startRapidFireSession });
 }
 
 // iter 75: deck-driven Rapid-Fire shell — extracted so other §9B/§9C surfaces
@@ -846,7 +846,7 @@ async function startRapidFireSession() {
 // opts: { label, againFn } — label sets header text; againFn is called when
 // user clicks "Another session" on the summary.
 function _runRapidFireWithDeck(deck, opts = {}) {
-  const label = opts.label || '⚡ Rapid';
+  const label = opts.label || dsIcon('zap', 15) + ' Rapid';
   const againFn = opts.againFn || startRapidFireSession;
   let idx = 0, correct = 0, streak = 0, bestStreak = 0;
   const times = [];
@@ -868,8 +868,8 @@ function _runRapidFireWithDeck(deck, opts = {}) {
     shell.innerHTML = `
       <div class="rapid-shell">
         <div class="rapid-header">
-          <span>${label} · ${idx + 1} of ${deck.length} · 🔥 ${streak}</span>
-          <button class="rapid-exit" data-action="exit-rapid">✕ Exit</button>
+          <span>${label} · ${idx + 1} of ${deck.length} · ${dsIcon('flame', 13)}${streak}</span>
+          <button class="rapid-exit" data-action="exit-rapid">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="rapid-timer-track"><div class="rapid-timer-bar" data-rapid-timer></div></div>
         <div class="rapid-meta">${escapeHtml(card.sectionName)} · <span class="rapid-lesson">${escapeHtml(card.lessonTitle)}</span></div>
@@ -898,7 +898,7 @@ function _runRapidFireWithDeck(deck, opts = {}) {
         correct++;
         streak++;
         if (streak > bestStreak) bestStreak = streak;
-        // iter 141: 📳 Haptic Tap-Pulse — Rapid-Fire deliberately skips
+        // iter 141: Haptic Tap-Pulse — Rapid-Fire deliberately skips
         // appendHistory('L1-pass') (would spam the sparkline across 20-card
         // streams), so the per-card correct pulse is wired here directly.
         // Streak-of-5 milestone fires the longer 3-pulse roll on top of the
@@ -927,7 +927,7 @@ function _runRapidFireWithDeck(deck, opts = {}) {
       const fb = shell.querySelector('[data-rapid-feedback]');
       fb.innerHTML = wasCorrect
         ? `<span class="rapid-good">✓ +1 streak</span>`
-        : `<span class="rapid-bad">✗ ${card.explain ? escapeHtml(card.explain) : 'Streak reset'}</span>`;
+        : `<span class="rapid-bad">${dsIcon('alert', 14)}${card.explain ? escapeHtml(card.explain) : 'Streak reset'}</span>`;
       setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 600 : 1300);
     };
 
@@ -942,7 +942,7 @@ function _runRapidFireWithDeck(deck, opts = {}) {
       const remaining = RAPID_FIRE_TIMER_MS - (Date.now() - timerStartedAt);
       if (remaining <= 0) {
         clearTimer();
-        if (!answered) grade(-1); // -1 = no pick; never equals card.answerIdx → miss
+        if (!answered) grade(-1); // -1 = no pick; never equals card.answerIdx  miss
       } else if (bar) {
         bar.style.width = `${(remaining / RAPID_FIRE_TIMER_MS) * 100}%`;
         bar.classList.toggle('rapid-timer-hot', remaining < 2000);
@@ -965,10 +965,10 @@ function _runRapidFireWithDeck(deck, opts = {}) {
         <div class="rapid-header"><span>${label} · Session done</span></div>
         <div class="rapid-summary">
           <div class="rapid-summary-pct">${pct}%</div>
-          <div class="rapid-summary-line">${correct} of ${deck.length} correct · 🔥 best streak ${bestStreak}</div>
+          <div class="rapid-summary-line">${correct} of ${deck.length} correct · ${dsIcon('flame', 13)} best streak ${bestStreak}</div>
           <div class="rapid-summary-line">Median ${(median / 1000).toFixed(1)}s · Throughput ${totalMs > 0 ? ((deck.length / (totalMs / 60000)) | 0) : 0}/min</div>
           ${slowestTop.length ? `<div class="rapid-summary-slowest"><div class="rapid-summary-slowest-title">Slowest lessons (drill these next):</div>${slowestTop.map(s => `<div class="rapid-summary-slowest-row"><span>${escapeHtml(s.lessonTitle)}</span><span class="rapid-summary-slowest-ms">${(s.ms / 1000).toFixed(1)}s</span></div>`).join('')}</div>` : ''}
-          <div class="rapid-summary-line rapid-summary-lifetime">Lifetime: ${state.rapidFire.correct} / ${state.rapidFire.attempts} (${state.rapidFire.attempts > 0 ? Math.round(state.rapidFire.correct / state.rapidFire.attempts * 100) : 0}%) · best 🔥 ${state.rapidFire.bestStreak}</div>
+          <div class="rapid-summary-line rapid-summary-lifetime">Lifetime: ${state.rapidFire.correct} / ${state.rapidFire.attempts} (${state.rapidFire.attempts > 0 ? Math.round(state.rapidFire.correct / state.rapidFire.attempts * 100) : 0}%) · best ${dsIcon('flame', 13)}${state.rapidFire.bestStreak}</div>
           <div class="rapid-summary-actions">
             <button class="primary" data-action="rapid-again">${label} · Another session</button>
             <button class="secondary" data-action="rapid-done">Done</button>
@@ -983,7 +983,7 @@ function _runRapidFireWithDeck(deck, opts = {}) {
   renderCard();
 }
 
-// iter 57: 🌅 3-Card Warmup — ultra-short mobile micro-session over the
+// iter 57: 3-Card Warmup — ultra-short mobile micro-session over the
 // existing Today's Plan curated 3-way mix (due + path + weak). Stack of 3
 // L1 question cards in the main viewport with slide-off-on-grade animation;
 // auto-advances; summary CTAs to keep going. PROFILE L69 "friction between
@@ -1059,8 +1059,8 @@ async function startWarmupSession() {
     shell.innerHTML = `
       <div class="warmup-shell">
         <div class="warmup-header">
-          <span>🌅 Warmup · Card ${idx + 1} of ${deck.length}</span>
-          <button class="warmup-exit" data-action="exit-warmup">✕ Exit</button>
+          <span>${dsIcon('sunrise', 15)} Warmup · Card ${idx + 1} of ${deck.length}</span>
+          <button class="warmup-exit" data-action="exit-warmup">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="warmup-stack">
           ${ghosts}
@@ -1115,8 +1115,8 @@ async function startWarmupSession() {
         });
         const fb = shell.querySelector('[data-warmup-feedback]');
         fb.innerHTML = wasCorrect
-          ? `<span class="warmup-good">✓ Got it</span>`
-          : `<span class="warmup-bad">✗ ${card.explain ? escapeHtml(card.explain) : 'Routed to weak spots'}</span>`;
+          ? `<span class="warmup-good">${dsIcon('check', 14)} Got it</span>`
+          : `<span class="warmup-bad">${dsIcon('alert', 14)}${card.explain ? escapeHtml(card.explain) : 'Routed to weak spots'}</span>`;
         // Slide-off animation, then advance.
         cardEl.classList.add(wasCorrect ? 'warmup-card-slide-right' : 'warmup-card-slide-left');
         setTimeout(() => { idx++; renderStack(); }, wasCorrect ? 600 : 1100);
@@ -1128,15 +1128,15 @@ async function startWarmupSession() {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="warmup-shell">
-        <div class="warmup-header"><span>🌅 Warmup · Session done</span></div>
+        <div class="warmup-header"><span>${dsIcon('sunrise', 15)} Warmup · Session done</span></div>
         <div class="warmup-summary">
           <div class="warmup-summary-pct">${pct}%</div>
           <div class="warmup-summary-line">${correct} of ${deck.length} correct</div>
           <div class="warmup-summary-line warmup-summary-lifetime">Lifetime: ${state.warmup.completions} session${state.warmup.completions === 1 ? '' : 's'} completed</div>
           <div class="warmup-summary-cta">→ Keep going:</div>
           <div class="warmup-summary-actions">
-            <button class="primary" data-action="warmup-rapid">⚡ Rapid-Fire</button>
-            <button class="secondary" data-action="warmup-today">📅 Today's Plan</button>
+            <button class="primary" data-action="warmup-rapid">${dsIcon('zap', 15)} Rapid-Fire</button>
+            <button class="secondary" data-action="warmup-today">${dsIcon('calendar-check', 15)} Today's Plan</button>
             <button class="secondary" data-action="warmup-done">Done</button>
           </div>
         </div>
@@ -1153,7 +1153,7 @@ async function startWarmupSession() {
   renderStack();
 }
 
-// iter 71: 🏁 Section Speedrun — first MOBILE timed-pressure surface.
+// iter 71: Section Speedrun — first MOBILE timed-pressure surface.
 // Mock Interview is desktop-only (per PROFILE §usage-context); recruiters
 // probe at the SECTION grain ("walk me through hashing") not single-lesson
 // grain, but no surface stopwatches a whole topic. Speedrun picks a section,
@@ -1242,8 +1242,8 @@ function startSpeedrunPicker() {
   shell.innerHTML = `
     <div class="speedrun-shell speedrun-picker">
       <div class="speedrun-header">
-        <span>🏁 Section Speedrun · pick a topic</span>
-        <button class="speedrun-exit" data-action="exit-speedrun">✕ Exit</button>
+        <span>${dsIcon('flag', 15)} Section Speedrun · pick a topic</span>
+        <button class="speedrun-exit" data-action="exit-speedrun">${dsIcon('x', 13)} Exit</button>
       </div>
       <div class="speedrun-picker-hint">Run all L1 questions in one section against the clock. Best time per section is saved.</div>
       <div class="speedrun-picker-list">
@@ -1288,8 +1288,8 @@ async function startSpeedrunSession(sectionSlug) {
     shell.innerHTML = `
       <div class="speedrun-shell">
         <div class="speedrun-header">
-          <span>🏁 ${escapeHtml(card.sectionName)} · ${idx + 1} of ${deck.length}</span>
-          <button class="speedrun-exit" data-action="exit-speedrun">✕ Exit</button>
+          <span>${dsIcon('flag', 15)}${escapeHtml(card.sectionName)} · ${idx + 1} of ${deck.length}</span>
+          <button class="speedrun-exit" data-action="exit-speedrun">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="speedrun-stopwatch" data-speedrun-clock>0.0s</div>
         <div class="speedrun-meta"><span class="speedrun-lesson">${escapeHtml(card.lessonTitle)}</span></div>
@@ -1321,7 +1321,7 @@ async function startSpeedrunSession(sectionSlug) {
         else if (i === pickedIdx) b.classList.add('speedrun-opt-wrong');
       });
       const fb = shell.querySelector('[data-speedrun-feedback]');
-      if (fb) fb.innerHTML = wasCorrect ? `<span class="speedrun-good">✓</span>` : `<span class="speedrun-bad">✗ ${card.explain ? escapeHtml(card.explain) : ''}</span>`;
+      if (fb) fb.innerHTML = wasCorrect ? `<span class="speedrun-good">${dsIcon('check', 14)}</span>` : `<span class="speedrun-bad">${dsIcon('alert', 14)}${card.explain ? escapeHtml(card.explain) : ''}</span>`;
       setTimeout(() => { idx++; clearStopwatch(); renderCard(); }, wasCorrect ? 350 : 1100);
     };
     opts.forEach(btn => btn.addEventListener('click', () => grade(+btn.dataset.optIdx)));
@@ -1341,7 +1341,7 @@ async function startSpeedrunSession(sectionSlug) {
     const deltaMs = prevBest ? prevBest - totalMs : 0;
     shell.innerHTML = `
       <div class="speedrun-shell">
-        <div class="speedrun-header"><span>🏁 Speedrun · done</span></div>
+        <div class="speedrun-header"><span>${dsIcon('flag', 15)} Speedrun · done</span></div>
         <div class="speedrun-summary">
           <div class="speedrun-summary-time">${_formatSpeedrunMs(totalMs)}</div>
           ${isNewBest && prevBest ? `<div class="speedrun-summary-pb">★ New personal best (−${_formatSpeedrunMs(deltaMs)})</div>` : ''}
@@ -1349,7 +1349,7 @@ async function startSpeedrunSession(sectionSlug) {
           ${!isNewBest ? `<div class="speedrun-summary-pb speedrun-summary-pb-off">Best: ${_formatSpeedrunMs(prevBest)} (+${_formatSpeedrunMs(totalMs - prevBest)} this run)</div>` : ''}
           <div class="speedrun-summary-line">${correct} of ${deck.length} correct${misses ? ` · ${misses} miss${misses === 1 ? '' : 'es'} flagged as weak spot` : ''}</div>
           <div class="speedrun-summary-actions">
-            <button class="primary" data-action="speedrun-again">🏁 Re-run</button>
+            <button class="primary" data-action="speedrun-again">${dsIcon('flag', 15)} Re-run</button>
             <button class="secondary" data-action="speedrun-pick">Pick another</button>
             <button class="secondary" data-action="speedrun-done">Done</button>
           </div>
@@ -1364,7 +1364,7 @@ async function startSpeedrunSession(sectionSlug) {
   renderCard();
 }
 
-// iter 125: 🥊 Pattern-Family Gauntlet — chained L1 stream across EVERY full
+// iter 125: Pattern-Family Gauntlet — chained L1 stream across EVERY full
 // lesson in a single section, surfacing EVERY L1 question per lesson (not
 // just the first). Cousin to Speedrun (iter 71): Speedrun is 1 L1/lesson on
 // a stopwatch (speed-first); Gauntlet is all-L1 untimed (interleaving-by-
@@ -1437,8 +1437,8 @@ function startGauntletPicker() {
   shell.innerHTML = `
     <div class="gauntlet-shell gauntlet-picker">
       <div class="gauntlet-header">
-        <span>🥊 Pattern-Family Gauntlet · pick a section</span>
-        <button class="gauntlet-exit" data-action="exit-gauntlet">✕ Exit</button>
+        <span>${dsIcon('layers', 15)} Pattern-Family Gauntlet · pick a section</span>
+        <button class="gauntlet-exit" data-action="exit-gauntlet">${dsIcon('x', 13)} Exit</button>
       </div>
       <div class="gauntlet-picker-hint">Run EVERY L1 question across EVERY lesson in one section, back-to-back. No timer — interleave the family's patterns. (Today's Plan = broad sample · Speedrun = first-L1 sprint · Gauntlet = deep on one family.)</div>
       <div class="gauntlet-picker-list" data-gauntlet-picker>
@@ -1478,8 +1478,8 @@ async function startGauntletSession(sectionSlug) {
     shell.innerHTML = `
       <div class="gauntlet-shell">
         <div class="gauntlet-header">
-          <span>🥊 ${escapeHtml(sectionName)} · ${idx + 1} of ${deck.length}</span>
-          <button class="gauntlet-exit" data-action="exit-gauntlet">✕ Exit</button>
+          <span>${dsIcon('layers', 15)}${escapeHtml(sectionName)} · ${idx + 1} of ${deck.length}</span>
+          <button class="gauntlet-exit" data-action="exit-gauntlet">${dsIcon('x', 13)} Exit</button>
         </div>
         <div class="gauntlet-progress-strip" data-gauntlet-progress>
           ${deck.map((_, i) => `<span class="gauntlet-pip${i < idx ? ' gauntlet-pip-done' : ''}${i === idx ? ' gauntlet-pip-active' : ''}"></span>`).join('')}
@@ -1514,7 +1514,7 @@ async function startGauntletSession(sectionSlug) {
         else if (i === pickedIdx) b.classList.add('gauntlet-opt-wrong');
       });
       const fb = shell.querySelector('[data-gauntlet-feedback]');
-      if (fb) fb.innerHTML = wasCorrect ? `<span class="gauntlet-good">✓</span>` : `<span class="gauntlet-bad">✗ ${card.explain ? escapeHtml(card.explain) : ''}</span>`;
+      if (fb) fb.innerHTML = wasCorrect ? `<span class="gauntlet-good">${dsIcon('check', 14)}</span>` : `<span class="gauntlet-bad">${dsIcon('alert', 14)}${card.explain ? escapeHtml(card.explain) : ''}</span>`;
       setTimeout(() => { idx++; renderCard(); }, wasCorrect ? 380 : 1200);
     };
     opts.forEach(btn => btn.addEventListener('click', () => grade(+btn.dataset.optIdx)));
@@ -1534,13 +1534,13 @@ async function startGauntletSession(sectionSlug) {
     const pct = Math.round((correct / deck.length) * 100);
     shell.innerHTML = `
       <div class="gauntlet-shell">
-        <div class="gauntlet-header"><span>🥊 Gauntlet · done</span></div>
+        <div class="gauntlet-header"><span>${dsIcon('layers', 15)} Gauntlet · done</span></div>
         <div class="gauntlet-summary">
           <div class="gauntlet-summary-score">${correct} / ${deck.length}</div>
           <div class="gauntlet-summary-pct">${pct}% across ${escapeHtml(sectionName)}</div>
           ${misses ? `<div class="gauntlet-summary-line">${misses} miss${misses === 1 ? '' : 'es'} flagged as weak spot</div>` : `<div class="gauntlet-summary-line">Clean run.</div>`}
           <div class="gauntlet-summary-actions">
-            <button class="primary" data-action="gauntlet-again">🥊 Re-run</button>
+            <button class="primary" data-action="gauntlet-again">${dsIcon('layers', 15)} Re-run</button>
             <button class="secondary" data-action="gauntlet-pick">Pick another</button>
             <button class="secondary" data-action="gauntlet-done">Done</button>
           </div>
@@ -1555,7 +1555,7 @@ async function startGauntletSession(sectionSlug) {
   renderCard();
 }
 
-// iter 62: 📅 Streak Map — 60-day calendar density heatmap. Aggregates
+// iter 62: Streak Map — 60-day calendar density heatmap. Aggregates
 // state.history events across ALL lessons by day, returning a 60-element
 // array (oldest first → newest last) so the renderer can paint a fixed
 // grid. Closes iter-59 roadmap entry #3. Carefully avoids PROFILE.md L75

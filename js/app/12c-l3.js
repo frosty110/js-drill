@@ -46,7 +46,7 @@ function _buildHintLadder(drill) {
 }
 
 function renderL3(body, lesson, content) {
-  // iter 117: 🎤 Clarify-First Ritual — opt-in gate before the L3 editor.
+  // iter 117: Clarify-First Ritual — opt-in gate before the L3 editor.
   // Skip when (a) toggle off, (b) mock interview in progress (no scaffolding
   // by design — mirrors iter-81 Edge case chips bypass), (c) lesson lacks
   // Conv Sec.1 say bullets (Syntax track), (d) user already completed the
@@ -88,14 +88,14 @@ function renderL3(body, lesson, content) {
   const mockBanner = isMock
     ? `<div class="mb-4 p-4 rounded-lg bg-rose-950/50 border border-rose-900 flex items-center justify-between">
          <div>
-           <div class="text-xs uppercase tracking-wider text-rose-300 mb-1">🎯 Mock interview in progress</div>
+           <div class="text-xs uppercase tracking-wider text-rose-300 mb-1">${dsIcon('target', 15)} Mock interview in progress</div>
            <div class="text-rose-100 mono"><span id="mock-timer">0:00</span> elapsed · hints disabled</div>
          </div>
          <button class="secondary" data-action="end-mock">End interview</button>
        </div>`
     : '';
   const bestBadge = bestMs
-    ? `<span class="pill" style="background:rgba(255,206,90,0.15);color:#ffedc2">⏱ Best: ${formatTime(bestMs)}</span>`
+    ? `<span class="pill" style="background:rgba(255,206,90,0.15);color:#ffedc2">${dsIcon('clock', 15)} Best: ${formatTime(bestMs)}</span>`
     : '';
   // Trend chip — show the rolling history of mock times so the user can see
   // whether they're improving across attempts, not just whether they hit a
@@ -160,7 +160,7 @@ function renderL3(body, lesson, content) {
       </div>
     </div>
     ${isMock ? '' : `
-    <!-- iter 81: 🛡 Edge case pre-enumeration chip strip. Trains the
+    <!-- iter 81:  Edge case pre-enumeration chip strip. Trains the
          clarifying-questions ritual interviewers grade — "before you code,
          what edges would you ask about?". Pure UX nudge (no scoring, no
          per-lesson curation); tap-toggles each chip's "considered" state.
@@ -176,7 +176,7 @@ function renderL3(body, lesson, content) {
     </div>
     `}
     ${isMock ? '' : `
-    <!-- iter 123: 🎹 L3 keyboard chips — one-tap insertion for the 12
+    <!-- iter 123: L3 keyboard chips — one-tap insertion for the 12
          high-cost JS tokens (paren/symbol/modifier-key heavy). PROFILE
          80%-phone L3-typing cost mitigation; rusty engineer's mobile L3
          drilling barrier is the keyboard, not the recall. Bypassed during
@@ -190,8 +190,8 @@ function renderL3(body, lesson, content) {
     <textarea id="drill-editor"></textarea>
     <div class="l3-actions mt-3 flex items-center gap-2 flex-wrap">
       <button class="primary" data-action="run">Run <span class="text-amber-900">(⌘↵)</span></button>
-      ${isMock ? '' : `<button class="secondary" data-action="hint" data-hint-btn>${dsIcon('lightbulb', 15)}Hint</button>`}
-      ${isMock || !Array.isArray(drill.criticalLines) || drill.criticalLines.length === 0 ? '' : `<button class="secondary" data-action="critical-fill" data-critical-btn title="Pre-fill the editor with the canonical; you fill just the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'}">${dsIcon('target', 15)}Critical lines</button>`}
+      ${isMock ? '' : `<button class="secondary" data-action="hint" data-hint-btn>${dsIcon('lightbulb', 15)} Hint</button>`}
+      ${isMock || !Array.isArray(drill.criticalLines) || drill.criticalLines.length === 0 ? '' : `<button class="secondary" data-action="critical-fill" data-critical-btn title="Pre-fill the editor with the canonical; you fill just the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'}">${dsIcon('target', 15)} Critical lines</button>`}
       ${isMock ? '' : '<button class="secondary" data-action="diff">Compare to canonical</button>'}
       ${isMock ? '' : '<button class="secondary" data-action="reveal">Reveal canonical</button>'}
       <button class="secondary" data-action="clear">Clear</button>
@@ -208,7 +208,7 @@ function renderL3(body, lesson, content) {
     </div>
     <div data-debug-panel class="mt-3 hidden">
       <div class="text-xs text-slate-500 mb-1 flex items-center gap-2">
-        <span style="color:#fde68a">🐛 Debug output</span>
+        <span style="color:#fde68a">${dsIcon('bug', 15)} Debug output</span>
         <span class="text-slate-600">(from <code class="mono">console.debug</code> / <code class="mono">console.info</code> — not graded)</span>
       </div>
       <div class="output-box" data-debug-box style="background:#1a1330;color:#fde68a;border-color:#3b2a52"></div>
@@ -268,7 +268,11 @@ function renderL3(body, lesson, content) {
   // no scoring, no per-lesson curation. Trains the clarifying-questions
   // ritual before coding. Hidden during Mock (see edge-strip render gate).
   wrap.querySelectorAll('.edge-chip').forEach(chip => {
-    chip.addEventListener('click', () => chip.classList.toggle('edge-chip-considered'));
+    chip.addEventListener('click', () => {
+      const on = chip.classList.toggle('edge-chip-considered');
+      chip.querySelector('.ds-icon')?.remove();
+      if (on) chip.insertAdjacentHTML('afterbegin', dsIcon('check', 12));
+    });
   });
 
   // iter 61: Mock Replay Reel — wire per-cell tap-for-detail. Renders a
@@ -334,7 +338,7 @@ function renderL3(body, lesson, content) {
   });
   cm.setSize('100%', null);
 
-  // iter 123: 🎹 L3 keyboard chips — wire one-tap insertion. Renders only
+  // iter 123: L3 keyboard chips — wire one-tap insertion. Renders only
   // when not in Mock (chip-strip HTML is gated above) and the wrap contains
   // the [data-l3-chips] container. CodeMirror's replaceSelection inserts at
   // the active cursor or replaces the current selection — works for both
@@ -420,12 +424,12 @@ function renderL3(body, lesson, content) {
       ? `<span class="hint-cost-ribbon" aria-label="Hint cost per recent attempt">${
           perAttempt.map(a => {
             const cls = a.hintCount === 0 ? 'hint-cost-chip-good' : a.hintCount <= 2 ? 'hint-cost-chip-mid' : 'hint-cost-chip-warn';
-            const glyph = a.hintCount === 0 ? '✓' : a.hintCount <= 2 ? String(a.hintCount) : `${a.hintCount}+`;
+            const glyph = a.hintCount === 0 ? dsIcon('check', 12) : a.hintCount <= 2 ? String(a.hintCount) : `${a.hintCount}+`;
             return `<span class="hint-cost-chip ${cls}" title="Attempt used ${a.hintCount} hint tier${a.hintCount === 1 ? '' : 's'}">${glyph}</span>`;
           }).join('')
         }</span>`
       : '';
-    hintTrendEl.innerHTML = `<span class="hint-trend-pill hint-trend-${tone}">💡 Hints / scaffold used on <strong>${hinted}</strong> of last <strong>${total}</strong> attempt${total === 1 ? '' : 's'}</span>${ribbon}`;
+    hintTrendEl.innerHTML = `<span class="hint-trend-pill hint-trend-${tone}">${dsIcon('lightbulb', 15)} Hints / scaffold used on <strong>${hinted}</strong> of last <strong>${total}</strong> attempt${total === 1 ? '' : 's'}</span>${ribbon}`;
   }
   // Show baseline on mount (so a lesson with prior hint history surfaces
   // the badge even before the user re-clicks Hint).
@@ -450,10 +454,10 @@ function renderL3(body, lesson, content) {
       renderHintStack();
       renderHintTrend();
       if (hintsUsed >= ladder.length) {
-        hintBtn.textContent = '💡 No more hints';
+        hintBtn.innerHTML = dsIcon('lightbulb', 15) + ' No more hints';
         hintBtn.disabled = true;
       } else {
-        hintBtn.textContent = `💡 Hint (${hintsUsed}/${ladder.length})`;
+        hintBtn.innerHTML = `${dsIcon('lightbulb', 15)} Hint (${hintsUsed}/${ladder.length})`;
       }
     });
   }
@@ -520,7 +524,7 @@ function renderL3(body, lesson, content) {
       appendHistory(lesson.id, 'critical-lines-used');
       saveProgress();
       renderHintTrend();
-      feedback.innerHTML = `<span class="text-amber-300">🎯 Fill the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'} marked <code>/* ___ FILL ___ */</code> — that's the insight of this pattern.</span>`;
+      feedback.innerHTML = `<span class="text-amber-300">${dsIcon('target', 15)} Fill the ${drill.criticalLines.length} load-bearing line${drill.criticalLines.length === 1 ? '' : 's'} marked <code>/* ___ FILL ___ */</code> — that's the insight of this pattern.</span>`;
     });
   }
 
@@ -546,7 +550,7 @@ function renderL3(body, lesson, content) {
     // Reset hint ladder so a fresh attempt starts unhinted.
     hintsUsed = 0;
     renderHintStack();
-    if (hintBtn) { hintBtn.textContent = '💡 Hint'; hintBtn.disabled = false; }
+    if (hintBtn) { hintBtn.innerHTML = dsIcon('lightbulb', 15) + ' Hint'; hintBtn.disabled = false; }
   });
 
   async function run() {
@@ -607,15 +611,15 @@ function renderL3(body, lesson, content) {
           // lowers friction for the repeat-mocks PROFILE's "personal-bests
           // trend down over weeks" success criterion structurally requires.
           // Random selection is preserved here (smart-pick is queued backlog).
-          liveFeedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Solved in ${formatTime(elapsed)} (${tries})${bestMsg}</span>` + srBadge +
-            ` <button class="secondary" data-action="mock-again" style="margin-left:10px;font-size:12px;padding:3px 10px;">🎯 Mock another</button>`;
+          liveFeedback.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} Solved in ${formatTime(elapsed)} (${tries})${bestMsg}</span>` + srBadge +
+            ` <button class="secondary" data-action="mock-again" style="margin-left:10px;font-size:12px;padding:3px 10px;">${dsIcon('target', 15)} Mock another</button>`;
           const againBtn = liveFeedback.querySelector('[data-action="mock-again"]');
           if (againBtn) againBtn.addEventListener('click', () => {
             if (typeof startRandomMockInterview === 'function') startRandomMockInterview();
           });
         }
       } else {
-        feedback.innerHTML = `<span class="text-emerald-400 font-medium">✓ Output matches — L3 passed (${tries}).</span>` + srBadge;
+        feedback.innerHTML = `<span class="text-emerald-400 font-medium">${dsIcon('check', 14)} Output matches — L3 passed (${tries}).</span>` + srBadge;
       }
     } else if (!result.ok) {
       feedback.innerHTML = '<span class="text-rose-400">Runtime error — read the output box.</span>';

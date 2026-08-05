@@ -33,6 +33,18 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">6</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — Top-N slices per leaderboard window, so the overwhelmingly common &#39;show me the top 100&#39; read never touches the underlying ranking structure.</li>
+      <li><a href="../../../sd/components/c/hot-keys/">Hot-Key Mitigation</a> <span class="ds-chip">signature</span> — One popular leaderboard absorbs most of the reads and writes, so its sorted set has to be split or replicated away from the others.</li>
+      <li><a href="../../../sd/components/c/sharding/">Sharding</a> <span class="ds-chip">signature</span> — Partitions scores by leaderboard and time window; one global sorted set would concentrate every write in the system on a single node.</li>
+      <li><a href="../../../sd/components/c/aggregation/">Pre-Aggregation &amp; Rollups</a> <span class="ds-chip">signature</span> — Scores are maintained as running totals rather than recomputed, so a read is a range query on a sorted set instead of a scan.</li>
+      <li><a href="../../../sd/components/c/kv-store/">Key-Value Store</a> — Sorted sets are the leaderboard — score updates and top-N range reads are both native operations rather than queries.</li>
+      <li><a href="../../../sd/components/c/stream-processing/">Stream Processing</a> — Score events are folded into the ranking as they arrive, because recomputing from raw events per read would not survive the read volume.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Submit/update a player&#39;s score; read top-K; read one user&#39;s exact rank plus nearby neighbours; multiple boards (global, per-region, per-mode).</li><li>Time windows — daily / weekly / monthly / all-time — each queryable independently.</li><li>Tie-breaking must be specified up front so equal scores have a stable order.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>20M DAU × ~10 matches → ~200M updates/day, ~2–3K writes/s avg, ~20K peak</li><li>Reads dominate: ~12K/s average, up to ~100K peak, though top-K is highly cacheable</li><li>A sorted-set entry is ~100 B with skiplist overhead → a 20M-player board is ~2 GB; a 100M all-time board ~10 GB</li><li>Rank should reflect a score within seconds; &lt;50ms for top-K and my-rank</li></ul>

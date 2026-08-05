@@ -33,6 +33,18 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">6</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — The whole problem. Ring placement, replication and eviction all exist to make one cache survive nodes joining and leaving without losing its value.</li>
+      <li><a href="../../../sd/components/c/replication/">Replication</a> <span class="ds-chip">signature</span> — Each entry is held on N successive ring nodes, so losing one node degrades the hit rate instead of losing a whole slice of the keyspace.</li>
+      <li><a href="../../../sd/components/c/consistent-hashing/">Consistent Hashing</a> <span class="ds-chip">signature</span> — Places keys on the ring so adding a node moves ~1/N of them, instead of invalidating the whole cache and stampeding the origin.</li>
+      <li><a href="../../../sd/components/c/service-discovery/">Service Discovery</a> — Tells clients which nodes are on the ring right now; a stale membership view means two clients hash the same key to different nodes.</li>
+      <li><a href="../../../sd/components/c/quorum/">Quorum (N/W/R)</a> — Read and write acknowledgement counts decide whether a cached value may be stale — the tunable this design exposes to its callers.</li>
+      <li><a href="../../../sd/components/c/bloom-filter/">Bloom Filter</a> — Avoids a network hop for keys a node certainly does not hold, which matters when the miss costs a round trip to the origin.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>GET/SET/DELETE by key with TTL, distributed so total capacity exceeds one machine, transparent to clients.</li><li>Elastic membership: nodes added or removed with minimal disruption to existing keys.</li><li>Clarify look-aside vs read-through, and the acceptable staleness and eviction behaviour.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>App does 1M reads/s at a ~95% hit rate → cache serves ~950K, only ~50K leak to the DB</li><li>A 10 TB hot set on 64 GB nodes → ~160 nodes for memory; at 2–3× replication ~320–480</li><li>Raw throughput (1M ops/s at ~150K/node) would need only a handful — memory dominates node count, not ops</li><li>Sub-millisecond p99 GET; eventual/best-effort consistency, since the DB is the source of truth</li><li>Hit rate is the number to optimize: 95% → 99% cuts DB fallthrough fivefold</li></ul>

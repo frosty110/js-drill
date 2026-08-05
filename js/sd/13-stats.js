@@ -27,7 +27,7 @@ async function openStats() {
   }
 
   document.getElementById('stats-body').innerHTML = `
-    <button class="close" id="stats-close">×</button>
+    <button class="close" id="stats-close" aria-label="Close">${icon('x', 18)}</button>
     <h2>Your progress</h2>
     <p style="color:var(--muted);font-size:13px;margin:2px 0 0">${esc(m.title)}</p>
     <div class="stat-grid">

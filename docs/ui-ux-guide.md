@@ -67,7 +67,7 @@ the reference it points at.
 |---|---|---|
 | Color, type, space, radius, motion, z-layers, breakpoint | `ds/tokens.css` | a hex in a component, a `:root` override in a page |
 | Reusable primitives (page frame, button, card, chip, row, sheet, nav, field, MC option, switch, segmented, stat, progress, empty, skeleton) | `ds/components.css` | a per-surface copy of the same box |
-| Iconography | `ds/icons.js` (`dsIcon(name, size)`) | inline one-off `<svg>`, emoji in chrome (D07) |
+| Iconography | `ds/icons.js` (`dsIcon(name, size)`) | inline one-off `<svg>`, emoji in chrome (D07), a text glyph as an icon — see [`iconography.md`](iconography.md) |
 | Visual catalog / smoke check | `ds/gallery.html` | guessing what exists |
 | App-specific styling of a ds surface | `css/06-ds-nav.css` … `css/10-ds-lesson.css` | app selectors inside `ds/` (breaks D04 isolation) |
 | Surface behavior/markup | `js/app/16-ds-nav.js` … `21-settings.js` | markup in `index.html` for dynamic surfaces |
@@ -297,8 +297,21 @@ close button, a status dot, a stat tile. They all exist.
   action, and any control that opens a *variable* destination (a menu, a
   launcher, a picker) — a bare glyph can't say where it goes.
 - **No emoji in chrome (D07).** Emoji renders per-platform and reads as
-  placeholder design. It remains fine in authored lesson content and in
-  celebratory toasts.
+  placeholder design. It remains fine in authored lesson content under `data/`.
+  **Gated** by `tools/check-icons.js` (invariants § 9) at a flat zero, along
+  with unresolvable icon names, modes missing a `DS_MODE_ICONS` row, text
+  glyphs standing in for icons, and inline `<svg>` outside `ds/icons.js`.
+  Full rules: [`iconography.md`](iconography.md).
+- **Chevron vs. arrow.** A **chevron** (`chevron-left/right/down`) names an
+  affordance that moves you through a hierarchy — into a card, back to the
+  parent, open a disclosure — and is an icon. A trailing `→` inside a button
+  label advances a *sequence* ("Next →", "Continue →") and stays typographic.
+  Both spellings are deliberate; don't convert one into the other.
+- **Alignment belongs to the set.** `dsIcon()` stamps `.ds-icon`
+  (`flex: none; vertical-align: -.16em`) on every glyph, so a call site never
+  carries its own nudge. If an icon needs a container, it gets a **tile** — one
+  size for every peer in the group, which is what makes a row of unrelated
+  subjects read as one menu.
 
 **Hierarchy per surface:** exactly one primary action visible at a time. If two
 things look equally important, the screen has no focus (PRINCIPLES #1).
@@ -559,6 +572,7 @@ Honest inventory so nobody mistakes legacy for precedent:
 | Inline `style="…"` in ds surfaces (`17`, `20`) | ~80 | New markup uses classes. Convert what you touch. |
 | Breakpoint drift (600/700/540/480px) | ~17 media queries | New code uses 768 only. |
 | Toast lives in `css/04-drills.css` with fixed colors | 4 variants | The next agent to add a toast hoists it to `.ds-toast` in `ds/components.css` (tokens, no emoji dependency) and migrates the variants. |
+
 | First-run welcome + several legacy modals aren't on `ds/` | ~6 surfaces | Migrate opportunistically, one per change, with screenshots. |
 
 **Boy-scout bounds:** clean up the *block you're already in*. Do not open a

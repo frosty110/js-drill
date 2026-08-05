@@ -8,7 +8,7 @@ function initTodaysPlanModal() {
     const plan = dailyPlan();
     const body = document.getElementById('today-body');
     if (!plan.length) {
-      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Nothing queued — you're caught up! 🎉<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
+      body.innerHTML = `<div style="color:#9aa0aa;text-align:center;padding:24px 0;">Nothing queued — you're caught up.<br><br>Pick a lesson from the sidebar or try Mock Interview.</div>`;
     } else {
       // Iter 10: PRIMARY autopilot CTA. Surfaces the smartest pick (plan[0]
       // — dailyPlan ranks SR-due first, then weak, then path) as a single
@@ -34,7 +34,7 @@ function initTodaysPlanModal() {
       const primaryCta = `
         <button data-action="start-first" data-lesson-id="${escapeHtml(first.id)}" style="text-align:left;width:100%;padding:14px 16px;border-radius:8px;background:rgba(52,211,153,0.14);border:1px solid rgba(52,211,153,0.55);color:#ecfdf5;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit;margin-bottom:14px;">
           <span style="display:flex;flex-direction:column;gap:3px;min-width:0;">
-            <span style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">🎯 Start</span>
+            <span style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">${dsIcon('target', 15)} Start</span>
             <span style="font-size:15px;font-weight:600;color:#f0fdf4;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(firstTitle)}</span>
             <span style="font-size:11px;color:#86efac;">${escapeHtml(first.why)}</span>
           </span>
@@ -84,7 +84,7 @@ function initTodaysPlanModal() {
     const heading = document.getElementById('today-heading');
     const sub = document.getElementById('today-sub');
     const body = document.getElementById('today-body');
-    if (heading) heading.textContent = `⏱ Day ${dayIdx + 1} of ${totalDays} — ${day.title}`;
+    if (heading) heading.innerHTML = `${dsIcon('clock', 15)} Day ${dayIdx + 1} of ${totalDays} — ${day.title}`;
     if (sub) sub.textContent = `${day.date}. Tasks auto-tick when you master the linked lesson. Earlier-day lessons resurface below as SR comes due.`;
 
     let totalTasks = 0, doneTasks = 0;
@@ -200,7 +200,7 @@ function initTodaysPlanModal() {
     }
     const heading = document.getElementById('today-heading');
     const sub = document.getElementById('today-sub');
-    if (heading) heading.textContent = `📅 Today's session`;
+    if (heading) heading.innerHTML = `${dsIcon('calendar-check', 15)} Today's session`;
     if (sub) sub.textContent = `Curated from your due reviews, starter path, and weak spots. Click any item to start.`;
     openToday();
   }
@@ -375,7 +375,7 @@ function initCheatsheetWiring() {
     renderCheatsheetBody();
   });
   document.getElementById('cheatsheet-expand-all').addEventListener('click', toggleCheatsheetExpandAll);
-  // iter 126: 📱 Save — printable PDF export. window.open() must fire synchronously
+  // iter 126: Save — printable PDF export. window.open() must fire synchronously
   // from this click handler (no await before it) to preserve iOS Safari popup-allow.
   document.getElementById('cheatsheet-save-pdf').addEventListener('click', exportCheatsheetToPdf);
 }
@@ -428,7 +428,7 @@ function initBootTail() {
       lastDueCount = dueNow;
     }
   }, 60 * 1000);
-  // iter 113: 📦 Offline Drill Pack — paint chip from last-known stats
+  // iter 113: Offline Drill Pack — paint chip from last-known stats
   // immediately so cold-start has no blank flash, then ask the SW for fresh
   // stats (round-trip is sub-second once SW is active).
   updateOfflinePackChip();

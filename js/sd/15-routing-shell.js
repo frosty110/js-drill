@@ -165,6 +165,7 @@ window.addEventListener('hashchange', () => {
   applyRoute().catch(() => {});
 });
 
+mountChromeIcons();
 // The page's own chrome. These three were lost when the D15 shell block was
 // spliced in over the old breadcrumb wiring — an off-by-a-few-lines splice
 // boundary that took the wordmark and Stats listeners with it. Nothing failed

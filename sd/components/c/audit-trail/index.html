@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Audit Log &amp; Provenance — Governance &amp; Accountability — system design</title>
+<meta name="description" content="An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later.">
+<link rel="canonical" href="https://frosty110.github.io/js-drill/sd/components/c/audit-trail/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Audit Log &amp; Provenance — Governance &amp; Accountability — system design">
+<meta property="og:description" content="An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later.">
+<meta property="og:url" content="https://frosty110.github.io/js-drill/sd/components/c/audit-trail/">
+<link rel="stylesheet" href="../../../../ds/tokens.css">
+<link rel="stylesheet" href="../../../../ds/components.css">
+<link rel="stylesheet" href="../../../../css/13-share-page.css">
+<script src="../../../../js/sharecode.js"></script>
+</head>
+<body class="ds-root sharepage">
+<div class="ds-page">
+
+  <header class="ds-page__head">
+    <p class="sharepage__crumb"><a href="../../../../sd/">System design</a> › <a href="../../../../sd/components/">Building Blocks</a> › <a href="../../../../sd/components/catalog/">Component catalog</a></p>
+    <h1>Audit Log &amp; Provenance</h1>
+    <p class="sharepage__lede">An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later.</p>
+    <p class="sharepage__meta">
+      <span class="ds-chip">Governance &amp; Accountability</span>
+      <a class="ds-chip" href="../../../../sd/design-problems/tag/mechanism/audit-trail/">signature mechanism</a>
+      <span class="ds-chip">6 problems</span>
+    </p>
+  </header>
+  
+  <section class="ds-section">
+    <h2>Reach for it when</h2>
+    <ul><li>A decision has to be defended to someone external — a regulator, an auditor, a counterparty — months or years after it was made</li><li>The inputs came from somewhere you do not control and will not replay: a third-party API, a vendor feed, a model</li><li>Money moved, or access was granted or refused, so &#39;what did we do and on what basis&#39; is a question that will eventually be asked</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>Don&#39;t reach for it when</h2>
+    <ul><li>The decision is trivially re-derivable from durable inputs you already retain — then the log stores no information you did not have</li><li>You only want debugging visibility, where tracing and structured logs are cheaper and are built for the job</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>What it costs you</h2>
+    <ul><li>The record outlives the schema that wrote it, so it must be self-describing and denormalized rather than a web of foreign keys</li><li>Retention is measured in years and is usually a legal floor rather than a tuning knob</li><li>Evidence has to be captured at decision time, which means storing the third-party response rather than the query that produced it</li><li>Write amplification on every step of every decision, which is the price of the record being complete rather than sampled</li></ul>
+  </section>
+  
+  <section class="ds-section">
+    <h2>How it breaks</h2>
+    <ul><li>Recording the conclusion but not what was shown, so the log asserts a decision it cannot evidence</li><li>Pinning the code version but not the policy, prompt or data snapshot — any one of them changing changes the answer</li><li>A log the application can update in place, which records the current story rather than what happened</li><li>Citing a live source instead of a stored snapshot, so the citation resolves to whatever that source says today</li><li>Promising deterministic replay of a non-deterministic process; preserved inputs and a comparison is what you can honestly offer</li></ul>
+  </section>
+
+  <section class="ds-section" id="alternatives">
+    <h2>Instead, consider</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/components/c/outbox-cdc/">Transactional Outbox / CDC</a> — Captures every state change for downstream consumers; an audit log captures the decision and its justification, which a change feed does not carry.</li>
+      <li><a href="../../../../sd/components/c/stream-processing/">Stream Processing</a> — When the question is aggregate behaviour over time rather than the defensibility of one specific decision.</li>
+    </ul>
+  </section>
+
+  <section class="ds-section" id="used-in">
+    <h2>Used in 6 design problems</h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../../sd/design-problems/p15/">Design a Payment System (Wallet / Ledger)</a> — A double-entry ledger is the audit trail: the balance is derived from immutable entries rather than stored, so any figure can be re-proved from the entries that produced it.</li>
+      <li><a href="../../../../sd/design-problems/p18/">Design an Ad Click Aggregator</a> — Raw events are kept in object storage and a nightly batch recompute is the authority, so the fast streaming number is always reconcilable against a durable record of what actually arrived.</li>
+      <li><a href="../../../../sd/design-problems/p33/">Design a Financial Crime Alert Investigation System</a> — An examiner can ask years later why one alert was cleared, so the trace pins prompt, model snapshot, policy version and evidence hashes — everything whose change would change the answer.</li>
+      <li><a href="../../../../sd/design-problems/p34/">Design a Sanctions Screening System</a> — Every screening decision records the list version it ran against, since &#39;we did not know&#39; is only defensible with the evidence attached.</li>
+      <li><a href="../../../../sd/design-problems/p35/">Design a Human Review Queue</a> — A reviewer&#39;s decision is written as an immutable event with its reason and the lease that authorised it, and a correction references the original rather than overwriting it.</li>
+      <li><a href="../../../../sd/design-problems/p36/">Design a Business Verification Pipeline</a> — Sources disagree routinely, so the record keeps what each one said and which precedence rule decided between them, rather than silently keeping the winner.</li>
+    </ul>
+  </section>
+  <script type="application/json" id="drill-data">{"topic":"components","kind":"component","id":"audit-trail","title":"Audit Log & Provenance","category":"governance-accountability","mechanism":"audit-trail","what":"An append-only record of what was decided and what it was shown, pinned to the versions in effect, so the decision can be reconstructed later.","reachFor":["A decision has to be defended to someone external — a regulator, an auditor, a counterparty — months or years after it was made","The inputs came from somewhere you do not control and will not replay: a third-party API, a vendor feed, a model","Money moved, or access was granted or refused, so 'what did we do and on what basis' is a question that will eventually be asked"],"avoid":["The decision is trivially re-derivable from durable inputs you already retain — then the log stores no information you did not have","You only want debugging visibility, where tracing and structured logs are cheaper and are built for the job"],"costs":["The record outlives the schema that wrote it, so it must be self-describing and denormalized rather than a web of foreign keys","Retention is measured in years and is usually a legal floor rather than a tuning knob","Evidence has to be captured at decision time, which means storing the third-party response rather than the query that produced it","Write amplification on every step of every decision, which is the price of the record being complete rather than sampled"],"failureModes":["Recording the conclusion but not what was shown, so the log asserts a decision it cannot evidence","Pinning the code version but not the policy, prompt or data snapshot — any one of them changing changes the answer","A log the application can update in place, which records the current story rather than what happened","Citing a live source instead of a stored snapshot, so the citation resolves to whatever that source says today","Promising deterministic replay of a non-deterministic process; preserved inputs and a comparison is what you can honestly offer"],"usedIn":[{"problem":"p15","title":"Design a Payment System (Wallet / Ledger)","doing":"A double-entry ledger is the audit trail: the balance is derived from immutable entries rather than stored, so any figure can be re-proved from the entries that produced it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p15/"},{"problem":"p18","title":"Design an Ad Click Aggregator","doing":"Raw events are kept in object storage and a nightly batch recompute is the authority, so the fast streaming number is always reconcilable against a durable record of what actually arrived.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p18/"},{"problem":"p33","title":"Design a Financial Crime Alert Investigation System","doing":"An examiner can ask years later why one alert was cleared, so the trace pins prompt, model snapshot, policy version and evidence hashes — everything whose change would change the answer.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p33/"},{"problem":"p34","title":"Design a Sanctions Screening System","doing":"Every screening decision records the list version it ran against, since 'we did not know' is only defensible with the evidence attached.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p34/"},{"problem":"p35","title":"Design a Human Review Queue","doing":"A reviewer's decision is written as an immutable event with its reason and the lease that authorised it, and a correction references the original rather than overwriting it.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p35/"},{"problem":"p36","title":"Design a Business Verification Pipeline","doing":"Sources disagree routinely, so the record keeps what each one said and which precedence rule decided between them, rather than silently keeping the winner.","url":"https://frosty110.github.io/js-drill/sd/design-problems/p36/"}]}</script>
+
+</div>
+<footer class="sharepage__foot">
+  <a class="ds-btn ds-btn--primary" href="https://frosty110.github.io/js-drill/system-design.html#/components/c/audit-trail">Drill this in the app →</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../p/">All lessons</a>
+  <a class="ds-btn ds-btn--ghost" href="../../../../sd/">System design</a>
+</footer>
+<script src="../../../../js/share-page.js"></script>
+</body>
+</html>

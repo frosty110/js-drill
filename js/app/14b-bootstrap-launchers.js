@@ -99,55 +99,55 @@ async function initBootstrap() {
 //  the breadcrumb. `?.addEventListener` no-ops on absent buttons.
 // ──────────────────────────────────────────────────────────────────────────
 const DRILL_LAUNCHERS = [
-  // iter 49 — 🔎 Recognize: diagnose the pattern from a problem prompt
+  // iter 49 — Recognize: diagnose the pattern from a problem prompt
   ['recognize-btn',        startRecognizeSession],
-  // iter 76 — 🎯 Reverse: output → problem (sibling to Recognize)
+  // iter 76 — Reverse: output → problem (sibling to Recognize)
   ['reverse-btn',          startReverseSession],
-  // iter 77 — 🔮 Predict: mental-execution from same-type distractors
+  // iter 77 — Predict: mental-execution from same-type distractors
   ['crystal-btn',          startCrystalSession],
-  // iter 79 — 📐 Claim: smell-test stated complexity vs the code
+  // iter 79 — Claim: smell-test stated complexity vs the code
   ['claim-btn',            startClaimSession],
-  // iter 83 — 🎰 Gotcha Roulette: reference.notes recall stream
+  // iter 83 — Gotcha Roulette: reference.notes recall stream
   ['gotcha-btn',           startGotchaSession],
-  // iter 86 — 🔀 Swap-Bench: pairwise idiom-equivalence ("same behavior?")
+  // iter 86 — Swap-Bench: pairwise idiom-equivalence ("same behavior?")
   ['swap-btn',             startSwapBenchSession],
-  // iter 91 — 🎬 Conversation Drill: classify section by interview-arc phase
+  // iter 91 — Conversation Drill: classify section by interview-arc phase
   ['conv-drill-btn',       startConvDrillSession],
-  // iter 93 — 🧬 Trace-Hop: pick the middle state of 3 consecutive frames
+  // iter 93 — Trace-Hop: pick the middle state of 3 consecutive frames
   ['trace-hop-btn',        startTraceHopSession],
-  // iter 97 — 📝 Notes Cloze: keyword-blank MC over reference.notes[]
+  // iter 97 — Notes Cloze: keyword-blank MC over reference.notes[]
   ['notes-drill-btn',      startNotesDrillSession],
-  // iter 98 — 🪐 Mechanic Constellation: multi-select lessons by tag
+  // iter 98 — Mechanic Constellation: multi-select lessons by tag
   ['constellation-btn',    startConstellationSession],
-  // iter 99 — ⏪ Reverse-Walkthrough: final state → which input produced it
+  // iter 99 — Reverse-Walkthrough: final state → which input produced it
   ['reverse-walk-btn',     startReverseWalkSession],
-  // iter 102 — 🗂 Notes Locate: cross-corpus note → which lesson
+  // iter 102 —  Notes Locate: cross-corpus note → which lesson
   ['notes-locate-btn',     startNotesLocateSession],
-  // iter 122 — 🧪 What-If: input → output prediction over walkthrough examples
+  // iter 122 — What-If: input → output prediction over walkthrough examples
   ['whatif-btn',           startWhatifSession],
-  // iter 142 — 🔀 Mutate-and-Predict: name the failure class of a mutation
+  // iter 142 — Mutate-and-Predict: name the failure class of a mutation
   ['mutate-btn',           startMutateSession],
-  // iter 147 — 📞 Phone Screen: chained 3-card session under one timer
+  // iter 147 — Phone Screen: chained 3-card session under one timer
   ['phone-screen-btn',     startPhoneScreenSession],
-  // iter 148 — 🚧 Constraint-Shift: rewrite under a swapped constraint
+  // iter 148 — Constraint-Shift: rewrite under a swapped constraint
   ['constraint-shift-btn', startConstraintShiftSession],
-  // iter 109 — 🔖 Match: bidirectional title ↔ description matcher
+  // iter 109 — Match: bidirectional title ↔ description matcher
   ['match-btn',            startMatchSession],
-  // iter 111 — 🌈 Sections: section mastery heatmap (28-cell grid)
+  // iter 111 — Sections: section mastery heatmap (28-cell grid)
   ['sections-grid-btn',    startSectionGrid],
-  // iter 88 — 🤖 AI Coach Export: clipboard payload for paste-into-LLM tutoring
+  // iter 88 — AI Coach Export: clipboard payload for paste-into-LLM tutoring
   ['ai-coach-btn',         startAiCoachExport],
-  // iter 54 — ⚡ Rapid-Fire L1: cross-lesson interleaved tap stream
+  // iter 54 — Rapid-Fire L1: cross-lesson interleaved tap stream
   ['rapid-fire-btn',       startRapidFireSession],
   // iter 75 — ⏱ Big-O: complexity-filtered L1 stream
   ['big-o-btn',            startBigOSession],
-  // iter 57 — 🌅 Warmup: 3-card micro-session over Today's Plan mix
+  // iter 57 — Warmup: 3-card micro-session over Today's Plan mix
   ['warmup-btn',           startWarmupSession],
-  // iter 71 — 🏁 Section Speedrun: pick a section, race its L1 stream
+  // iter 71 — Section Speedrun: pick a section, race its L1 stream
   ['speedrun-btn',         startSpeedrunPicker],
-  // iter 125 — 🥊 Gauntlet: chained all-L1 untimed across one section
+  // iter 125 — Gauntlet: chained all-L1 untimed across one section
   ['gauntlet-btn',         startGauntletPicker],
-  // iter 73 — 🪲 Bug-Hunt: tap the buggy line on a mutated canonical
+  // iter 73 — Bug-Hunt: tap the buggy line on a mutated canonical
   ['bug-hunt-btn',         startBugHuntSession],
 ];
 
@@ -227,7 +227,7 @@ function initSidebarActions() {
     if (id) selectLesson(id);
   });
 
-  // iter 108: 🍀 Lucky — random not-yet-mastered lesson dropped at the first
+  // iter 108: Lucky — random not-yet-mastered lesson dropped at the first
   // incomplete level so the user is drilling, not reading. Land on L1 by
   // default; skip to L2/L3 if those earlier levels are already passed.
   document.getElementById('lucky-btn').addEventListener('click', () => {
@@ -272,7 +272,7 @@ function initSidebarActions() {
     renderSidebar();
   });
 
-  // Phase E: 🛠 Repair filter — show only lessons needing work.
+  // Phase E: Repair filter — show only lessons needing work.
   document.getElementById('repair-filter-btn')?.addEventListener('click', () => {
     state.repairFilter = !state.repairFilter;
     saveProgress();
@@ -306,7 +306,7 @@ function initSidebarActions() {
     if (id) navToLesson(id, { tab: 'L1' });
   });
 
-  // iter 65: 💀 Resurrect — jump to most-overdue mastered lesson at L1.
+  // iter 65: Resurrect — jump to most-overdue mastered lesson at L1.
   // On touch devices land on L2 (mirror Review-button pattern); on fine
   // pointer land on L3 — same recall calibration the SR ladder uses.
   document.getElementById('resurrect-btn').addEventListener('click', () => {
@@ -316,7 +316,7 @@ function initSidebarActions() {
     navToLesson(ids[0], { tab: coarse ? 'L2' : 'L3', updateHash: true, collapseMobile: true });
   });
 
-  // iter 94: 🧠 Bridge — route to a cross-track transfer-gap lesson. Picks
+  // iter 94: Bridge — route to a cross-track transfer-gap lesson. Picks
   // the first candidate from `_bridgeCandidates()` (one per gap-mechanic,
   // deterministic by MECHANIC_INDEX iteration order). Lands on L1 with a
   // 2.2-sec fuchsia toast prefacing the transfer context. Closes iter-90

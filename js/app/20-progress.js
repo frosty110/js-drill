@@ -145,7 +145,7 @@ function _progActivityHtml(buckets) {
   // 14-day stacked rep bars (solved base, miss cap; today outlined).
   const last14 = buckets.slice(-14);
   const barMax = Math.max(1, ...last14.map(b => b.passes + b.misses));
-  const CH = 52; // px available for segments (56px track − 2px gap headroom)
+  const CH = 52; // px available for segments (56px track  2px gap headroom)
   const bars = last14.map((b, i) => {
     const ph = b.passes ? Math.max(2, Math.round((b.passes / barMax) * CH)) : 0;
     const mh = b.misses ? Math.max(2, Math.round((b.misses / barMax) * CH)) : 0;
@@ -226,7 +226,7 @@ function _progAttentionHtml() {
           <span>${escapeHtml(r.section)}</span>
         </div>
         ${chips}
-        <span class="ds-row__chev">›</span>
+        <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
       </button>`;
   }).join('');
 
@@ -237,7 +237,7 @@ function _progAttentionHtml() {
         <b>Resurrect ${resIds.length} overdue lesson${resIds.length === 1 ? '' : 's'}</b>
         <span>Mastered, but past 2× the review interval — drill the most overdue</span>
       </div>
-      <span class="ds-row__chev">›</span>
+      <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
     </button>` : '';
 
   const revealRow = revealQ.length ? `
@@ -247,7 +247,7 @@ function _progAttentionHtml() {
         <b>Re-earn ${revealQ.length} revealed pass${revealQ.length === 1 ? '' : 'es'}</b>
         <span>Pass again without peeking to clear the reveal flag</span>
       </div>
-      <span class="ds-row__chev">›</span>
+      <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
     </button>` : '';
 
   // Bridge — cross-track transfer gaps (nav-audit P2-3). With the sidebar
@@ -264,7 +264,7 @@ function _progAttentionHtml() {
         <b>Bridge ${bridges.length} transfer gap${bridges.length === 1 ? '' : 's'}</b>
         <span>You know this mechanic in another track — ride the transfer</span>
       </div>
-      <span class="ds-row__chev">›</span>
+      <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
     </button>` : '';
 
   const body = riskRows + resRow + revealRow + bridgeRow;
@@ -396,7 +396,7 @@ function _progInsightsHtml() {
         <button type="button" class="ds-row prog-rowbtn" data-prog-lesson="${escapeHtml(row.lessonId)}">
           <div class="ds-row__main"><b style="font-weight: var(--ds-fw-med);">${escapeHtml(lesson.title)}</b></div>
           <span class="ds-num ds-dim" style="font-size: var(--ds-fs-sm);">${fmtGap(row.medianGapMs)}</span>
-          <span class="ds-row__chev">›</span>
+          <span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>
         </button>`;
     }).join('');
     blocks.push(`
@@ -512,7 +512,7 @@ function _progInsightsHtml() {
   return `
     <section class="ds-section">
       <details class="prog-details" data-prog-more>
-        <summary>More insights<span class="prog-caret">›</span></summary>
+        <summary>More insights<span class="prog-caret">${dsIcon('chevron-right', 17)}</span></summary>
         <div class="prog-details-body">${body}</div>
       </details>
     </section>`;
@@ -600,7 +600,7 @@ function _wireProgress(shell, buckets) {
       const missedIds = Array.isArray(b.missedLessonIds) ? b.missedLessonIds : [...(b.missedLessonIds || [])];
       if (isTap && missedIds.length) {
         const lessons = missedIds.map(id => findLesson(id)).filter(Boolean).slice(0, 4);
-        const routes = lessons.map(l => `<button type="button" class="prog-route" data-prog-lesson="${escapeHtml(l.id)}">${escapeHtml(l.title)} ›</button>`).join('');
+        const routes = lessons.map(l => `<button type="button" class="prog-route" data-prog-lesson="${escapeHtml(l.id)}">${escapeHtml(l.title)}${dsIcon('chevron-right', 14)}</button>`).join('');
         detail.innerHTML = `${head}${routes ? `<div>${routes}</div>` : ''}`;
         detail.querySelectorAll('[data-prog-lesson]').forEach(rb => rb.addEventListener('click', () => selectLesson(rb.getAttribute('data-prog-lesson'))));
       } else {

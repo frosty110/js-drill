@@ -2,7 +2,7 @@
 //  AUDIO EPISODES — two-voice podcast playback over Conversation-tab content.
 //
 //  Two surfaces, one persistent playback state:
-//    (1) #audio-modal — playlist entry point. Pick an episode → modal closes.
+// (1) #audio-modal — playlist entry point. Pick an episode → modal closes.
 //    (2) #audio-dock — fixed bottom bar. Renders while audio is queued, even
 //        across tab and lesson navigation. Closing it stops + clears state.
 //
@@ -77,7 +77,7 @@ function initAudioPlayer() {
         const isPlaying = _audioLessonId === ep.lessonId && _audioQueue;
         const marker = isPlaying
           ? '<span style="color:#f5b62b;">●</span>'
-          : '<span style="color:#6b7079;">▶</span>';
+          : `<span style="color:#6b7079;">${dsIcon('play', 13)}</span>`;
         return `<button class="audio-episode" data-ep-id="${escapeHtml(ep.lessonId)}" style="text-align:left; background:#262930; border-radius:6px; padding:8px 12px; color:#eef0f2; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; border:1px solid ${isPlaying ? '#f5b62b' : 'transparent'};">
           <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(ep.title)}</span>
           ${marker}
@@ -150,10 +150,10 @@ function initAudioPlayer() {
     // content like the L3 action bar. Cleared when the dock hides.
     document.body.style.paddingBottom = '70px';
     document.getElementById('audio-dock-title').textContent =
-      '🎧 ' + (_audioLessonTitle || '') + '  ·  clip ' + (_audioClipIdx + 1) + ' / ' + _audioQueue.length;
+      dsIcon('headphones', 15) + '' + (_audioLessonTitle || '') + '  ·  clip ' + (_audioClipIdx + 1) + ' / ' + _audioQueue.length;
     const voiceTag = c.voice === 'a' ? 'Voice A · what you would say' : 'Voice B · why it matters';
     document.getElementById('audio-dock-section').textContent = c.title + '  —  ' + voiceTag;
-    dockPlaypause.textContent = _audioPlaying ? '⏸' : '▶';
+    dockPlaypause.innerHTML = dsIcon(_audioPlaying ? 'pause' : 'play', 16);
     dockPrev.disabled = _audioClipIdx <= 0;
     dockNext.disabled = _audioClipIdx >= _audioQueue.length - 1;
     dockPrev.style.opacity = dockPrev.disabled ? '0.4' : '1';
@@ -330,7 +330,7 @@ function initAudioPlayer() {
   }
 
   // Expose a programmatic start so the Conversation tab can mount an inline
-  // 🎧 Listen button without going through the playlist surface. Any lesson
+  // Listen button without going through the playlist surface. Any lesson
   // with a conversation.sections block is a valid target — the EPISODES list
   // only gates what the playlist surfaces, not what can play.
   window.startAudioEpisode = startEpisode;

@@ -53,6 +53,8 @@
     // fallback = the label's initial in the badge tile.
     const iconName = it.icon || DS_MODE_ICONS[it.id];
     const badge = `<span class="ds-row__badge" aria-hidden="true">${
+      // The letter tile is a last resort that DS_MODE_ICONS coverage (gated by
+      // tools/check-icons.js) keeps unreachable for a real mode.
       iconName ? dsIcon(iconName, 16) : escapeHtml((it.label || '?').charAt(0))
     }</span>`;
     // audit F14: the subtitle is the ONLY thing that tells two adjacent rows
@@ -63,12 +65,12 @@
     // comfortable thumb tile. (The authored strings still want shortening —
     // they live in TOPBAR_MENU_TAXONOMY / the hidden buttons' title attrs.)
     const main = `<div class="ds-row__main"><b>${escapeHtml(it.label)}</b>${it.desc ? `<span style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:var(--ds-lh-sm);">${escapeHtml(it.desc)}</span>` : ''}</div>`;
-    const chev = `<span class="ds-row__chev">›</span>`;
+    const chev = `<span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>`;
     if (it.action === 'shuffle') {
       const idList = Array.isArray(it.ids) ? it.ids : [];
       const ids = idList.join(',');
       // The row tap keeps launching a RANDOM family member (good interleaving),
-      // but a ▾ disclosure now expands the member list so a user who wants a
+      // but a chevron disclosure now expands the member list so a user who wants a
       // SPECIFIC drill can pick it deterministically instead of typing into the
       // palette (nav-audit P2-4). Members resolve via the same data-btn-id
       // synth-click contract; labels come from the hidden buttons. Zero state.
@@ -81,8 +83,8 @@
       }).filter(Boolean).join('');
       const shuffleRow = `<button data-action="shuffle" data-shuffle-ids="${escapeHtml(ids)}" style="flex:1; min-width:0; display:flex; align-items:flex-start; gap: var(--ds-s3); text-align:left; background:none; border:0; cursor:pointer; min-height: var(--ds-tap);">${badge}${main}</button>`;
       const disclose = members
-        ? `<button data-disclose aria-expanded="false" aria-label="Show every drill in this family" style="flex:none; width: var(--ds-tap); min-height: var(--ds-tap); background:none; border:0; color: var(--ds-text-mute); cursor:pointer; font-size: var(--ds-fs-md); line-height:1;">▾</button>`
-        : `<span class="ds-row__chev">›</span>`;
+        ? `<button data-disclose aria-expanded="false" aria-label="Show every drill in this family" style="flex:none; width: var(--ds-tap); min-height: var(--ds-tap); background:none; border:0; color: var(--ds-text-mute); cursor:pointer; display:grid; place-items:center;">${dsIcon('chevron-down', 17)}</button>`
+        : `<span class="ds-row__chev">${dsIcon('chevron-right', 17)}</span>`;
       return `<div data-family>
         <div class="ds-row" style="padding-right:0;">${shuffleRow}${disclose}</div>
         ${members ? `<div data-members hidden>${members}</div>` : ''}
@@ -120,7 +122,7 @@
   }
 
   function onRowTap(e) {
-    // ▾ disclosure — expand/collapse a drill family's member list in place
+    // Chevron disclosure — expand/collapse a drill family's member list in place
     // (nav-audit P2-4). Kept ahead of the launch branches so it never triggers
     // a random pick.
     const disc = e.target.closest('[data-disclose]');
@@ -131,7 +133,7 @@
         const opening = members.hasAttribute('hidden');
         members.toggleAttribute('hidden', !opening);
         disc.setAttribute('aria-expanded', String(opening));
-        disc.textContent = opening ? '▴' : '▾';
+        disc.innerHTML = dsIcon(opening ? 'chevron-up' : 'chevron-down', 17);
       }
       return;
     }

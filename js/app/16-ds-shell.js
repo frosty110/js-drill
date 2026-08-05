@@ -153,19 +153,20 @@
     });
   }
 
-  // Topbar chrome: swap the emoji glyphs for the ds stroke icon set (D07).
-  function upgradeTopbarIcons() {
+  // Static chrome markup can't call dsIcon() inline, so each element NAMES its
+  // own mark with data-icon and this fills it once at boot (invariant 9, and
+  // the convention system-design.html already uses). Pure plumbing: a new icon
+  // in the markup needs no change here. Replaced a hardcoded three-selector
+  // list, which is a second icon registry written in JavaScript.
+  function mountChromeIcons(root = document) {
     if (typeof dsIcon !== 'function') return;
-    for (const [sel, name, size] of [
-      ['#palette-trigger', 'search', 19],
-      ['#topbar-help', 'help', 19],
-      ['#topbar-settings', 'sliders', 19]
-    ]) {
-      const el = document.querySelector(sel);
-      if (el) el.innerHTML = dsIcon(name, size);
+    for (const el of root.querySelectorAll('[data-icon]')) {
+      el.innerHTML = dsIcon(el.dataset.icon, +el.dataset.iconSize || 16);
     }
   }
+  window.mountChromeIcons = mountChromeIcons;
+
 
   start();
-  upgradeTopbarIcons();
+  mountChromeIcons();
 })();

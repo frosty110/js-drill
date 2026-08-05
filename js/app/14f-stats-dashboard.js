@@ -108,7 +108,7 @@ function renderStatsInto(statsBodyEl, _close) {
       : '';
     const compassHtml = `
       <div style="margin-bottom: 14px; padding: 12px 14px; background: #17181c; border: 1px solid #262930; border-radius: 8px;">
-        <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">🧭 Track Balance</div>
+        <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">${dsIcon('compass', 15)} Track Balance</div>
         ${compassRows.map(r => `
           <div style="display:grid; grid-template-columns: 70px 1fr 70px; gap:8px; align-items:center; padding:3px 0;">
             <span style="font-size:12px; color:${r.color}; font-weight:600;">${escapeHtml(r.label)}</span>
@@ -165,7 +165,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.2); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🔎 Recognize lifetime <span style="color: #6b7079; font-weight: 400;">(incl. 🎯 Reverse)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('scan', 15)} Recognize lifetime <span style="color: #6b7079; font-weight: 400;">(incl. Reverse)</span></div>
               <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.recognize.correct} / ${state.recognize.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.recognize.correct / state.recognize.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-recognize-from-stats" style="background: rgba(245,182,43,0.16); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Drill →</button>
@@ -176,7 +176,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🎯 Crux lifetime <span style="color: #6b7079; font-weight: 400;">(key-trick recall)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('target', 15)} Crux lifetime <span style="color: #6b7079; font-weight: 400;">(key-trick recall)</span></div>
               <div style="color: #ffedc2; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.gotcha.correct} / ${state.gotcha.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.gotcha.correct / state.gotcha.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-gotcha-from-stats" style="background: rgba(255,206,90,0.16); color: #ffedc2; border: 1px solid rgba(255,206,90,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Recall →</button>
@@ -187,7 +187,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">📐 Claim lifetime <span style="color: #6b7079; font-weight: 400;">(smell-test complexity)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('gauge', 15)} Claim lifetime <span style="color: #6b7079; font-weight: 400;">(smell-test complexity)</span></div>
               <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.claim.correct} / ${state.claim.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.claim.correct / state.claim.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-claim-from-stats" style="background: rgba(245,182,43,0.16); color: #ffce5a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Spin →</button>
@@ -198,7 +198,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(245,182,43,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(245,182,43,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🔮 Predict lifetime <span style="color: #6b7079; font-weight: 400;">(mental-execution)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('eye', 15)} Predict lifetime <span style="color: #6b7079; font-weight: 400;">(mental-execution)</span></div>
               <div style="color: #ffdd8a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.crystal.correct} / ${state.crystal.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.crystal.correct / state.crystal.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-crystal-from-stats" style="background: rgba(245,182,43,0.16); color: #ffdd8a; border: 1px solid rgba(245,182,43,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Predict →</button>
@@ -209,7 +209,7 @@ function renderStatsInto(statsBodyEl, _close) {
         <div style="margin-top: 8px;">
           <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.25); display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <div style="color: #9aa0aa; font-size: 12px;">🪲 Bug-Hunt lifetime <span style="color: #6b7079; font-weight: 400;">(spot the operator flip)</span></div>
+              <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('bug', 15)} Bug-Hunt lifetime <span style="color: #6b7079; font-weight: 400;">(spot the operator flip)</span></div>
               <div style="color: #ffce5a; font-size: 16px; font-weight: 600; margin-top: 2px;">${state.bugHunt.correct} / ${state.bugHunt.attempts} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${Math.round(state.bugHunt.correct / state.bugHunt.attempts * 100)}%)</span></div>
             </div>
             <button data-action="open-bughunt-from-stats" style="background: rgba(255,206,90,0.16); color: #ffce5a; border: 1px solid rgba(255,206,90,0.4); border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; cursor: pointer;">Hunt →</button>
@@ -217,7 +217,7 @@ function renderStatsInto(statsBodyEl, _close) {
         </div>
       ` : ''}
       ${(() => {
-        // iter 101: 🎯 Self-rescue rate tile. Aggregates L3-pass events across
+        // iter 101: Self-rescue rate tile. Aggregates L3-pass events across
         // all lessons, counts ones that completed with zero hints used. First
         // surface that measures QUALITY-OF-PASS (not pass/fail). Closes the
         // iter-37 deferred metric. Hidden when no L3-pass history yet so the
@@ -232,7 +232,7 @@ function renderStatsInto(statsBodyEl, _close) {
           <div style="background: ${bgTone}; padding: 10px; border-radius: 6px; border: 1px solid ${borderTone};">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <div style="color: #9aa0aa; font-size: 12px;">🎯 Self-rescue rate <span style="color: #6b7079; font-weight: 400;">(zero-hint L3 passes)</span></div>
+                <div style="color: #9aa0aa; font-size: 12px;">${dsIcon('target', 15)} Self-rescue rate <span style="color: #6b7079; font-weight: 400;">(zero-hint L3 passes)</span></div>
                 <div style="color: ${tone}; font-size: 16px; font-weight: 600; margin-top: 2px;">${sr.zeroHint} / ${sr.total} <span style="color: #9aa0aa; font-size: 12px; font-weight: 400;">(${sr.rate}%)</span></div>
               </div>
             </div>
@@ -268,7 +268,7 @@ function renderStatsInto(statsBodyEl, _close) {
         `;
       })()}
       ${(() => {
-        // iter 106: 📈 Mastery Half-Life tile. Per-lesson longitudinal SR
+        // iter 106: Mastery Half-Life tile. Per-lesson longitudinal SR
         // signal — buckets each lesson's median L3-pass gap into Sticky /
         // Normal / Slippery. Tap-routed top-5 slippery lessons list lets
         // the user jump straight to "what's slipping." Hidden when no
@@ -285,7 +285,7 @@ function renderStatsInto(statsBodyEl, _close) {
         return `
         <div style="margin-top: 8px;">
           <div style="background: rgba(255,206,90,0.08); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,206,90,0.2);">
-            <div style="color: #9aa0aa; font-size: 12px; margin-bottom: 6px;">📈 Mastery Half-Life <span style="color: #6b7079; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
+            <div style="color: #9aa0aa; font-size: 12px; margin-bottom: 6px;">${dsIcon('chart', 15)} Mastery Half-Life <span style="color: #6b7079; font-weight: 400;">(${total} lesson${total === 1 ? '' : 's'} with ≥2 L3 passes)</span></div>
             <div class="half-life-buckets">
               <div class="half-life-bucket"><span class="half-life-dot sticky"></span><span class="half-life-label">Sticky</span><span class="half-life-count">${hl.sticky}</span><span class="half-life-range">&gt;${HALF_LIFE_STICKY_DAYS}d</span></div>
               <div class="half-life-bucket"><span class="half-life-dot normal"></span><span class="half-life-label">Normal</span><span class="half-life-count">${hl.normal}</span><span class="half-life-range">${HALF_LIFE_NORMAL_DAYS}-${HALF_LIFE_STICKY_DAYS}d</span></div>
@@ -308,8 +308,7 @@ function renderStatsInto(statsBodyEl, _close) {
       })()}
       ${_renderSectionRetentionBlock(14)}
       ${state.calibrateOn === false ? `
-        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(245,182,43,0.08); border: 1px solid rgba(245,182,43,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">
-          💡 <strong>⏱ Calibration</strong> not tracking yet — turn on from <strong>⚙️ Settings → ⏱ Calibrate</strong> to log your time-to-solve per mechanic and see your top miscalibrated patterns here.
+        <div data-calibration-hint style="margin-top: 18px; padding: 10px 12px; background: rgba(245,182,43,0.08); border: 1px solid rgba(245,182,43,0.3); border-radius: 8px; font-size: 12px; color: #fde68a; line-height: 1.5;">${dsIcon('lightbulb', 15)}<strong>Calibration</strong> not tracking yet — turn on from <strong>${dsIcon('sliders', 15)} Settings → Calibrate</strong> to log your time-to-solve per mechanic and see your top miscalibrated patterns here.
         </div>
       ` : ''}
       ${_renderCalibrationTile()}
@@ -352,7 +351,7 @@ function renderStatsInto(statsBodyEl, _close) {
       _close();
       startBugHuntSession();
     });
-    // iter 106: 📈 Mastery Half-Life — wire each slippery-list row to deep-link
+    // iter 106: Mastery Half-Life — wire each slippery-list row to deep-link
     // to its lesson. Each row carries data-lesson-id; selectLesson handles the
     // rest (default tab = Reference, so the user lands on the canonical they
     // need to re-encode before re-attempting L3).
@@ -364,7 +363,7 @@ function renderStatsInto(statsBodyEl, _close) {
         selectLesson(id);
       });
     });
-    // iter eval-2026-05-30 (Phase 4-B): 🏷 Mistake Tagging tile chips
+    // iter eval-2026-05-30 (Phase 4-B): Mistake Tagging tile chips
     // now tap-route to the most-recent miss of that tag. Per
     // audits/mistake-tagging.md edits 1+2.
     statsBodyEl.querySelectorAll('[data-mistake-route]').forEach(btn => {
@@ -416,7 +415,7 @@ function renderDailyInto(rootEl) {
        <div style="font-size:20px; font-weight:700; color:${color};">${value}</div>
      </div>`;
   rootEl.innerHTML = `
-    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">📆 Today</div>
+    <div style="font-size:10px; color:#6b7079; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">${dsIcon('calendar', 15)} Today</div>
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
       ${tile('Solved today', today.passes || 0, '#34d399', 'rgba(52,211,153,0.08)', 'rgba(52,211,153,0.25)')}
       ${tile('Missed today', today.misses || 0, '#f87171', 'rgba(248,113,113,0.08)', 'rgba(248,113,113,0.25)')}
@@ -443,12 +442,12 @@ function openDashboard() {
   shell.innerHTML = `
     <div class="dashboard-page">
       <div class="dashboard-page-header">
-        <h1 class="dashboard-page-title">📊 Dashboard</h1>
-        <button class="dashboard-exit" data-action="exit-dashboard" aria-label="Exit dashboard">✕ Exit</button>
+        <h1 class="dashboard-page-title">${dsIcon('chart', 15)} Dashboard</h1>
+        <button class="dashboard-exit" data-action="exit-dashboard" aria-label="Exit dashboard">${dsIcon('x', 13)} Exit</button>
       </div>
       <section class="dash-section" data-dash-daily></section>
-      <section class="dash-section"><div class="dash-h">📅 Activity · 60 days</div><div data-dash-activity></div></section>
-      <section class="dash-section"><div class="dash-h">📊 Mastery &amp; progress</div><div data-dash-stats></div></section>
+      <section class="dash-section"><div class="dash-h">${dsIcon('calendar-check', 15)} Activity · 60 days</div><div data-dash-activity></div></section>
+      <section class="dash-section"><div class="dash-h">${dsIcon('chart', 15)} Mastery &amp; progress</div><div data-dash-stats></div></section>
     </div>`;
   renderDailyInto(shell.querySelector('[data-dash-daily]'));
   renderActivityInto(shell.querySelector('[data-dash-activity]'), () => {});

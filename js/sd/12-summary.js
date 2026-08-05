@@ -12,12 +12,12 @@ function renderSummary() {
       <h2>${session.plan ? esc(session.title) : 'Session complete'}</h2>
       <div class="score">${session.right}/${total}</div>
       <p class="sub">${pct}% on this ${session.mixed ? 'mixed review' : 'set'}.</p>
-      ${session.gained ? `<div class="gained">🎯 ${session.gained} new item${session.gained === 1 ? '' : 's'} mastered</div>` : ''}
+      ${session.gained ? `<div class="gained">${icon('target', 15)}${session.gained} new item${session.gained === 1 ? '' : 's'} mastered</div>` : ''}
       <div class="cta-row" style="justify-content:center;margin-top:22px">
         ${session.plan
           ? `<button class="cta ds-btn ds-btn--primary" id="plan-next">${session.plan.index + 1 < session.plan.total ? 'Next in plan →' : 'Finish plan →'}</button>`
-          : `<button class="cta ds-btn ds-btn--primary" id="again-btn">${session.mixed ? '⚡ Another mixed set' : (session.mode === 'crux' ? '⚡ Crux again' : '↻ Drill again')}</button>`}
-        <button class="cta ds-btn ds-btn--ghost" id="back-btn">${session.mixed ? '← All chapters' : '← Back'}</button>
+          : `<button class="cta ds-btn ds-btn--primary" id="again-btn">${session.mixed ? icon('zap') + ' Another mixed set' : (session.mode === 'crux' ? icon('zap') + ' Crux again' : icon('refresh') + ' Drill again')}</button>`}
+        <button class="cta ds-btn ds-btn--ghost" id="back-btn">${icon('chevron-left')}${session.mixed ? 'All chapters' : 'Back'}</button>
         ${session.mixed ? '' : `<button class="cta ds-btn ds-btn--ghost" id="share-session" title="Share a link carrying your results, for an AI to drill you from">Share</button>`}
       </div>
     </div>`;

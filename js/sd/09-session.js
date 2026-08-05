@@ -74,8 +74,8 @@ function renderPlanDone(t, plan) {
       <p class="detail-summary">You worked all ${pr.total} ${esc(unitNoun(t, pr.total))} in this plan.
         ${pr.done} of ${pr.total} are fully mastered — the rest stay in spaced review.</p>
       <div class="cta-row">
-        <button class="cta ds-btn ds-btn--primary" id="plan-again">↻ Run it again</button>
-        <button class="cta ds-btn ds-btn--ghost" id="plan-back">← All ${esc(unitNoun(t, 2))}</button>
+        <button class="cta ds-btn ds-btn--primary" id="plan-again">${icon('refresh')} Run it again</button>
+        <button class="cta ds-btn ds-btn--ghost" id="plan-back">${icon('chevron-left')} All ${esc(unitNoun(t, 2))}</button>
       </div>
     </div>`;
   document.getElementById('plan-back').addEventListener('click', () => renderTopicHome(t));

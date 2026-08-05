@@ -4,13 +4,13 @@
 // visitor landed INSIDE Basics lesson 1 with no map, and a returning user
 // never saw an overview of where they stood. Home is the launchpad:
 //
-//   greeting + streak (+ diagnostic chip) → CONTINUE hero
-//   → due / weak / today stat row → ⟲ Review all due
-//   → three AREA cards (Coding · Syntax · System Design), each with
+// greeting + streak (+ diagnostic chip) → CONTINUE hero
+// → due / weak / today stat row → ⟲ Review all due
+// → three AREA cards (Coding · Syntax · System Design), each with
 //     mastery meter, due count, Continue + scoped Review
-//   → each area expands into its SUBCATEGORIES (17/11 sections, 4 SD topics)
+// → each area expands into its SUBCATEGORIES (17/11 sections, 4 SD topics)
 //     with the same two affordances per row
-//   → More (Today's plan · Practice · Diagnostic · Progress)
+// → More (Today's plan · Practice · Diagnostic · Progress)
 //
 // Home is the app's SINGLE front door (audit F5). The Today-home page used to
 // render the same greeting/clock/streak/hero for the same lesson and took the
@@ -22,10 +22,10 @@
 // Two affordances, one meaning each — the rule that keeps the page readable:
 //   · Continue = FORWARD progress. First non-mastered lesson in authored
 //     order, at its first unpassed level. (Not the due one — that's what the
-//     ⟲ is for. If both buttons did the same thing one of them is a lie.)
-//     A fully-mastered scope's Continue becomes "Refresh" → least-recently
+// ⟲ is for. If both buttons did the same thing one of them is a lie.)
+// A fully-mastered scope's Continue becomes "Refresh" → least-recently
 //     reviewed lesson, so the button is never dead.
-//   · ⟲ Review = the scope's REPAIR queue (due → weak → reveal-flagged),
+// · ⟲ Review = the scope's REPAIR queue (due → weak → reveal-flagged),
 //     handed to the scoped review session in 23-review.js.
 //
 // System Design lives on a separate page with its own Leitner store
@@ -280,7 +280,7 @@ function _homeDuePill(n) {
 // write-only sink: it was asked, stored and synced, and nothing in js/app/*
 // ever read it — while PROFILE.md § "Study intent — autopilot" makes the last
 // diagnostic's per-section result the thing that steers what gets weighted
-// ("if the last one showed complexity-pricing weak, weight the 🧮 Big-O drill
+// ("if the last one showed complexity-pricing weak, weight the Big-O drill
 // higher"). Home is where that belongs: ONE chip, ONE tap, straight into the
 // drill that attacks the weakest area — not a second decision in the hero,
 // which keeps exactly one primary action (PROFILE: "press one thing → you're
@@ -417,7 +417,7 @@ function _homeHeroHtml() {
 
 function _homeAreaCardHtml(area) {
   const open = !!(state.homeOpen || {})[area.key];
-  const chev = `<span class="home-expand__chev" aria-hidden="true">${open ? '▾' : '▸'}</span>`;
+  const chev = `<span class="home-expand__chev" aria-hidden="true">${dsIcon(open ? 'chevron-down' : 'chevron-right', 15)}</span>`;
 
   if (area.external) {
     const s = _sdAreaStats();
@@ -510,7 +510,7 @@ function _homeAreaCardHtml(area) {
           ${cont && cont.kind === 'refresh' ? 'Refresh' : 'Continue'}&nbsp;→
         </button>
         ${repairN ? `<button class="ds-btn ds-btn--subtle" data-home-review="${area.key}">
-          ${dsIcon('refresh', 14)}Review ${repairN}
+          ${dsIcon('refresh', 14)} Review ${repairN}
         </button>` : ''}
       </div>
       ${cont && contLesson ? `<p class="home-area__next ds-mute">Next: ${escapeHtml(contLesson.title)} · ${cont.level}</p>` : ''}
@@ -586,7 +586,7 @@ function openHome() {
   }
 
   const reviewAllHtml = dueTotal
-    ? `<button class="ds-btn ds-btn--subtle ds-btn--block home-reviewall" data-home-review="all">${dsIcon('refresh', 15)}Review all ${dueTotal} due</button>`
+    ? `<button class="ds-btn ds-btn--subtle ds-btn--block home-reviewall" data-home-review="all">${dsIcon('refresh', 15)} Review all ${dueTotal} due</button>`
     : '';
 
   // Home is a full-page destination, so it wears the shared page frame

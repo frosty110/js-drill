@@ -33,6 +33,20 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">8</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/work-queue/">Work Queue</a> <span class="ds-chip">signature</span> — The dispatch path: due jobs are enqueued and worker pools pull from it, which is what separates deciding-what-is-due from running-it.</li>
+      <li><a href="../../../sd/components/c/at-least-once/">At-Least-Once Delivery</a> <span class="ds-chip">signature</span> — A scheduled job may fire twice if a worker dies mid-run, so job bodies have to tolerate re-execution by construction.</li>
+      <li><a href="../../../sd/components/c/idempotency/">Idempotency</a> <span class="ds-chip">signature</span> — A job execution is keyed, so at-least-once dispatch does not run the same scheduled task twice on two different workers.</li>
+      <li><a href="../../../sd/components/c/leader-election/">Leader Election</a> <span class="ds-chip">signature</span> — Exactly one scheduler instance may decide which jobs are due, or every due job fires once per running instance.</li>
+      <li><a href="../../../sd/components/c/kv-store/">Key-Value Store</a> — Stores per-job execution state keyed by job id, written and read far more often than it is queried.</li>
+      <li><a href="../../../sd/components/c/dead-letter-queue/">Dead-Letter Queue</a> — Holds jobs that failed every attempt, turning a silent stall into a queue someone can inspect and replay.</li>
+      <li><a href="../../../sd/components/c/distributed-lock/">Distributed Lock</a> — Ensures one scheduler tick executes once, with a lease so a crashed holder does not stall the schedule forever.</li>
+      <li><a href="../../../sd/components/c/retry-backoff/">Retry with Backoff &amp; Jitter</a> — Decides how a failed attempt is re-scheduled, and the ceiling at which it stops being retried and is dead-lettered.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Submit one-off jobs with a run-at time and recurring jobs with a cron expression; cancel; query status and history.</li><li>At-least-once execution, so job handlers must be idempotent — at-most-once silently drops work.</li><li>An accepted job must survive scheduler and broker restarts; one tenant&#39;s flood must not starve another.</li><li>Scheduling accuracy: fire within a few seconds of the target.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>10M scheduled jobs · 50K executions/s peak · durations from 100ms to hours</li><li>The job table is trivial: ~1 KB × 10M = 10 GB, and the hot query touches only the due slice via a next-run-time index</li><li>Fleet sizing is Little&#39;s Law — concurrency = rate × duration: 50K/s at 100ms is 5,000 slots; at 10s it&#39;s 500,000</li><li>So the fleet is sized by duration, not rate, which is why mixing job classes matters</li><li>The real storage problem is execution history: 50K/s is 4.3B records/day</li></ul>

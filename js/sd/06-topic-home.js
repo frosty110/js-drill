@@ -45,8 +45,8 @@ async function renderTopicHome(t) {
           ${workLine}</div>
       </div>
       <div class="cta-row">
-        <button class="cta ds-btn ds-btn--primary" id="mixed-btn" ${s.total ? '' : 'disabled'}>${s.seen ? '⚡ Mixed review' : '▶ Start learning'}${s.due ? ` <span class="due-pill">${s.due}</span>` : ''}</button>
-        ${resume ? `<button class="cta ds-btn ds-btn--ghost" id="resume-btn">↻ Resume ${unitAbbrev(t)} ${chNum(byId[resume], t)}</button>` : ''}
+        <button class="cta ds-btn ds-btn--primary" id="mixed-btn" ${s.total ? '' : 'disabled'}>${s.seen ? icon('zap') + ' Mixed review' : icon('play') + ' Start learning'}${s.due ? ` <span class="due-pill">${s.due}</span>` : ''}</button>
+        ${resume ? `<button class="cta ds-btn ds-btn--ghost" id="resume-btn">${icon('refresh')} Resume ${unitAbbrev(t)} ${chNum(byId[resume], t)}</button>` : ''}
       </div>
     </section>`;
 
@@ -60,12 +60,12 @@ async function renderTopicHome(t) {
     const links = (CATALOG.components || []).reduce((a, c) => a + componentEdges(c.id).length, 0);
     html += `
       <a class="cmp-entry" href="#/${t}/catalog" id="catalog-entry">
-        <span class="cmp-entry__icon">${'▦'}</span>
+        <span class="cmp-entry__icon sd-badge" aria-hidden="true">${icon('grid', 19)}</span>
         <span class="cmp-entry__main">
           <span class="cmp-entry__title">Component catalog</span>
           <span class="cmp-entry__sub">${n} building blocks · when to reach for each · ${links} links into the design problems</span>
         </span>
-        <span class="ch-chevron">›</span>
+        <span class="ch-chevron" aria-hidden="true">${icon('chevron-right', 17)}</span>
       </a>`;
   }
 
@@ -84,7 +84,7 @@ async function renderTopicHome(t) {
               <span class="plan-active__meta">${ap.index + 1} of ${pr.total} · ${pr.done} mastered</span>
             </div>
             <button class="ds-btn ds-btn--primary plan-active__go" id="plan-resume">Resume →</button>
-            <button class="plan-active__exit" id="plan-drop" title="Leave this plan">✕</button>
+            <button class="plan-active__exit" id="plan-drop" title="Leave this plan" aria-label="Leave this plan">${icon('x', 17)}</button>
           </div>
         </section>`;
     } else {
@@ -137,7 +137,7 @@ async function renderTopicHome(t) {
     }
     return `
       <button class="ch-card" data-ch="${ch.id}">
-        <div class="ch-num ${done ? 'done' : ''}">${done ? '✓' : chNum(ch, t)}</div>
+        <div class="ch-num ${done ? 'done' : ''}">${done ? icon('check', 19) : chNum(ch, t)}</div>
         <div class="ch-main">
           <div class="ch-title">${esc(ch.title)}</div>
           <div class="ch-meta"><span class="bar"><i style="width:${p}%"></i></span>
@@ -145,7 +145,7 @@ async function renderTopicHome(t) {
             ${workLabel(cs)}</div>
           ${chips}
         </div>
-        <span class="ch-chevron">›</span>
+        <span class="ch-chevron" aria-hidden="true">${icon('chevron-right', 17)}</span>
       </button>`;
   };
 
@@ -159,7 +159,7 @@ async function renderTopicHome(t) {
         <button class="sd-filter-head" id="filter-toggle" aria-expanded="${open}">
           <span class="sd-filter-title">Filter</span>
           ${active ? `<span class="sd-filter-count">${active} active</span>` : ''}
-          <span class="sd-filter-caret">${open ? '▾' : '▸'}</span>
+          <span class="sd-filter-caret" aria-hidden="true">${icon(open ? 'chevron-down' : 'chevron-right', 15)}</span>
         </button>
         ${open ? `<div class="sd-filter-body">
           ${facets.map(f => {

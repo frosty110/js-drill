@@ -5,8 +5,8 @@
 // listeners. Reading top-to-bottom = reading the boot sequence.
 //
 // Order rules:
-//   1. initBootstrap MUST be awaited first. It loads PATHS → progress →
-//      manifest → mechanics, GC's stale state, resolves the resume target,
+// 1. initBootstrap MUST be awaited first. It loads PATHS → progress →
+// manifest → mechanics, GC's stale state, resolves the resume target,
 //      and paints the first render. If loadManifest fails it returns false
 //      and we abort — the UI shell already shows the error message.
 //   2. After bootstrap, the wiring sub-inits run in any order. They only

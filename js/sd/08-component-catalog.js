@@ -17,11 +17,16 @@ async function renderComponentCatalog(t) {
   const comps = CATALOG.components || [];
   const total = comps.reduce((n, c) => n + componentEdges(c.id).length, 0);
 
+  // A component's tagging was invisible here: the card showed a usage count and
+  // nothing else, so "is this one of the 35 registered mechanisms an interviewer
+  // probes, or a supporting block?" — the distinction that drives the signature
+  // marker on every problem page — could only be discovered by opening it.
   const card = (c) => {
     const n = componentEdges(c.id).length;
-    return `<a class="cmp-card" href="#/${t}/c/${encodeURIComponent(c.id)}" data-cmp="${esc(c.id)}">
+    const sig = !!c.mechanism;
+    return `<a class="cmp-card" href="#/${t}/c/${encodeURIComponent(c.id)}" data-cmp="${esc(c.id)}" data-sig="${sig ? '1' : '0'}">
       <span class="cmp-card__main">
-        <span class="cmp-card__title">${esc(c.title)}</span>
+        <span class="cmp-card__title">${esc(c.title)}${sig ? ` <span class="cmp-sig" title="A registered mechanism — a headline component problems are tagged with">signature</span>` : ''}</span>
         <span class="cmp-card__what">${fmt(c.what)}</span>
       </span>
       ${n ? `<span class="cmp-card__uses" title="Appears in ${n} canonical design problem${n === 1 ? '' : 's'}">${n}</span>`
@@ -41,6 +46,24 @@ async function renderComponentCatalog(t) {
       </div>
     </section>`;
 
+  // Role filter. The problems list has had a faceted filter for months while the
+  // catalog had none, so its taxonomy was decoration rather than something you
+  // could act on. Categories are already headings, so the filter that actually
+  // adds reach is the one the headings cannot express: signature (a registered
+  // mechanism, tagged onto problems) vs supporting.
+  const role = progress.catalogRole || 'all';
+  const roleCounts = {
+    all: comps.length,
+    signature: comps.filter(c => c.mechanism).length,
+    supporting: comps.filter(c => !c.mechanism).length
+  };
+  html += `
+    <div class="cmp-roles" role="group" aria-label="Filter components">
+      ${[['all', 'All'], ['signature', 'Signature'], ['supporting', 'Supporting']].map(([id, label]) =>
+        `<button class="sd-chip sd-chip--btn ${role === id ? 'is-on' : ''}" data-role="${id}"
+           aria-pressed="${role === id}">${label} <b>${roleCounts[id]}</b></button>`).join('')}
+    </div>`;
+
   for (const cat of cats) {
     // Within a category, most-used first. The asymmetry IS the curriculum
     // signal — caching carries 11 problems and vector-search 1, and flattening
@@ -50,8 +73,11 @@ async function renderComponentCatalog(t) {
     // "API Gateway" over "Load Balancer" purely because A sorts before L.
     const idx = Object.fromEntries(comps.map((c, i) => [c.id, i]));
     const list = comps.filter(c => c.category === cat.id)
+      .filter(c => role === 'all' || (role === 'signature' ? !!c.mechanism : !c.mechanism))
       .sort((a, b) => componentEdges(b.id).length - componentEdges(a.id).length
         || idx[a.id] - idx[b.id]);
+    // A category emptied by the filter drops out entirely rather than leaving a
+    // heading over nothing.
     if (!list.length) continue;
     html += `<div class="part-head">${esc(cat.title)}</div>
       <p class="cmp-cat-blurb">${esc(cat.blurb || '')}</p>
@@ -63,6 +89,9 @@ async function renderComponentCatalog(t) {
     // Let cmd/ctrl/middle-click open a real new tab; plain click renders in place.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault(); renderComponentDetail(t, el.dataset.cmp);
+  }));
+  app.querySelectorAll('[data-role]').forEach(el => el.addEventListener('click', () => {
+    progress.catalogRole = el.dataset.role; persist(); renderComponentCatalog(t);
   }));
   window.scrollTo(0, 0);
 }
@@ -102,6 +131,15 @@ async function renderComponentDetail(t, id) {
       <h2 class="detail-title">${esc(c.title)}</h2>
       <p class="detail-summary">${fmt(c.what)}</p>
 
+      <div class="detail-tags">
+        ${c.mechanism
+          ? `<a class="sd-chip sd-chip--link" href="#/design-problems/tag/mechanism/${encodeURIComponent(c.mechanism)}"
+               title="Every problem tagged with this mechanism">${esc(facetLabel('mechanism', c.mechanism))}</a>
+             <span class="sd-chip cmp-sig">signature</span>`
+          : `<span class="sd-chip sd-chip--more" title="Not a registered mechanism — a supporting block problems are not tagged with">supporting</span>`}
+        <span class="sd-chip">${edges.length} problem${edges.length === 1 ? '' : 's'}</span>
+      </div>
+
       ${bullets('Reach for it when', c.reachFor, 'yes')}
       ${bullets("Don't reach for it when", c.avoid, 'no')}
       ${bullets('What it costs you', c.costs, 'cost')}
@@ -126,7 +164,7 @@ async function renderComponentDetail(t, id) {
       </section>
 
       <div class="cta-row">
-        ${c.drill && c.drill.unit ? `<button class="cta ds-btn ds-btn--primary" id="cmp-drill">▶ Drill ${esc(c.title)}</button>` : ''}
+        ${c.drill && c.drill.unit ? `<button class="cta ds-btn ds-btn--primary" id="cmp-drill">${icon('play')} Drill ${esc(c.title)}</button>` : ''}
         ${c.mechanism ? `<a class="cta ds-btn ds-btn--ghost" href="#/design-problems/tag/mechanism/${encodeURIComponent(c.mechanism)}" id="cmp-filter">Filter problems by this</a>` : ''}
       </div>
     </div>`;

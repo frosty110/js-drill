@@ -33,6 +33,20 @@
     <div data-results></div>
   </section>
 
+  <section class="ds-section" id="components">
+    <h2>Components in play <span class="sharepage__count">8</span></h2>
+    <ul class="sharepage__list">
+      <li><a href="../../../sd/components/c/caching/">Cache</a> <span class="ds-chip">signature</span> — Session and token-validation state, so every authenticated request is not a database read. Revocation is what makes the TTL choice genuinely hard.</li>
+      <li><a href="../../../sd/components/c/replication/">Replication</a> <span class="ds-chip">signature</span> — Session state is replicated across regions, so a login in one region is honoured in another without a cross-region read on every request.</li>
+      <li><a href="../../../sd/components/c/idempotency/">Idempotency</a> <span class="ds-chip">signature</span> — Token issuance and refresh are made repeat-safe, so a retried login does not mint a second live session the user cannot see or revoke.</li>
+      <li><a href="../../../sd/components/c/rate-limiting/">Rate Limiting</a> <span class="ds-chip">signature</span> — Login attempts per account and per IP, the primary defence against credential stuffing and brute force.</li>
+      <li><a href="../../../sd/components/c/load-balancer/">Load Balancer</a> — Fronts a stateless auth tier, which is what lets any node validate any session — and the reason session state lives in a shared store rather than server memory.</li>
+      <li><a href="../../../sd/components/c/api-gateway/">API Gateway</a> — Validates the session on every request so downstream services never re-implement auth, making it the single enforcement point.</li>
+      <li><a href="../../../sd/components/c/relational-db/">Relational Database</a> — The user and credential store — modest volume, strong consistency, and the place a password change must take effect immediately.</li>
+      <li><a href="../../../sd/components/c/kv-store/">Key-Value Store</a> — Holds sessions and refresh tokens keyed by id, with TTL doing the expiry work the application would otherwise schedule itself.</li>
+    </ul>
+  </section>
+
   <section class="ds-section" id="brief">
     <h2>The brief</h2>
     <h3>Functional requirements</h3><ul class="sharepage__notes"><li>Register, log in, log out; issue credentials other services can verify; refresh without re-login; revoke a session; MFA; optionally social/SSO login.</li><li>Every other service depends on this one, so availability is the headline requirement — if auth is down the whole product is down.</li><li>That dependency shape argues for verification that does NOT require calling this service on every request.</li><li>Security requirements are functional here: credential storage, brute-force resistance, session fixation, token theft, immediate revocation on compromise.</li><li>State the revocation latency target explicitly — &#39;immediate&#39; and &#39;stateless verification&#39; cannot both be fully true.</li></ul><h3>Scale &amp; constraints</h3><ul class="sharepage__notes"><li>100M users, ~20M daily active; logins run a few hundred/s average and a few thousand at peak</li><li>Login is deliberately expensive: a memory-hard hash burns ~100ms of CPU on purpose, so 5K logins/s is roughly 500 cores just for hashing — a CPU planning exercise, not an I/O one</li><li>Verification is the mirror image: with stateless tokens it&#39;s a local signature check of ~10µs inside whichever service was called, costing the auth service nothing</li><li>Had verification required a lookup, every request across the fleet — maybe 500K/s — would land here</li><li>Verification must be sub-millisecond because it&#39;s on every request to every service; storage is trivial at both ends</li></ul>

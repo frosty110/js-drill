@@ -81,7 +81,7 @@ function renderTagFacets(nav) {
   header.className = 'tag-facets-toggle' + (activeN ? ' has-active' : '');
   header.setAttribute('aria-expanded', state.tagFilterOpen ? 'true' : 'false');
   header.innerHTML = `<span>🏷 Filter${activeN ? ` <span class="tag-facets-count">${activeN}</span>` : ''}</span>`
-    + `<span class="tag-facets-chevron">${state.tagFilterOpen ? '▾' : '▸'}</span>`;
+    + `<span class="tag-facets-chevron">${dsIcon(state.tagFilterOpen ? 'chevron-down' : 'chevron-right', 13)}</span>`;
   header.addEventListener('click', () => {
     state.tagFilterOpen = !state.tagFilterOpen;
     saveProgress();
@@ -166,17 +166,17 @@ function renderSidebar() {
       : 'Your current study plan has no drillable lesson sequence to filter to';
     pathBtn.classList.toggle('text-blue-300', state.starterPath && hasLessons);
     pathBtn.classList.toggle('text-slate-500', !(state.starterPath && hasLessons));
-    // Show "🧭 Plan View · Syn" etc. when a track sub-filter is selected, so the
+    // Show dsIcon('compass', 15) + " Plan View · Syn" etc. when a track sub-filter is selected, so the
     // user always sees which scope is active without opening the chip row.
     if (state.starterPath && state.starterPathTrack && state.starterPathTrack !== 'all') {
       const shortLabel = state.starterPathTrack[0].toUpperCase() + state.starterPathTrack.slice(1, 3);
-      pathBtn.textContent = '🧭 Plan View · ' + shortLabel;
+      pathBtn.innerHTML = dsIcon('compass', 15) + ' Plan View · ' + shortLabel;
     } else {
-      pathBtn.textContent = '🧭 Plan View';
+      pathBtn.innerHTML = dsIcon('compass', 15) + ' Plan View';
     }
   }
 
-  // Paint the 👁 Hide Mastered filter's active state on every render (not just
+  // Paint the  Hide Mastered filter's active state on every render (not just
   // on click) so a saved hideMastered:true shows as active on load.
   const hideBtn = document.getElementById('hide-mastered-btn');
   if (hideBtn) {
@@ -185,7 +185,7 @@ function renderSidebar() {
     hideBtn.style.opacity = state.repairFilter ? '0.4' : '';   // auto-disabled under Repair
     hideBtn.title = state.repairFilter ? 'Repair already filters to lessons needing work' : "Hide lessons you've fully mastered";
   }
-  // Phase E: 🛠 Repair filter chip — active paint + live count.
+  // Phase E: Repair filter chip — active paint + live count.
   const repBtn = document.getElementById('repair-filter-btn');
   if (repBtn) {
     repBtn.classList.toggle('text-rose-300', state.repairFilter);
@@ -742,7 +742,7 @@ function renderLesson() {
   // audit F1 + F7: two session-scoped facts the whole header render keys off.
   //   · _inSession — a mock interview OR a scoped review session is live on
   //     THIS lesson. Both own the screen and both ship their own exits (the
-  //     mock banner, the review HUD's Skip/✕).
+  // mock banner, the review HUD's Skip/✕).
   //   · _isDrillTab — the user is on a tapping/typing rung, so the prose
   //     header is context rather than the task.
   const _isMockHere = state.mock.active && state.mock.lessonId === lesson.id;
@@ -762,7 +762,7 @@ function renderLesson() {
   const pill = trackPill.cls;
   const pillText = trackPill.label;
   const overall = lessonOverallStatus(lesson.id);
-  const masteredPill = overall === 'mastered' ? `<span class="pill pill-mastered ml-2">✓ Mastered</span>` : '';
+  const masteredPill = overall === 'mastered' ? `<span class="pill pill-mastered ml-2">${dsIcon('check', 14)} Mastered</span>` : '';
   // Starter-path step indicator — shown only when path mode is on AND this
   // lesson is part of the path. The sidebar shows step numbers per-lesson
   // but they group by section, so 22 / 20 / 21 can appear adjacent —
@@ -774,28 +774,28 @@ function renderLesson() {
     ? ' (' + state.starterPathTrack[0].toUpperCase() + state.starterPathTrack.slice(1) + ')' : '';
   const _pathName = getSubscribedPath().label;
   const pathPill = pathIdx > 0
-    ? `<span class="pill pill-path ml-2" title="${escapeHtml(_pathName)} step ${pathIdx} of ${_activePath.length}${_trackLabel}">🧭 Step ${pathIdx} of ${_activePath.length}${_trackLabel}</span>`
+    ? `<span class="pill pill-path ml-2" title="${escapeHtml(_pathName)} step ${pathIdx} of ${_activePath.length}${_trackLabel}">${dsIcon('compass', 15)} Step ${pathIdx} of ${_activePath.length}${_trackLabel}</span>`
     : '';
   const nextId = nextLessonId(lesson.id);
   const nextLessonObj = nextId ? findLesson(nextId) : null;
   // On a mastered lesson, surface the highest-priority next action:
-  //   - Due reviews exist → primary becomes "🕒 Review N due", which jumps
+  //  - Due reviews exist → primary becomes "Review N due", which jumps
   //     to the most-overdue lesson via the same path as the sidebar Review
   //     button (device-calibrated tab routing). The "Next lesson" choice
   //     drops to secondary. Retention beats new content per dailyPlan.
-  //   - No due reviews → keep the original "Next lesson" primary.
+  // - No due reviews → keep the original "Next lesson" primary.
   // The sidebar Review CTA is invisible on mobile (behind the drawer);
   // this surface puts the same action in the main viewport.
   const dueDuringMastered = (overall === 'mastered') ? dueReviewIds() : [];
   let nextCta = '';
   if (overall === 'mastered' && dueDuringMastered.length > 0) {
-    const reviewLabel = `${dsIcon('clock', 14)}Review ${dueDuringMastered.length} due →`;
+    const reviewLabel = `${dsIcon('clock', 14)} Review ${dueDuringMastered.length} due →`;
     const secondary = nextLessonObj
       ? `<button class="secondary" data-action="goto-next">Next: ${escapeHtml(nextLessonObj.title)}</button>`
       : '';
-    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">${dsIcon('dice', 14)}Shuffle</button></div>`;
+    nextCta = `<div class="mt-3 flex items-center gap-2 flex-wrap" data-cta-row><button class="primary" data-action="goto-due-review">${reviewLabel}</button>${secondary}<button class="secondary" data-action="shuffle-here">${dsIcon('dice', 14)} Shuffle</button></div>`;
   } else if (overall === 'mastered' && nextLessonObj) {
-    nextCta = `<div class="mt-3 flex items-center gap-2" data-cta-row><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">${dsIcon('dice', 14)}Shuffle review</button></div>`;
+    nextCta = `<div class="mt-3 flex items-center gap-2" data-cta-row><button class="primary" data-action="goto-next">Next lesson: ${escapeHtml(nextLessonObj.title)} →</button><button class="secondary" data-action="shuffle-here">${dsIcon('dice', 14)} Shuffle review</button></div>`;
   }
   // iter 22 (refine — iter 24 of the refine loop): suppress the abandonment
   // CTAs while a mock interview is active on THIS lesson. The next-lesson /
@@ -805,7 +805,7 @@ function renderLesson() {
   // audit F1: a scoped review session gets the SAME suppression. The row's
   // three buttons all call selectLesson(), which is not the review advance
   // path — each one silently abandons the queue the HUD claims to be draining.
-  // Worse, "🕒 Review N due" counted the GLOBAL due list and so contradicted
+  // Worse, dsIcon('clock', 15) + " Review N due" counted the GLOBAL due list and so contradicted
   // the HUD's own n/N ("Review 1 due" next to "1/1"). One session, one count.
   if (_inSession) nextCta = '';
 
@@ -822,8 +822,8 @@ function renderLesson() {
            (next-CTA) and 27 (tab strip). j/k keyboard shortcuts unaffected. -->
       <div class="flex items-center gap-1 text-slate-500 text-xs">
         <button class="hover:text-slate-300 px-1" data-action="share-lesson" title="Share this lesson — a link carrying your results, for an AI to tutor you from">${dsIcon('share', 15)}</button>
-        ${_isReviewHere ? '' : `<button class="hover:text-slate-300 px-1" data-action="prev-lesson" title="Previous (k)">◀</button>
-        <button class="hover:text-slate-300 px-1" data-action="next-lesson" title="Next (j)">▶</button>`}
+        ${_isReviewHere ? '' : `<button class="hover:text-slate-300 px-1" data-action="prev-lesson" title="Previous (k)" aria-label="Previous lesson">${dsIcon('chevron-left', 15)}</button>
+        <button class="hover:text-slate-300 px-1" data-action="next-lesson" title="Next (j)" aria-label="Next lesson">${dsIcon('chevron-right', 15)}</button>`}
       </div>`;
 
   // audit F7 (+ F16): on a 390×844 phone the first tappable L1 option sat at
@@ -847,7 +847,7 @@ function renderLesson() {
   const _briefLabel = _promptHtml ? 'Problem' : 'About this lesson';
   const _brief = _isDrillTab
     ? `<details class="lesson-brief"${_narrow ? '' : ' open'}>
-      <summary class="lesson-brief__summary"><span>${_briefLabel}</span><span class="lesson-brief__chevron" aria-hidden="true">▾</span></summary>
+      <summary class="lesson-brief__summary"><span>${_briefLabel}</span><span class="lesson-brief__chevron" aria-hidden="true">${dsIcon('chevron-down', 14)}</span></summary>
       <div class="lesson-brief__body">${_descHtml}${_promptHtml}</div>
     </details>`
     : `<div class="lesson-brief-open">${_descHtml}${_promptHtml}</div>`;
@@ -858,7 +858,7 @@ function renderLesson() {
         <span class="pill ${pill}">${pillText}</span>
         <span class="text-xs text-slate-500">${escapeHtml(lesson.section)}</span>
         <!-- iter 32 (refine): suppress journey-context metadata pills (✓ Mastered
-             + 🧭 Step path) during an active mock — neither is actionable mid-
+             + Step path) during an active mock — neither is actionable mid-
              attempt; sidebar status dots carry the same per-lesson mastery
              signal. Same broken-context-affordance pattern as iters 24/27/29. -->
         ${_isMockHere ? '' : `${masteredPill}${pathPill}`}
@@ -957,7 +957,7 @@ function renderLesson() {
     let check = '';
     if (t.status === 'passed') {
       const partial = t.id === 'L1' && isPartialL1(lesson.id);
-      check = ` <span class="${partial ? 'text-amber-400' : 'text-emerald-400'} ml-1">✓</span>`;
+      check = ` <span class="${partial ? 'text-amber-400' : 'text-emerald-400'} ml-1">${dsIcon('check', 12)}</span>`;
     }
     btn.innerHTML = `${num}${t.label}${check}`;
     btn.addEventListener('click', () => selectTab(t.id));

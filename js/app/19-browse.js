@@ -120,7 +120,7 @@ function _browseControlsHtml(repIdx) {
     <button class="browse-filter-toggle" data-bf="toggle-panel" aria-expanded="${state.tagFilterOpen ? 'true' : 'false'}">
       ${icon}<span>Filters</span>
       ${nFilters ? `<span class="browse-fcount">${nFilters}</span>` : ''}
-      <span class="browse-caret" aria-hidden="true">›</span>
+      <span class="browse-caret" aria-hidden="true">${dsIcon('chevron-right', 17)}</span>
     </button>`;
 
   let panelHtml = '';
@@ -237,7 +237,7 @@ function _renderBrowseList(shell) {
         ${step}
         <span class="browse-row-title">${escapeHtml(l.title)}</span>
         ${chip}
-        <span class="browse-row-chev" aria-hidden="true">›</span>
+        <span class="browse-row-chev" aria-hidden="true">${dsIcon('chevron-right', 17)}</span>
       </button>`;
   };
 

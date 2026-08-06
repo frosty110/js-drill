@@ -81,6 +81,21 @@
     clear: function () { buffer = []; persist(); },
     record: function (message, detail) { record('manual', message, detail); },
 
+    // For a catch block that genuinely should not stop anything — a quota
+    // error, an unreadable blob, a missing optional API. Swallowing those is
+    // usually CORRECT; the bug is swallowing them without a trace, which is
+    // what 22 bare `catch (_) {}` blocks in js/app/ still do.
+    //
+    //   try { risky(); } catch (e) { DrillErrors.swallow('offline pack count', e); }
+    //
+    // Prefer this to an empty catch in new code: the app carries on exactly as
+    // it would have, and the failure is still there to find in Settings →
+    // Diagnostics when someone eventually asks why a number looks wrong.
+    swallow: function (context, err) {
+      record('swallowed', context + ': ' + ((err && err.message) || err),
+        (err && err.stack) || '');
+    },
+
     // A paste-ready report. The user is on a phone with no devtools, so the
     // realistic bug-report path is "copy this, send it to someone".
     report: function () {

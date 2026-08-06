@@ -31,7 +31,7 @@
 
 ## Standing constraints (read before changing content or adding assets)
 
-**[docs/invariants.md](docs/invariants.md) is the rules doc.** Nine constraints
+**[docs/invariants.md](docs/invariants.md) is the rules doc.** Thirteen constraints
 whose failure mode is invisible — the app stays green and the meaning quietly
 becomes wrong. Every one has a gate:
 
@@ -99,6 +99,14 @@ persistence). Live on GitHub Pages: https://frosty110.github.io/js-drill/
 - Cheatsheet markdown export
 - Progress JSON backup/restore
 - Session resume (currentLessonId + tab persisted)
+- **Diagnostics row in Settings** (2026-08-06) — appears only when something has
+  actually gone wrong. `js/core/errors.js` records exceptions, unhandled
+  rejections and failed resource loads to a bounded `sessionStorage` buffer;
+  one tap copies a paste-ready report. The app has no server and no error
+  reporting, so before this a failure on a phone was visible to nobody — the
+  user just saw a surface that silently didn't render. New code that must
+  swallow an error should call `DrillErrors.swallow(context, err)` rather
+  than write a bare `catch {}` (22 of those remain in `js/app/`).
 - Sticky L3 action bar (the off-canvas mobile drawer that used to sit beside it was retired in design-loop P4 part 3 — `#hamburger` now opens the Browse page; see `initMobileDrawer` in `js/app/14-init-core.js`)
 - Multi-tab storage sync
 - Search (`/` — focuses Browse's search field when Browse is open, otherwise opens the ⌘K command palette), keyboard nav (`j`/`k` or ↑/↓ = prev/next lesson · `1`-`9` = Nth tab in render order, so up to 6 on Patterns/Applied · `s` = shuffle review · `?` = help · `Esc` = close)
@@ -243,7 +251,7 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `js/core/runner.js` | Sandboxed code runner (`window.DrillRunner`) — **the ONLY runner**, used by the browser AND by every Node tool that grades lesson content. Erases TypeScript types for `lang:"ts"` lessons (browser: lazy-loads the TS compiler; Node: injects `stripTypeScriptTypes` via `setTypeEraser`), then executes via `new Function` under `"use strict"`. There used to be four hand-kept copies of this; they diverged on Map/Set formatting, the `[error] ` prefix, strict mode and the macrotask drain, and shipped a live-broken lesson. Gated by `tools/test-runner-parity.js`. |
 | `tools/lib/runner-node.js` | The one place Node may build a runner — loads `js/core/runner.js` + `js/core/util.js` and supplies Node's type-eraser. Used by `validate-data.js`, `verify-lesson.js`, `validate-files.js`. |
 | `js/core/errors.js` | Global error recorder (`window.DrillErrors`). FIRST script on all three pages. Bounded ring buffer of exceptions / rejections / failed resource loads, kept in `sessionStorage`, surfaced in Settings only when non-empty and copyable in one tap. The app has no error reporting, so before this a failure on a phone was invisible to everyone. |
-| `docs/invariants.md` | **The rules doc** — the eight standing constraints whose failure mode is invisible (positional share codes, committed generated output, offline precache parity, sync key coverage, single-source-of-truth ownership, executable lesson content, addressable-is-fetchable, annotated graph edges). Each names its gate and its escape hatch. |
+| `docs/invariants.md` | **The rules doc** — the thirteen standing constraints whose failure mode is invisible (positional share codes, committed generated output, offline precache parity, sync key coverage, single-source-of-truth ownership, executable lesson content, addressable-is-fetchable, annotated graph edges, one icon vocabulary, one runner grading lesson content, no third-party origin on the boot path, no unrun probe posing as coverage, no doc naming a file that doesn't exist). Each names its gate and its escape hatch. |
 | `tools/check-all.js` | Runs every gate in one command; `--fix` regenerates first. What `.githooks/pre-commit` and `.github/workflows/checks.yml` both run — that default must stay browser-free. `--probes` adds the durable CDP suite (`PROBE_SUITE`) with a pass/fail line per probe; opt-in, needs Chrome on `:9222`, takes minutes. (The old `tools/cdp/fetch-vendor.sh` workaround for sandboxed environments is gone — the CDN assets are vendored into `vendor/` now, so probes work with no network.) Run it before shipping anything user-facing. |
 | `tools/test-runner-parity.js` | Gate: no Node tool may define its own `formatArg`/`runCode`/`outputsMatch`, plus behavioural pins on every observable an `expectedOutput` depends on (Map/Set formatting, `[error] `/`[warn] ` prefixes, `console.debug` exclusion, strict mode, the 8-macrotask drain). |
 | `tools/test-sr.js` | Gate: the spaced-repetition scheduler. Loads the real slices in a `vm` with an injected clock — the 1d/3d/7d/14d/30d ladder, the `advance:false` hold, due-ness boundaries, queue order, the Resurrect 2x threshold, legacy-blob migration, save/load round-trip. |
@@ -568,6 +576,13 @@ node tools/test-sharecode.js              # share-code codec + route registry
 # Offline-pack parity — run after adding ANY script or stylesheet to index.html.
 # A missing APP_SHELL entry breaks only offline users, so it never shows locally.
 node tools/check-sw-shell.js
+
+# Third-party assets + the Tailwind build. VERIFYING needs nothing but node
+# (CI has no install step); REGENERATING needs `npm install`.
+node tools/vendor-deps.js --check          # SHA-256 per file, no CDN on any page
+node tools/check-tailwind-subset.js        # every used utility is built
+node tools/vendor-deps.js                  # re-download the pinned versions
+node tools/build-tailwind-subset.js        # recompile css/00-tailwind.css
 
 # The durable browser probes as a suite, with a pass/fail line per probe.
 # Run before shipping anything user-facing; takes minutes and needs Chrome.

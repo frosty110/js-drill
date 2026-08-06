@@ -41,6 +41,7 @@ const GATES = [
   { name: 'offline app shell',   cmd: ['tools/check-sw-shell.js'] },
   { name: 'vendored deps',       cmd: ['tools/vendor-deps.js', '--check'] },
   { name: 'tailwind subset',     cmd: ['tools/check-tailwind-subset.js'] },
+  { name: 'boot weight',         cmd: ['tools/check-boot-weight.js'] },
   { name: 'sync key coverage',   cmd: ['tools/check-sync-coverage.js'] },
   { name: 'storage call sites',  cmd: ['tools/check-storage-callsites.js'] },
   { name: 'probe registry',      cmd: ['tools/check-probe-registry.js'] },

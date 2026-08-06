@@ -448,6 +448,32 @@ as are `iter-artifacts/`, `docs-archive/` and `docs/**/archives/`.
 
 ---
 
+## 14. The boot path has a budget
+
+**Rule — each page declares a ceiling for the bytes it makes a phone fetch
+before the app is usable, and staying under it is checked.**
+
+PROFILE.md's one load-bearing fact is that ~80% of study happens on a phone.
+Nothing measured what a phone actually downloads, so the boot path could only
+grow: every slice, stylesheet and library was individually reasonable and
+collectively unbudgeted. It had gone badly wrong — the pages were fetching the
+Tailwind *compiler* (~400 KB) to generate the same 119 classes in every
+visitor's browser, and `system-design.html` pulled 3.5 MB of Mermaid in a
+`<script defer>` on every visit, for the many visits that never open a diagram.
+Fixing those took `system-design.html` from 4073 KB to 593 KB.
+
+**Gate** — `tools/check-boot-weight.js` (`--report` prints the per-file
+breakdown). Uncompressed same-origin bytes the page loads eagerly; pages are
+served gzipped so the wire cost is roughly a third, and the ratio is stable
+enough that budgeting the raw number is the simpler honest measure.
+
+**Escape hatch** — raise the budget, in the same commit that spends it. The
+number is set with headroom; the point is to make a large regression a
+conversation rather than an accident, and to keep the diff honest about who
+chose to spend it.
+
+---
+
 ## Open debt: four design problems ship without artwork
 
 Not an invariant. A record of one being suspended, so it does not become

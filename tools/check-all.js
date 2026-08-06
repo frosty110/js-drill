@@ -35,6 +35,7 @@ const PROBES = process.argv.includes('--probes');
 // run instead when --fix is passed (a generator rather than its --check).
 const GATES = [
   { name: 'share-code codec',    cmd: ['tools/test-sharecode.js'] },
+  { name: 'runner parity',       cmd: ['tools/test-runner-parity.js'] },
   { name: 'content-order gate',  cmd: ['tools/test-content-order.js'] },
   { name: 'offline app shell',   cmd: ['tools/check-sw-shell.js'] },
   { name: 'sync key coverage',   cmd: ['tools/check-sync-coverage.js'] },

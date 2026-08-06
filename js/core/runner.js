@@ -5,13 +5,27 @@
 // other lines. Also lets future surfaces (a "compare two snippets" drill,
 // say) call into runCode without dragging app state with them.
 //
-// Mirror copy lives in tools/validate-data.js — that's a Node CommonJS
-// script and can't share a browser-only module. Behavior MUST stay in
-// sync between the two (subsequence match semantics + 8-tick drain).
+// SHARED WITH THE VALIDATOR. tools/validate-data.js used to carry a hand-kept
+// copy of formatArg/runCode, with a comment asking the two to stay in sync.
+// They did not: by the time it was measured, 9 of 10 probe cases diverged —
+// Map/Set printed as `{}` under Node but `Map(1) { a => 1 }` in the browser,
+// console.error lost its `[error] ` prefix, the drain was 1 macrotask instead
+// of 8, and the validator ran in sloppy mode. Every one of those green-lights
+// an expectedOutput the browser then grades as WRONG, so the user types the
+// canonical perfectly and is told they failed.
 //
-// To consume: include before app.js.
+// The fix was to delete the copy, not to gate it. This file is now the single
+// implementation and runs under both engines: the IIFE binds to `window` in
+// the browser and to `module.exports` under CommonJS, and every browser-only
+// path (document, window) is feature-detected. The one genuine engine
+// difference — how TypeScript types are erased — is injected by the host via
+// setTypeEraser(). Parity is pinned by tools/test-runner-parity.js.
+//
+// To consume in the browser: include before app.js.
 //   <script src="js/core/runner.js"></script>
 // Exposed as `window.DrillRunner`.
+// To consume under Node:
+//   const { DrillRunner } = require('../js/core/runner.js');
 
 (function (root) {
   'use strict';
@@ -78,9 +92,20 @@
     try { return (langResolver && langResolver()) || 'js'; } catch { return 'js'; }
   };
 
+  // Type-erasure override. The browser lazy-loads the TypeScript compiler
+  // (above); Node ships `module.stripTypeScriptTypes` and has no reason to
+  // pull 9 MB of dependency to do the same job. The host registers whichever
+  // it has, and everything downstream of erasure — formatting, the console
+  // shim, the drain, strict mode — stays identical between the two. Different
+  // erasers, same contract: both erase, neither type-checks, and lessons may
+  // only use erasable syntax (docs/canonical-style.md § TypeScript lessons).
+  let typeEraser = null;
+  R.setTypeEraser = function (fn) { typeEraser = fn; };
+
   // Erase types. A no-op for JS, so it's safe to call unconditionally.
   R.transpile = async function (code, lang) {
     if (R.resolveLang(lang) !== 'ts') return code;
+    if (typeEraser) return typeEraser(code, 'ts');
     const ts = await R.ensureTypeScript();
     const out = ts.transpileModule(code, {
       compilerOptions: {
@@ -153,14 +178,31 @@
     };
     // Capture unhandled async rejections inside the user code — async IIFEs
     // whose returned Promise isn't surfaced to us would otherwise hit the
-    // window-level handler with no lesson feedback.
+    // host's global handler with no lesson feedback.
+    //
+    // Both engines have to be wired here, not just the browser. Under Node the
+    // default action for an unhandled rejection is to PRINT A STACK AND KILL
+    // THE PROCESS, so a single lesson whose async IIFE rejects would take the
+    // whole validator down mid-run instead of being reported as one failing
+    // exercise. Same contract, two subscription APIs.
     let unhandled = null;
-    const rejectionHandler = (e) => {
-      if (!unhandled) unhandled = (e && e.reason) || new Error('Unhandled rejection');
+    const noteRejection = (reason) => {
+      if (!unhandled) unhandled = reason || new Error('Unhandled rejection');
+    };
+    const browserHandler = (e) => {
+      noteRejection(e && e.reason);
       e && e.preventDefault && e.preventDefault();
     };
-    const hasWindow = typeof window !== 'undefined';
-    if (hasWindow) window.addEventListener('unhandledrejection', rejectionHandler);
+    const nodeHandler = (reason) => noteRejection(reason);
+
+    const hasWindow = typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function';
+    const hasProcess = !hasWindow && typeof process !== 'undefined' &&
+      typeof process.on === 'function';
+    if (hasWindow) window.addEventListener('unhandledrejection', browserHandler);
+    // Node only invokes OUR handler while one is attached, which suppresses the
+    // default crash for exactly the span of this run.
+    if (hasProcess) process.on('unhandledRejection', nodeHandler);
     try {
       const wrapped = '"use strict";\n' + source;
       // eslint-disable-next-line no-new-func
@@ -181,7 +223,8 @@
     } catch (e) {
       return { ok: false, output: (e && e.message) || String(e), debug: debugLogs.join('\n') };
     } finally {
-      if (hasWindow) window.removeEventListener('unhandledrejection', rejectionHandler);
+      if (hasWindow) window.removeEventListener('unhandledrejection', browserHandler);
+      if (hasProcess) process.off('unhandledRejection', nodeHandler);
     }
   };
 

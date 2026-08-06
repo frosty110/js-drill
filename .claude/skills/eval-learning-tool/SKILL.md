@@ -9,7 +9,7 @@ The metric — and the action loop — for "is this learning tool actually teach
 
 ## North star
 
-[PROFILE.md](../../PROFILE.md) says WHO. This rubric says WHETHER a tool actually moves the needle on long-term retention + transfer to the interview-coding context for that WHO. Engagement, completion, "feels productive" — none of those are this rubric. Memory consolidation and transfer are.
+[PROFILE.md](../../../PROFILE.md) says WHO. This rubric says WHETHER a tool actually moves the needle on long-term retention + transfer to the interview-coding context for that WHO. Engagement, completion, "feels productive" — none of those are this rubric. Memory consolidation and transfer are.
 
 If a tool engages well but doesn't consolidate memory, it's *engagement theater*. Removing it reduces the ADHD-fit cost of menu clutter without measurable learning loss.
 
@@ -133,9 +133,9 @@ Tools scored: N / total in registry
 
 | Tool | Score | Verdict | Salvage/Removal one-liner | Action status | Audit |
 |---|---|---|---|---|---|
-| Notes Drill | 11/21 | IMPROVE | Add per-item explanation on miss; score blank-word + distractor quality | not-actioned | [→](audits/notes-drill.md) |
-| L3 Drill | 19/21 | KEEP | Ship-quality | n/a | [→](audits/l3.md) |
-| Reverse | 7/21 | REMOVE | Engagement theater; cut and reclaim menu slot | not-actioned | [→](audits/reverse.md) |
+| Notes Drill | 11/21 | IMPROVE | Add per-item explanation on miss; score blank-word + distractor quality | not-actioned | [→](../../../docs/tool-evaluations/audits/notes-drill.md) |
+| L3 Drill | 19/21 | KEEP | Ship-quality | n/a | [→](../../../docs/tool-evaluations/audits/l3.md) |
+| Reverse | 7/21 | REMOVE | Engagement theater; cut and reclaim menu slot | not-actioned | [→](../../../docs/tool-evaluations/audits/reverse.md) |
 
 ## Summary
 

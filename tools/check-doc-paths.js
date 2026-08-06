@@ -37,18 +37,25 @@ const ROOT = path.resolve(__dirname, '..');
 // Docs describing the CURRENT repo. iter-artifacts/ and docs-archive/ are
 // excluded on purpose: they are append-only historical records, and rewriting
 // them to track later file moves would falsify the record.
+//
+// `.claude/skills/` is included: a skill is a living doc that tells the next
+// agent which files to read, and a skill pointing at a moved file sends that
+// agent somewhere that doesn't exist — the same failure as a bad row in the
+// file-layout table, with a longer fuse.
 const DOCS = ['CLAUDE.md', 'README.md', 'MIGRATION-NOTES.md', 'PROFILE.md'];
-(function collect(dir) {
-  if (!fs.existsSync(dir)) return;
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    // docs/**/archives/ holds dated snapshots of past evaluation runs. They
-    // link to each other and to files as they were at the time; "fixing" them
-    // would rewrite history rather than fix a doc.
-    if (e.isDirectory()) { if (e.name !== 'archives') collect(p); }
-    else if (e.name.endsWith('.md')) DOCS.push(path.relative(ROOT, p));
-  }
-})(path.join(ROOT, 'docs'));
+for (const root of ['docs', '.claude/skills']) {
+  (function collect(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      // **/archives/ holds dated snapshots of past evaluation runs. They link
+      // to each other and to files as they were at the time; "fixing" them
+      // would rewrite history rather than fix a doc.
+      if (e.isDirectory()) { if (e.name !== 'archives') collect(p); }
+      else if (e.name.endsWith('.md')) DOCS.push(path.relative(ROOT, p));
+    }
+  })(path.join(ROOT, root));
+}
 
 const FILE_EXT = /\.(js|css|json|md|html|py|sh|yml|xml|webmanifest|svg|png|sql|txt)$/;
 

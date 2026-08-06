@@ -36,8 +36,11 @@ const PROBES = process.argv.includes('--probes');
 const GATES = [
   { name: 'share-code codec',    cmd: ['tools/test-sharecode.js'] },
   { name: 'runner parity',       cmd: ['tools/test-runner-parity.js'] },
+  { name: 'spaced repetition',   cmd: ['tools/test-sr.js'] },
   { name: 'content-order gate',  cmd: ['tools/test-content-order.js'] },
   { name: 'offline app shell',   cmd: ['tools/check-sw-shell.js'] },
+  { name: 'vendored deps',       cmd: ['tools/vendor-deps.js', '--check'] },
+  { name: 'tailwind subset',     cmd: ['tools/check-tailwind-subset.js'] },
   { name: 'sync key coverage',   cmd: ['tools/check-sync-coverage.js'] },
   { name: 'icon consistency',    cmd: ['tools/check-icons.js'] },
   { name: 'content order lock',  cmd: ['tools/check-content-order.js', '--check'], fix: ['tools/check-content-order.js'] },

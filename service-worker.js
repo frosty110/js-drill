@@ -1,8 +1,14 @@
 // iter 113: Offline Drill Pack — service worker that pre-caches the app shell
-// + data/manifest.json + every authored lesson JSON on first install. Same-origin
-// fetches are cache-first; cross-origin (Tailwind / CodeMirror / Supabase CDNs)
-// fall through to the network, picking up the browser's HTTP cache after first
-// online visit. v2 will vendor the CDN assets for true cold-start offline.
+// + data/manifest.json + every authored lesson JSON on first install.
+//
+// 2026-08-06: the CDN assets ARE vendored now (tools/vendor-deps.js), which is
+// what the note here used to promise as "v2". Tailwind is compiled to a static
+// stylesheet, CodeMirror / Supabase / Mermaid are served from vendor/, and all
+// of them are in APP_SHELL below — so a cold start with no network now renders
+// the styled app WITH a working L3 editor, instead of an unstyled page whose
+// editor never appeared. There are no cross-origin boot dependencies left; the
+// bypass branch in the fetch handler is kept for the one remaining lazy fetch
+// (the TypeScript compiler, used by 3 lessons) and for anything added later.
 //
 // Cache strategy:
 //   - install: cache app shell + manifest.json + every full-status lesson JSON
@@ -38,7 +44,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v43-shared-shell-network-first-code-2026-08-05';
+const CACHE_VERSION = 'jsdrill-v44-vendored-deps-offline-complete-2026-08-06';
 
 // Code the SW revalidates instead of freezing. Same-origin GETs whose path ends
 // in one of these, plus navigations, take the network-first branch.
@@ -47,6 +53,21 @@ const CODE_EXT = /\.(?:html|js|css)$/i;
 const APP_SHELL = [
   './',
   './index.html',
+  // Third-party code, now served from our own origin (tools/vendor-deps.js).
+  // This is the entry this file's header used to promise: "v2 will vendor the
+  // CDN assets for true cold-start offline." Until it existed, the fetch
+  // handler bypassed cross-origin requests, so an offline cold start had no
+  // Tailwind (unstyled app) and no CodeMirror (the L3 editor simply absent).
+  './css/00-tailwind.css',
+  './vendor/codemirror/codemirror.css',
+  './vendor/codemirror/dracula.css',
+  './vendor/codemirror/codemirror.js',
+  './vendor/codemirror/javascript.js',
+  './vendor/codemirror/closebrackets.js',
+  './vendor/codemirror/matchbrackets.js',
+  './vendor/codemirror/runmode.js',
+  './vendor/supabase/supabase.js',
+  './vendor/mermaid/mermaid.min.js',
   // app.js was split into ordered slices (tools/split-app.py); precache them all.
   './js/app/01-state-content.js',
   './js/app/02-util-metrics.js',

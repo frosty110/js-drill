@@ -1,8 +1,35 @@
 // ── Diagrams ────────────────────────────────────────────────────────────
-let _mermaidReady = false, _mmdCounter = 0;
+// Mermaid is 3.5 MB — by far the largest thing this page can fetch, and most
+// visits never open a diagram at all. It used to be a `<script defer>` in the
+// page head, so every visitor on every load paid for it whether or not they
+// looked at a single architecture diagram. It is now fetched on FIRST DIAGRAM
+// RENDER instead.
+//
+// It stays in the service worker's APP_SHELL, so the fetch is usually a cache
+// hit and offline diagrams keep working — the change is to when the network is
+// asked, not to whether the bytes are available.
+let _mermaidReady = false, _mmdCounter = 0, _mermaidLoad = null;
+
+// Load the vendored bundle once. Resolves to false rather than rejecting, so
+// every failure path (offline first visit, blocked, corrupt) lands on the same
+// graceful fallback the caller already had.
+function loadMermaid() {
+  if (window.mermaid) return Promise.resolve(true);
+  if (_mermaidLoad) return _mermaidLoad;
+  _mermaidLoad = new Promise((resolve) => {
+    const el = document.createElement('script');
+    el.src = 'vendor/mermaid/mermaid.min.js';
+    el.async = true;
+    el.onload = () => resolve(!!window.mermaid);
+    el.onerror = () => { _mermaidLoad = null; resolve(false); };  // let a later attempt retry
+    document.head.appendChild(el);
+  });
+  return _mermaidLoad;
+}
+
 function initMermaid() {
   if (_mermaidReady) return true;
-  if (!window.mermaid) return false;   // CDN not loaded (offline / blocked) → caller falls back
+  if (!window.mermaid) return false;   // not loaded yet → caller falls back
   try {
     window.mermaid.initialize({
       startOnLoad: false, securityLevel: 'loose', theme: 'base',
@@ -23,6 +50,8 @@ async function renderDiagramInto(el, diagram) {
   if (!el || !diagram || !diagram.code) return;
   const cap = diagram.caption ? `<div class="diagram-cap">${esc(diagram.caption)}</div>` : '';
   if (diagram.kind === 'svg') { el.innerHTML = cap + `<div class="diagram-box">${diagram.code}</div>`; return; }
+  // First mermaid diagram on the page pays the fetch; the rest are free.
+  await loadMermaid();
   if (initMermaid()) {
     try {
       const { svg } = await window.mermaid.render('mmd' + (_mmdCounter++), diagram.code);

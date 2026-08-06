@@ -132,11 +132,16 @@ The validator checks: every conversation has ≥3 sections, every section has a 
 
 ## Step 4 — Spot-check the browser
 
+There is **no working browser probe for the Conversation tab**. `tools/cdp/archive/conversation-tab.js` was never registered in `PROBE_SUITE`, so nothing ran it; measured 2026-08-06 it scores 2 passed / 13 failed against the current DOM, and it now lives in `tools/cdp/archive/`. See the note in [`docs/conversation-walkthrough.md`](../../../docs/conversation-walkthrough.md) § Probes.
+
+So this step is manual, and it matters more than it used to. Serve the app and read your lessons end-to-end:
+
 ```bash
-node tools/cdp/conversation-tab.js
+python3 -m http.server 8765
+# open http://localhost:8765/ → your lesson → Conversation tab
 ```
 
-The existing probe verifies the tab renders and sections collapse/expand. If it passes for an existing lesson, your new lessons should render too. For broader confidence, open the app at `http://localhost:8765/`, navigate to your lessons, and read the Conversation tab end-to-end. Ask yourself: *"Would this make sense to a rusty engineer prepping for an interview tomorrow?"* If no — rewrite.
+Check the tab renders, sections collapse and expand, and the worked-examples sub-blocks open independently. Then ask the question that the probe never could: *"Would this make sense to a rusty engineer prepping for an interview tomorrow?"* If no — rewrite.
 
 ## Common authoring pitfalls
 

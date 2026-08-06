@@ -35,9 +35,17 @@ const PROBES = process.argv.includes('--probes');
 // run instead when --fix is passed (a generator rather than its --check).
 const GATES = [
   { name: 'share-code codec',    cmd: ['tools/test-sharecode.js'] },
+  { name: 'runner parity',       cmd: ['tools/test-runner-parity.js'] },
+  { name: 'spaced repetition',   cmd: ['tools/test-sr.js'] },
   { name: 'content-order gate',  cmd: ['tools/test-content-order.js'] },
   { name: 'offline app shell',   cmd: ['tools/check-sw-shell.js'] },
+  { name: 'vendored deps',       cmd: ['tools/vendor-deps.js', '--check'] },
+  { name: 'tailwind subset',     cmd: ['tools/check-tailwind-subset.js'] },
+  { name: 'boot weight',         cmd: ['tools/check-boot-weight.js'] },
   { name: 'sync key coverage',   cmd: ['tools/check-sync-coverage.js'] },
+  { name: 'storage call sites',  cmd: ['tools/check-storage-callsites.js'] },
+  { name: 'probe registry',      cmd: ['tools/check-probe-registry.js'] },
+  { name: 'documented paths',    cmd: ['tools/check-doc-paths.js'] },
   { name: 'icon consistency',    cmd: ['tools/check-icons.js'] },
   { name: 'content order lock',  cmd: ['tools/check-content-order.js', '--check'], fix: ['tools/check-content-order.js'] },
   { name: 'lesson exercises',    cmd: ['tools/validate-data.js'] },
@@ -63,6 +71,9 @@ const PROBE_SUITE = [
   { name: 'nav hierarchy',       cmd: ['tools/cdp/nav-hierarchy.js'] },
   { name: 'share URLs',          cmd: ['tools/cdp/share-urls.js'] },
   { name: 'sd study plans',      cmd: ['tools/cdp/sd-plans.js'] },
+  // CLAUDE.md described this as a durable probe with 11 assertions for months
+  // while nothing ran it. It passes; now it runs.
+  { name: 'sd graphic route',    cmd: ['tools/cdp/sd-graphic-route.js'] },
   { name: 'sd tags + nav',       cmd: ['tools/cdp/sd-tags-nav.js'] },
   { name: 'sd mixed context',    cmd: ['tools/cdp/sd-mixed-context.js'] },
   { name: 'sd component catalog',cmd: ['tools/cdp/sd-component-catalog.js'] },
@@ -70,6 +81,10 @@ const PROBE_SUITE = [
   { name: 'sd + app icons',      cmd: ['tools/cdp/sd-icons.js'] },
   { name: 'ai book shelf',       cmd: ['tools/cdp/ai-shelf.js'] },
   { name: 'agent bridge',        cmd: ['tools/cdp/agent-bridge.js'] },
+  // Documented in docs/conversation-walkthrough.md as regression coverage but
+  // never registered. Of the four probes that table claimed, this is the one
+  // still passing (10/10) — so it runs now and the other three are archived.
+  { name: 'tab state preserved', cmd: ['tools/cdp/tab-switch-preserves-state.js'] },
   { name: 'sync merge rules',    cmd: ['tools/cdp/sync-merge.js'] }
 ];
 

@@ -330,14 +330,37 @@ For future authors picking up a new lesson, here's the trace pattern that worked
 - **DOM access** — the trace runs in an eval'd context with no DOM/`fetch`/`require`/`import`.
 - **Padding short traces with redundant yields** — degenerate inputs (empty, single element, all-same) genuinely have few state changes. Honoring that is more pedagogical than faking 20 steps.
 
-## Probes (regression coverage)
+## Probes (regression coverage) — LAPSED, read this before trusting it
 
-| Probe | What it asserts |
-|---|---|
-| `tools/cdp/conversation-tab.js` | 30 assertions × (desktop+mobile). Tab renders, sections collapse/expand, worked-examples sub-blocks expand independently, "See the solution" CTA routes to Reference, non-conversation lessons unaffected. |
-| `tools/cdp/walkthrough-tab.js` | 34 assertions × (desktop+mobile). Tab order, initial step 1, line highlight, prev/next/reset, example dropdown switch, end-of-trace `returns` value, non-walkthrough lessons omit tab. |
-| `tools/cdp/walkthrough-cross-shapes.js` | 140 assertions × (desktop+mobile). One representative per shape family (14 shapes); confirms Conversation has ≥3 sections + Walkthrough renders code+state+counter + final state includes `returns`. Run this when a wide content change might have broken a shape. |
-| `tools/cdp/tab-switch-preserves-state.js` | 10 assertions. Existing BS-12 cache regression — Walkthrough position now also restores via this pattern. |
+> **These four probes no longer pass, and this table described coverage that
+> had stopped existing.** Measured 2026-08-06, against the current app:
+>
+> | Probe | Claimed | Actual |
+> |---|---|---|
+> | `tools/cdp/archive/conversation-tab.js` | 30 assertions | **2 passed, 13 failed** — the tab selectors it looks for return `""` |
+> | `tools/cdp/archive/walkthrough-tab.js` | 34 assertions | **harness error** — `[data-walk-next]` not found |
+> | `tools/cdp/archive/walkthrough-cross-shapes.js` | 140 assertions | **0 passed, 70 failed** |
+> | `tools/cdp/tab-switch-preserves-state.js` | 10 assertions | **10 passed, 0 failed** — still good, and now REGISTERED in `PROBE_SUITE` |
+>
+> None of the four was registered in `PROBE_SUITE`, so nothing ran them and
+> nothing reported when the UI moved out from under three of them. The three
+> that rotted are now in `tools/cdp/archive/` (see the README there); the one
+> that still passes runs in CI. This table is left in place, corrected, rather
+> than deleted, because the honest state of the world is *"the Conversation and
+> Walkthrough RENDERING has no browser regression coverage right now"* and a
+> reader deserves to know that rather than infer coverage from a confident
+> table.
+>
+> **What still holds the line:** `tools/validate-data.js` compiles every
+> walkthrough trace, runs it against every declared example, and asserts the
+> final `state.returns` matches the declared `expected`. That is the
+> load-bearing gate for this feature and it is green. What is unguarded is the
+> *rendering* — tab order, collapse/expand, the stepper controls.
+>
+> **To restore coverage:** fix one of the archived probes against the current
+> DOM, confirm it passes, move it back to `tools/cdp/`, and register it in
+> `PROBE_SUITE` in `tools/check-all.js`. `tools/check-probe-registry.js` will
+> then keep it honest.
 
 ## Maintenance playbook
 

@@ -11,81 +11,21 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');   // tools/ → project root
 const DATA = path.join(ROOT, 'data');
 
-// ── Runner — must match index.html's runCode() and outputsMatch() ─────────
-function formatArg(a) {
-  if (typeof a === 'string') return a;
-  if (typeof a === 'number' || typeof a === 'boolean') return String(a);
-  if (a === null) return 'null';
-  if (a === undefined) return 'undefined';
-  return JSON.stringify(a);
-}
-// ── TypeScript type erasure ───────────────────────────────────────────────
-// A lesson may declare `"lang": "ts"`. `new Function` is a JavaScript parser,
-// so types must be erased first. Node 22.13+ ships the stripper the runtime
-// itself uses for `node file.ts`, which means the validator needs no extra
-// dependency — unlike the browser, which lazy-loads the TypeScript compiler
-// (see js/core/runner.js for why the two engines are allowed to differ:
-// both erase, neither type-checks, and lessons may only use erasable syntax).
-const nodeModule = require('node:module');
-const STRIP = typeof nodeModule.stripTypeScriptTypes === 'function'
-  ? nodeModule.stripTypeScriptTypes
-  : null;
-
-function eraseTypes(code, lang) {
-  if (lang !== 'ts') return code;
-  if (!STRIP) {
-    throw new Error(
-      'This Node build cannot strip TypeScript types (needs Node >= 22.13). ' +
-      'Upgrade Node to validate lang:"ts" lessons.'
-    );
-  }
-  // mode:'strip' blanks types out in place, preserving line/column so a
-  // runtime error's position still points at the authored source.
-  return STRIP(code, { mode: 'strip' });
-}
-
-async function runCode(code, lang) {
-  try {
-    code = eraseTypes(code, lang);
-  } catch (err) {
-    return { output: '', error: err.message };
-  }
-  const lines = [];
-  const fakeConsole = {
-    log: (...args) => lines.push(args.map(formatArg).join(' ')),
-    error: (...args) => lines.push(args.map(formatArg).join(' ')),
-    warn: (...args) => lines.push(args.map(formatArg).join(' '))
-  };
-  try {
-    const fn = new Function('console', code);
-    const res = fn(fakeConsole);
-    if (res && typeof res.then === 'function') await res;
-    // One macrotask drain
-    await new Promise(r => setTimeout(r, 0));
-    return { output: lines.join('\n'), error: null };
-  } catch (err) {
-    return { output: lines.join('\n'), error: err.message };
-  }
-}
-// Subsequence match — must mirror app.js's outputsMatch. Every expected line
-// must appear in actual, in order; extra lines in actual are ignored (so a
-// user's debug console.log doesn't break the check). Canonicals don't add
-// debug logs, so this is equivalent to strict equality for the validator.
-function normalizeLines(s) {
-  return (s ?? '').toString().trim().replace(/\r\n/g, '\n')
-    .split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.length > 0);
-}
-function outputsMatch(actual, expected) {
-  const exp = normalizeLines(expected);
-  const act = normalizeLines(actual);
-  if (exp.length === 0) return act.length === 0;
-  let i = 0;
-  for (const line of act) {
-    if (line === exp[i]) i++;
-    if (i === exp.length) return true;
-  }
-  return false;
-}
+// ── Runner — THE SAME CODE THE BROWSER RUNS ───────────────────────────────
+// This file used to carry its own formatArg/runCode/outputsMatch, kept in step
+// with the browser's by a comment reading "must match index.html". They
+// drifted, and the drift was the dangerous kind: the validator green-lit an
+// expectedOutput that the app then graded as WRONG, so a user typing the
+// canonical exactly was told they had failed. Measured at the time of
+// unification, 9 of 10 probe cases diverged — Map/Set formatting, the
+// `[error] `/`[warn] ` prefixes, console.debug, function formatting, strict
+// mode, the macrotask drain, circular objects — and one shipped lesson
+// (s-strings L2#0) was live-broken in the browser as a direct result.
+//
+// All four copies are gone now. tools/lib/runner-node.js loads the app's real
+// runner and supplies the one thing that legitimately differs between engines
+// (how TypeScript types get erased). Pinned by tools/test-runner-parity.js.
+const { runCode, outputsMatch, eraseTypes } = require('./lib/runner-node.js');
 
 // ── Mechanics registry ────────────────────────────────────────────────────
 // Optional: data/mechanics.json defines cross-cutting code idioms tagged on

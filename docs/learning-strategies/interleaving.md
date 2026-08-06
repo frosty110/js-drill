@@ -46,7 +46,7 @@ surfaced as a competing access pattern.
   the surface that pulls the cross-cutting view INTO the lesson the
   user is already in.
 - **Today's plan** mixes a due review + the next path step + a weak spot
-  in one session ([app.js dailyPlan](../../app.js)). Three different
+  in one session ([`dailyPlan`](../../js/app/09-stats-cheatsheet-mock.js)). Three different
   retrieval cues, not three repetitions of one.
 - **Mock interview** picks a random pattern lesson with no warning —
   the user has to discriminate from a cold start, exactly the

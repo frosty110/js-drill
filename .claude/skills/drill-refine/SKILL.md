@@ -5,14 +5,14 @@ description: Run one iteration of the REFINEMENT loop for the JS drill app. Per 
 
 # drill-refine
 
-You are running one iteration of the **refinement loop**. The job is to make ONE existing surface of the JS drill app *demonstrably better for the user in [`PROFILE.md`](../../PROFILE.md)*, this iter.
+You are running one iteration of the **refinement loop**. The job is to make ONE existing surface of the JS drill app *demonstrably better for the user in [`PROFILE.md`](../../../PROFILE.md)*, this iter.
 
 ## Prior art — re-read these before iterating
 
 - [`/drill-improve`](../drill-improve/SKILL.md) — sibling loop. **Its Step 0 immune system applies here too.** The lessons from BS-14 (iter 1–23 UX-only drift), iter 24–34 process-rule accretion, the pivot-rate signal, and the "don't add process to fix process-induced slowness" rule are not re-litigated below; read them there. This skill INHERITS that immune system, just specialized for refinement.
 - [`/browser-test`](../browser-test/SKILL.md) — the Chrome-debugger discipline. Step 2 of this skill calls it. **Don't reinvent CDP plumbing.** `tools/cdp/lib.js` handles the WS connect + screenshot + DOM eval — your scenario script stays short and intent-revealing (arrange → act → assert + snap).
 - [`/refine-rubric`](../refine-rubric/SKILL.md) — the metric. Documented as its own agentic command so it's invokable standalone and impossible to drift from PROFILE.md silently. Step 3 invokes it.
-- [`PROFILE.md`](../../PROFILE.md) — the law. Re-read at the start of every iter. The rubric and the vision step are both grounded here; if PROFILE.md changed since the last iter, the rubric must be updated *before* this iter's score is meaningful.
+- [`PROFILE.md`](../../../PROFILE.md) — the law. Re-read at the start of every iter. The rubric and the vision step are both grounded here; if PROFILE.md changed since the last iter, the rubric must be updated *before* this iter's score is meaningful.
 
 ## What this loop is NOT
 

@@ -60,18 +60,48 @@ for (const rel of shell) {
 //    is deliberately absent: it is standalone, reached by URL, and shares no
 //    chrome — precaching it would grow the offline pack for nothing.
 const PAGES = ['index.html', 'system-design.html'];
+
+// The directories a page may load assets from. This list used to be inlined in
+// the match regex as `(?:js|css|ds)/`, which meant the gate could only see
+// directories someone had remembered to add to it. When the CDN dependencies
+// were vendored into `vendor/`, every one of those files was invisible here —
+// a page could load them and the precache could omit them and this gate stayed
+// green, which is the exact bug it exists to prevent, just at a new address.
+// So the list is now explicit AND the sweep below fails on any local directory
+// that is not in it.
+const LOCAL_ASSET_DIRS = ['js', 'css', 'ds', 'vendor'];
+const assetRe = new RegExp(`(?:src|href)="((?:${LOCAL_ASSET_DIRS.join('|')})\\/[^"]+)"`, 'g');
+
 for (const page of PAGES) {
   if (!shellSet.has(page)) {
     console.error(`  ✗ page not precached at all: ${page}`);
     errors++;
   }
   const html = read(page);
-  const refs = [...html.matchAll(/(?:src|href)="((?:js|css|ds)\/[^"]+)"/g)].map(m => m[1]);
+  const refs = [...html.matchAll(assetRe)].map(m => m[1]);
   for (const rel of new Set(refs)) {
     if (!shellSet.has(rel)) {
       console.error(`  ✗ loaded by ${page} but NOT precached: ${rel}`);
       errors++;
     }
+  }
+
+  // Catch a NEW local asset directory before it can slip past the list above.
+  // Any relative src/href with a path segment that resolves to a real
+  // directory in the repo has to be a directory this gate knows about.
+  for (const m of html.matchAll(/(?:src|href)="([^"#:]+\/[^"]*)"/g)) {
+    const first = m[1].split('/')[0];
+    if (!first || first === '.' || first === '..') continue;
+    if (LOCAL_ASSET_DIRS.includes(first)) continue;
+    if (!fs.existsSync(path.join(ROOT, first))) continue;          // not a local dir
+    if (!fs.statSync(path.join(ROOT, first)).isDirectory()) continue;
+    // `p/` and `sd/` are generated PAGES, linked to, never loaded as assets.
+    if (first === 'p' || first === 'sd') continue;
+    console.error(
+      `  ✗ ${page} loads from local directory "${first}/", which this gate does not check.\n` +
+      `      Add it to LOCAL_ASSET_DIRS in tools/check-sw-shell.js so its files\n` +
+      `      are required to be precached — otherwise they break offline silently.`);
+    errors++;
   }
 }
 

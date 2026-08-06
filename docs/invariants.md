@@ -313,6 +313,167 @@ Full contract: [`component-catalog.md`](component-catalog.md).
 
 ---
 
+## 9. One icon vocabulary
+
+**Rule — every glyph in the UI comes from `ds/icons.js`. No emoji in chrome, no
+text glyph standing in for an icon, no inline `<svg>` anywhere else.**
+
+The failures are quiet ones. A typo'd icon name makes `dsIcon()` return `''` —
+an icon that silently isn't there. A launchable mode with no `DS_MODE_ICONS` row
+renders the label's first LETTER in a row of icons. Neither throws.
+
+**Gate** — `tools/check-icons.js`, five checks, flat zero, no escape hatch. It
+shipped as a ratchet against 492 legacy glyphs; that backlog is cleared, so the
+budget and `--accept` are gone. Full rules in
+[`iconography.md`](iconography.md).
+
+---
+
+## 10. One runner grades lesson content
+
+**Rule — the code the app runs a drill with and the code the validator certifies
+an `expectedOutput` with must be the same code.**
+
+Invariant 6 says lesson content must be executable. This is the other half: it
+must be executable *the same way in both places*. If the validator and the app
+disagree about how a `Map` prints, whether `console.error` is prefixed, how many
+macrotasks are drained, or whether the body is strict, then the validator
+green-lights an `expectedOutput` the app then grades as WRONG — and the user
+types the canonical perfectly and is told they failed.
+
+This was broken for a long time and nothing could see it, because the two
+implementations were only ever compared to themselves. There were **four**:
+`js/core/runner.js` plus private copies in `validate-data.js`, `verify-lesson.js`
+and `validate-files.js`, each asking the others to stay in sync via a comment.
+Measured, 9 of 10 probe cases diverged, and one shipped lesson (`s-strings`
+L2#0) asked the user to complete an assignment that throws under the app's
+strict-mode wrapper while the sloppy-mode validator passed it.
+
+**Gate** — `tools/test-runner-parity.js`, in two directions. Structurally, no
+tool in `tools/` may define its own `formatArg`/`runCode`/`outputsMatch`; they
+must grade through `tools/lib/runner-node.js`, which loads the app's real
+runner. Behaviourally, every observable an `expectedOutput` can depend on is
+pinned as an explicit expectation, so changing one forces you to notice that
+every authored output containing it just became wrong.
+
+**Escape hatch** — none. The engines may differ in exactly one place, TypeScript
+type erasure, and that is injected via `DrillRunner.setTypeEraser()` rather than
+forked.
+
+---
+
+## 11. Nothing on the boot path comes from someone else's server
+
+**Rule — the three user-facing pages load no third-party origin, and everything
+they do load is precached.**
+
+The pages used to pull Tailwind, CodeMirror, Supabase and Mermaid from cdnjs and
+jsdelivr. Four separate failures, only one of them performance:
+
+- **Offline was a lie.** The service worker bypasses cross-origin requests, so
+  none of it could be precached. An offline cold start rendered an unstyled page
+  with no code editor — the L3 drill simply absent. This file's own header
+  promised the fix ("v2 will vendor the CDN assets") for as long as the offline
+  pack existed.
+- **No integrity.** Not one of the ten CDN tags carried an `integrity`
+  attribute.
+- **No pin.** `@supabase/supabase-js@2` is a range; the code executing in a
+  user's browser could change with no commit here.
+- **Tailwind's CDN script is the compiler**, not a stylesheet — it shipped
+  ~400 KB to every visitor to re-derive the same 119 utility classes on every
+  load, on the phone that is ~80% of study time.
+
+**Gate** — `tools/vendor-deps.js --check` verifies a SHA-256 per file against
+`vendor/lockfile.json`, rejects anything in `vendor/` it did not put there, and
+fails if any page names a CDN again. `tools/check-tailwind-subset.js`
+re-derives the used utility set with an independent scanner and fails on
+anything used but not built, plus asserts preflight survived (`css/01-base.css`
+has no reset of its own). `tools/check-sw-shell.js` requires it all to be
+precached — and now takes a directory LIST and fails on any local asset
+directory missing from it, because it previously hardcoded `(?:js|css|ds)/` and
+was blind to `vendor/` entirely.
+
+**Escape hatch** — one, documented in `tools/vendor-deps.js`: the TypeScript
+compiler stays a pinned lazy fetch. It is 8.9 MB and serves the 3 lessons that
+declare `"lang":"ts"`, so vendoring it would grow the repo by more than every
+other dependency combined for a path that never runs at boot.
+
+---
+
+## 12. A probe that isn't run isn't coverage
+
+**Rule — every `.js` directly in `tools/cdp/` is registered in `PROBE_SUITE` or
+explicitly allowlisted as a manual tool, and the docs may not describe coverage
+that doesn't run.**
+
+`tools/cdp/` held 186 files while `--probes` ran 15. Nothing on disk
+distinguished them, so both a human and an agent reading the directory saw a
+186-file test suite that was a 15-file suite plus a museum. The unregistered
+ones rot silently — when the 6 that the docs described as durable were finally
+measured, 4 had rotted (one scoring 0 of 70) and 2 were fine and had simply
+never been wired up.
+
+**Gate** — `tools/check-probe-registry.js`. Historical probes live in
+`tools/cdp/archive/`.
+
+**Escape hatch** — `MANUAL` in that file, for hand-driven tools that print
+output for a human rather than asserting. Each entry carries a reason.
+
+---
+
+## 13. The docs may not name files that don't exist
+
+**Rule — every markdown link target and every file-layout-table path in the
+living docs resolves.**
+
+CLAUDE.md is loaded into every session by every agent, and its file-layout table
+is the map everyone navigates by. It documented `app.css` (~3,955 lines), a file
+that had been split into `css/` months earlier; it kept a row for
+`js/app/25-breadcrumb.js` two rows below the line saying it had been absorbed;
+and it stated `__v: 5` in four places while the code writes 6. The document had
+accumulated eight self-corrections in its own prose — "audit F17", "had been
+wrong", "is not what ships", "measure, don't quote" — which is what a doc looks
+like when it has learned not to trust itself.
+
+Prose about behaviour genuinely cannot be gated. Prose that names a **file**
+can.
+
+**Gate** — `tools/check-doc-paths.js`. Deliberately narrow: an earlier version
+flagged 1207 "paths" including `do/while` and `[product/fix]`, and a gate that
+cries wolf is one people learn to skip.
+
+**Escape hatch** — fenced code blocks are exempt (they hold transcripts and
+quoted historical commit messages, where a stale path is part of the record),
+as are `iter-artifacts/`, `docs-archive/` and `docs/**/archives/`.
+
+---
+
+## 14. The boot path has a budget
+
+**Rule — each page declares a ceiling for the bytes it makes a phone fetch
+before the app is usable, and staying under it is checked.**
+
+PROFILE.md's one load-bearing fact is that ~80% of study happens on a phone.
+Nothing measured what a phone actually downloads, so the boot path could only
+grow: every slice, stylesheet and library was individually reasonable and
+collectively unbudgeted. It had gone badly wrong — the pages were fetching the
+Tailwind *compiler* (~400 KB) to generate the same 119 classes in every
+visitor's browser, and `system-design.html` pulled 3.5 MB of Mermaid in a
+`<script defer>` on every visit, for the many visits that never open a diagram.
+Fixing those took `system-design.html` from 4073 KB to 593 KB.
+
+**Gate** — `tools/check-boot-weight.js` (`--report` prints the per-file
+breakdown). Uncompressed same-origin bytes the page loads eagerly; pages are
+served gzipped so the wire cost is roughly a third, and the ratio is stable
+enough that budgeting the raw number is the simpler honest measure.
+
+**Escape hatch** — raise the budget, in the same commit that spends it. The
+number is set with headroom; the point is to make a large regression a
+conversation rather than an accident, and to keep the diff honest about who
+chose to spend it.
+
+---
+
 ## Open debt: four design problems ship without artwork
 
 Not an invariant. A record of one being suspended, so it does not become

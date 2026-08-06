@@ -14,7 +14,9 @@
   `module.stripTypeScriptTypes`). Neither type-checks — the drill grades on output. Only
   erasable syntax is permitted, so `enum` and parameter properties are banned in favour of
   string-literal unions. See [`docs/canonical-style.md`](docs/canonical-style.md) § TypeScript lessons.
-- `index.html` is markup only (~430 lines); `app.css` (~3,955 lines) loads via `<link>`
+- `index.html` is markup only (~580 lines); styles load as ordered slices from
+  `css/00..16-*.css` plus `ds/tokens.css` + `ds/components.css` (~6.4k lines total).
+  There is no `app.css` — it was split, and this line claimed otherwise for months
 - **`app.js` (13.3k lines) was split into 15 ordered slices `js/app/01..15-*.js`** that
   share global scope and load in order (see § File layout). They are plain
   `<script src>` files (NOT ES modules) — the split is byte-identical to the old
@@ -29,7 +31,7 @@
 
 ## Standing constraints (read before changing content or adding assets)
 
-**[docs/invariants.md](docs/invariants.md) is the rules doc.** Nine constraints
+**[docs/invariants.md](docs/invariants.md) is the rules doc.** Fourteen constraints
 whose failure mode is invisible — the app stays green and the meaning quietly
 becomes wrong. Every one has a gate:
 
@@ -65,10 +67,24 @@ CI runs the same command on every push (`.github/workflows/checks.yml`).
 
 ## What this project is
 
-A **JavaScript syntax + interview-pattern memorization web app**. No build step —
-open `index.html` in a browser (or serve `python3 -m http.server`). Uses Tailwind
-CSS and CodeMirror via CDN. Progress persists in `localStorage` under
-`jsdrill.progress.v1` (current schema `__v: 5`, load accepts v2/3/4/5; see § State
+A **JavaScript syntax + interview-pattern memorization web app**. No build step
+to RUN it — open `index.html` in a browser (or serve `python3 -m http.server`)
+and everything works, including offline. **No CDN either, as of 2026-08-06**:
+Tailwind, CodeMirror, Supabase and Mermaid used to be fetched from three
+third-party origins at boot, unpinned and without integrity hashes, and none of
+them could be precached — so an offline cold start had no styling and no code
+editor. Tailwind's CDN script was the *compiler*, re-deriving the same 119
+utility classes in every visitor's browser on every load.
+
+Now: `css/00-tailwind.css` is compiled once by `tools/build-tailwind-subset.js`
+and committed, and the rest live in `vendor/` (`tools/vendor-deps.js`, exact
+versions + SHA-256 in `vendor/lockfile.json`). Regenerating either needs
+`npm install`; verifying them does not, so CI stays dependency-free. The one
+remaining external fetch is the TypeScript compiler, lazy-loaded by the 3
+lessons that declare `"lang":"ts"`.
+
+Progress persists in `localStorage` under
+`jsdrill.progress.v1` (current schema `__v: 6`, load accepts v2-v6; see § State
 persistence). Live on GitHub Pages: https://frosty110.github.io/js-drill/
 
 ## Features shipped (so future iterations don't re-add them)
@@ -83,6 +99,14 @@ persistence). Live on GitHub Pages: https://frosty110.github.io/js-drill/
 - Cheatsheet markdown export
 - Progress JSON backup/restore
 - Session resume (currentLessonId + tab persisted)
+- **Diagnostics row in Settings** (2026-08-06) — appears only when something has
+  actually gone wrong. `js/core/errors.js` records exceptions, unhandled
+  rejections and failed resource loads to a bounded `sessionStorage` buffer;
+  one tap copies a paste-ready report. The app has no server and no error
+  reporting, so before this a failure on a phone was visible to nobody — the
+  user just saw a surface that silently didn't render. New code that must
+  swallow an error should call `DrillErrors.swallow(context, err)` rather
+  than write a bare `catch {}` (22 of those remain in `js/app/`).
 - Sticky L3 action bar (the off-canvas mobile drawer that used to sit beside it was retired in design-loop P4 part 3 — `#hamburger` now opens the Browse page; see `initMobileDrawer` in `js/app/14-init-core.js`)
 - Multi-tab storage sync
 - Search (`/` — focuses Browse's search field when Browse is open, otherwise opens the ⌘K command palette), keyboard nav (`j`/`k` or ↑/↓ = prev/next lesson · `1`-`9` = Nth tab in render order, so up to 6 on Patterns/Applied · `s` = shuffle review · `?` = help · `Esc` = close)
@@ -158,7 +182,7 @@ based on what it learned — that's how the app keeps converging on the profile.
 | File / Dir | Role |
 |---|---|
 | `index.html` | Main drill app markup — ~430 lines; loads the 15 `js/app/*.js` slices in order |
-| `app.css` | Main app styles — ~3,955 lines |
+| `css/00..16-*.css` | Main app styles as ordered slices (~6.4k lines). `00-tailwind.css` is GENERATED — see `tools/build-tailwind-subset.js`. |
 | `js/app/22-home.js` | **Home — the app's front door.** `openHome()` renders the CONTINUE hero, three track cards (Coding = patterns+applied · Syntax · System Design) each with mastery meter + due count + Continue/scoped-Review, expandable into their subcategories (29 sections · 4 SD topics), plus a More list (Today's plan · Practice · Progress · Diagnostic). Also holds the **scope model** (`homeScopeLessons/Stats/ContinueTarget/RepairIds`, scope = `{kind:'area'\|'section', key}`) that Home and the review sessions share, and the read-only System Design rollup (`_sdTopicStats` over `jsdrill.systemdesign.v1` boxes × manifest `questions` counts). Route `#/m/home`. |
 | `js/app/23-review.js` | **Scoped review sessions.** `startScopedReview(slug)` builds the scope's repair queue (overdue → due → weak → reveal-flagged, via `buildRepairIndex()`), drops the user into rep 1 at the right level (L2 on touch / L3 on fine pointer for mastered lessons; first unpassed level otherwise), and mounts a HUD strip between the topbar and the stage. Advances on a qualifying pass via the `_reviewOnLevelPass` hook in `markLevelPassed`. Session state is in-memory only. Routes `#/m/review/<scope-slug>` (e.g. `#/m/review/trees`, `#/m/review/all`). |
 | `css/11-ds-home.css` | Home page + review-HUD styles (ds primitives only). |
@@ -211,7 +235,6 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `css/15-ds-shell.css` · `css/16-sd-shell.css` | The shell's own styles and the system-design page's integration with them — the sibling of `css/06-ds-nav.css`, which does that job for `index.html`. **`15` owns the TOP BAR itself** (`.topbar`/`-left`/`-right`/`-wordmark`/`-icon` and every responsive tier, plus the scope meter, due chip, breadcrumb slot, nav-as-links and the Sync chip's offset) — one component, both pages. Those rules used to live in the index-only `css/05-shell-chrome.css`, which is why `system-design.html` grew a bespoke header that merely *hosted* `#ds-shellbar`: at 390px the room left over measured **zero**, so the breadcrumb, meter and due chip rendered and none of them were visible. `16` holds only geometry — a fixed rail / bottom bar around a sticky header and a centred main — and declares `--sd-header-h`, which was previously read with a fallback and never set. Gated by the cross-page block at the end of `tools/cdp/nav-hierarchy.js`. |
 | `tools/check-shell-contract.js` | Gate for the composability rule: `ds/` may not name a DOM id or non-`ds-` class it does not create; every nav rung is a **routed, top-level** surface addressable from both pages; both pages mount the shell; the retired topbar menubar can't come back. The failure it exists to catch is invisible from whichever page works. |
 | `js/breadcrumb.js` | **The derived breadcrumb** (D15 phase 1) — paints the `parent` trail from `js/routes.js` into `#ds-crumbs`, on `index.html` AND `system-design.html`. Knows nothing about lessons or units: each page passes a `title` resolver (ids come from the hash, display names from the manifests), an `extra` hook for real hierarchy that has no route yet (a lesson's section), and `hidden` for its root. Re-renders on `hashchange`. Adding a surface with a `parent` gives it a breadcrumb for free. |
-| `js/app/25-breadcrumb.js` | The main app's adapter for the above — lesson titles via `findLesson`, mode-slug → destination labels (`#/m/dashboard` reads "Progress", `#/m/review/trees` reads "Review · Trees"), the section splice, and a `#lesson-shell` observer so surface swaps that don't touch the hash still repaint. |
 | `tools/cdp/nav-hierarchy.js` | Durable probe for the hierarchy — a breadcrumb on every non-root surface and none at a root, trail depth matching the registry, the leaf unlinked and `aria-current`, ancestors climbing exactly one level, lessons/units named by title rather than id, no horizontal scroll at 390px. Its last block asserts the **one-chrome-two-pages** invariant by MEASURING it: both pages' top bars compute to the same height, and system-design's shell bar / breadcrumb / nav have real width at 390px. Every other assertion here asks whether a crumb *exists* — which is why all of them passed while that page's header was rendering at 0px. Read the probe's own passed/total rather than quoting a number here. |
 | `js/share-page.js` | Progressive enhancement on the generated static pages: decodes `?s=`, marks the picked option inline, renders a results table, and flags rows whose code contradicts the current content ("code out of date") instead of reporting a false verdict. |
 | `tools/build-share-pages.js` | Renders the crawlable pages — `p/<lesson>/` (171), `sd/<topic>/<unit>/` (64), `sd/<topic>/<unit>/<sheet>/` (183 study sheets — the JS-free twin of the app's `#/…/graphic/<id>` route), indexes, `sitemap.xml`, `robots.txt`. Also maintains the **agent bridge** inside `index.html` and `system-design.html` between `<!-- agent-bridge:start/end -->` markers — the no-JS fallback telling a fetcher how to turn a `#/…` route into a path. Output is **committed** (Pages serves from the repo); `--check` fails when it's stale. Run after any content change. |
@@ -225,12 +248,25 @@ based on what it learned — that's how the app keeps converging on the profile.
 | `data/tags.json` | Faceted-filter registry for the merged Problems list (Patterns+Applied). 4 facets: `source`(Type) + `topic` derived from track/section (no authoring); `difficulty` + `company` authored on manifest entries. Add a company by appending a value here. Validator enforces authored values against this registry. |
 | `data/<section-slug>/<lesson-id>.json` | One JSON per lesson — the source of truth for content |
 | `MIGRATION-NOTES.md` | Goals, principles, learnings from the multi-file refactor |
-| `js/core/runner.js` | Sandboxed code runner (`window.DrillRunner`). Erases TypeScript types for `lang:"ts"` lessons by lazy-loading the TS compiler on first use, then executes via `new Function`. Mirror semantics in `tools/validate-data.js`. |
-| `docs/invariants.md` | **The rules doc** — the eight standing constraints whose failure mode is invisible (positional share codes, committed generated output, offline precache parity, sync key coverage, single-source-of-truth ownership, executable lesson content, addressable-is-fetchable, annotated graph edges). Each names its gate and its escape hatch. |
-| `tools/check-all.js` | Runs every gate in one command; `--fix` regenerates first. What `.githooks/pre-commit` and `.github/workflows/checks.yml` both run — that default must stay browser-free. `--probes` adds the durable CDP suite (`PROBE_SUITE`) with a pass/fail line per probe; opt-in, needs Chrome on `:9222`, takes minutes. **In a sandboxed environment (blocked CDNs), run `bash tools/cdp/fetch-vendor.sh` first** — without the vendored assets the four main-app probes fail on `tailwind is not defined` rather than on anything real, which reads exactly like a regression. Run it before shipping anything user-facing. |
+| `js/core/runner.js` | Sandboxed code runner (`window.DrillRunner`) — **the ONLY runner**, used by the browser AND by every Node tool that grades lesson content. Erases TypeScript types for `lang:"ts"` lessons (browser: lazy-loads the TS compiler; Node: injects `stripTypeScriptTypes` via `setTypeEraser`), then executes via `new Function` under `"use strict"`. There used to be four hand-kept copies of this; they diverged on Map/Set formatting, the `[error] ` prefix, strict mode and the macrotask drain, and shipped a live-broken lesson. Gated by `tools/test-runner-parity.js`. |
+| `tools/lib/runner-node.js` | The one place Node may build a runner — loads `js/core/runner.js` + `js/core/util.js` and supplies Node's type-eraser. Used by `validate-data.js`, `verify-lesson.js`, `validate-files.js`. |
+| `js/core/errors.js` | Global error recorder (`window.DrillErrors`). FIRST script on all three pages. Bounded ring buffer of exceptions / rejections / failed resource loads, kept in `sessionStorage`, surfaced in Settings only when non-empty and copyable in one tap. The app has no error reporting, so before this a failure on a phone was invisible to everyone. |
+| `.claude/skills/add-a-gate/` | **How to close an invisible-failure class.** The ladder (make it impossible → make it fail loudly → document it), why deleting a duplicate beats gating it, gating structurally *and* behaviourally, asking what your gate can't see, keeping it low-noise, and the CI dependency-free constraint. Read it before adding a row to `GATES`. |
+| `.claude/skills/regression-triage/` | **Is this failure yours, the environment's, or a flake?** Prove attribution with `git diff --stat` before theorizing, confirm you're testing the tree you think, compute a flaky assertion's actual failure rate, and fix flakes with determinism rather than retries. Read it the moment a probe goes red. |
+| `docs/invariants.md` | **The rules doc** — the fourteen standing constraints whose failure mode is invisible (positional share codes, committed generated output, offline precache parity, sync key coverage, single-source-of-truth ownership, executable lesson content, addressable-is-fetchable, annotated graph edges, one icon vocabulary, one runner grading lesson content, no third-party origin on the boot path, no unrun probe posing as coverage, no doc naming a file that doesn't exist, a budget on the boot path). Each names its gate and its escape hatch. |
+| `tools/check-all.js` | Runs every gate in one command; `--fix` regenerates first. What `.githooks/pre-commit` and `.github/workflows/checks.yml` both run — that default must stay browser-free. `--probes` adds the durable CDP suite (`PROBE_SUITE`) with a pass/fail line per probe; opt-in, needs Chrome on `:9222`, takes minutes. (The old `tools/cdp/fetch-vendor.sh` workaround for sandboxed environments is gone — the CDN assets are vendored into `vendor/` now, so probes work with no network.) Run it before shipping anything user-facing. |
+| `tools/test-runner-parity.js` | Gate: no Node tool may define its own `formatArg`/`runCode`/`outputsMatch`, plus behavioural pins on every observable an `expectedOutput` depends on (Map/Set formatting, `[error] `/`[warn] ` prefixes, `console.debug` exclusion, strict mode, the 8-macrotask drain). |
+| `tools/test-sr.js` | Gate: the spaced-repetition scheduler. Loads the real slices in a `vm` with an injected clock — the 1d/3d/7d/14d/30d ladder, the `advance:false` hold, due-ness boundaries, queue order, the Resurrect 2x threshold, legacy-blob migration, save/load round-trip. |
+| `vendor/` + `tools/vendor-deps.js` | CodeMirror 5.65.16, Supabase 2.112.1, Mermaid 11.16.1 — **committed**, served same-origin, precached. `--check` verifies SHA-256 per file against `vendor/lockfile.json` and fails if any page references a CDN again. |
+| `css/00-tailwind.css` + `tools/build-tailwind-subset.js` | **Generated — do not hand-edit.** The 119 Tailwind utilities the app uses, compiled from tailwindcss@3.4.10 with the Ink & Amber palette (`tools/tailwind-theme.js`) and preflight. `tools/check-tailwind-subset.js` re-derives the used set with an independent scanner and fails on anything used but not built. |
+| `tools/check-boot-weight.js` | Gate: per-page ceiling on the bytes a phone fetches at boot. `--report` prints the breakdown. Mermaid (3.5 MB) is loaded on first diagram render rather than in the head, which took `system-design.html` from 4073 KB to 593 KB. |
+| `tools/check-storage-callsites.js` | Gate for invariant 5 at the CALL SITE (`check-sync-coverage.js` only covers fields): `js/storage.js` is the only file allowed to touch `localStorage`. Two files had grown raw access, one skipping `__v` validation, the other bypassing sync on restore. |
+| `tools/check-probe-registry.js` | Gate: every `.js` directly in `tools/cdp/` is registered in `PROBE_SUITE` or allowlisted as a manual tool, and every probe named in the living docs exists. |
+| `tools/check-doc-paths.js` | Gate: every markdown link target and every file-layout-table path in the living docs resolves. Written after this file documented `app.css` (~3,955 lines) for months after it was split into `css/`. |
+| `tools/cdp/archive/` | 160 historical one-off probes, unrun and ungated. See the README there. |
 | `tools/check-content-order.js` | Locks authored question/option order into `data/content-order.lock.json` — fails on reorder/removal, allows append and in-place rewording, `--accept` re-baselines. Also gates the ≤8-option share-alphabet ceiling. |
 | `tools/check-sw-shell.js` | Asserts `service-worker.js`'s `APP_SHELL` covers every local asset `index.html` loads (and vice versa). A gap breaks offline users only. |
-| `tools/validate-data.js` | Runs every L2 fill + L3 canonical, diffs manifest vs disk, gates banned syntax and walkthrough trace line ranges. Erases TS types via Node's built-in stripper. Run before commits. |
+| `tools/validate-data.js` | Runs every L2 fill + L3 canonical **through the app's own runner** (`tools/lib/runner-node.js`), diffs manifest vs disk, gates banned syntax and walkthrough trace line ranges. Run before commits. |
 | `tools/cdp/check.js` | Probes a deployed URL via Chrome's :9222 port (basic) |
 | `tools/cdp/deep-check.js` | Multi-tab + multi-lesson navigation probe with screenshots |
 | `tools/cdp/mobile-l3.js` | iPhone-viewport probe for the L3 editor + sticky action bar |
@@ -458,14 +494,16 @@ that ships, the laptop and phone are independent drill journeys.
 
 ### Schema
 
-Current save version is `__v: 5`. The load handler accepts `__v` 2, 3, 4,
-or 5 — older shapes are backfilled (e.g. v<4 lessons with `L1+L2+L3=passed`
+Current save version is `__v: 6`. The load handler accepts `__v` 2 through 6
+(`DrillStorage.MAIN_APP_ACCEPTED_VERSIONS` is the source of truth, and
+`tools/test-sr.js` asserts the saved version is the newest accepted one) —
+older shapes are backfilled (e.g. v<4 lessons with `L1+L2+L3=passed`
 get seeded with the first SR interval so spaced-rep works for legacy
 users). The save (`saveProgress` in `js/app/04-progress-sr.js`) writes:
 
 ```js
 {
-  __v: 5,
+  __v: 6,
   progress: { [lessonId]: { L1?: 'passed', L2?: 'passed', L3?: 'passed' } },
   bestTimes: { [lessonId]: ms },                      // mock-interview best time
   mockHistory: { [lessonId]: [ms, ms, …] },           // last 5 mock attempts
@@ -541,6 +579,13 @@ node tools/test-sharecode.js              # share-code codec + route registry
 # Offline-pack parity — run after adding ANY script or stylesheet to index.html.
 # A missing APP_SHELL entry breaks only offline users, so it never shows locally.
 node tools/check-sw-shell.js
+
+# Third-party assets + the Tailwind build. VERIFYING needs nothing but node
+# (CI has no install step); REGENERATING needs `npm install`.
+node tools/vendor-deps.js --check          # SHA-256 per file, no CDN on any page
+node tools/check-tailwind-subset.js        # every used utility is built
+node tools/vendor-deps.js                  # re-download the pinned versions
+node tools/build-tailwind-subset.js        # recompile css/00-tailwind.css
 
 # The durable browser probes as a suite, with a pass/fail line per probe.
 # Run before shipping anything user-facing; takes minutes and needs Chrome.

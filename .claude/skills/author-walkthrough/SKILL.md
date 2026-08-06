@@ -124,13 +124,16 @@ If ANY of those three fails, fix and re-run. A passing validator is the bar; do 
 
 ## Step 5 — Spot-check the browser
 
-Once a batch is in:
+Once a batch is in — and note there is **no working browser probe for the Walkthrough tab**. `tools/cdp/archive/walkthrough-tab.js` was never registered in `PROBE_SUITE`, so nothing ran it; measured 2026-08-06 it dies on a selector (`[data-walk-next]`) that no longer exists, and it now lives in `tools/cdp/archive/`. See [`docs/conversation-walkthrough.md`](../../../docs/conversation-walkthrough.md) § Probes.
+
+The load-bearing gate is still green and still the important one: `tools/validate-data.js` compiles your trace, runs it against every example, and asserts the final `state.returns` matches the declared `expected`. What is unguarded is the *rendering*, so check it by hand:
 
 ```bash
-node tools/cdp/walkthrough-tab.js
+python3 -m http.server 8765
+# open http://localhost:8765/ → your lesson → Walkthrough tab
 ```
 
-If the existing probe passes, the engine is wired and your lesson's trace will render. For broader confidence, you can write a one-off probe that lands on your specific lesson — but this is optional; the validator's compile+run+returns check is the load-bearing gate.
+Step through with prev/next, switch examples in the dropdown, and confirm the line highlight tracks and the final state shows `returns`.
 
 ## Common authoring pitfalls (read this before writing your first trace)
 

@@ -493,9 +493,14 @@ function _diagnosticBlob() {
         typeof window.DrillStorage.loadDiagnostic === 'function') {
       return window.DrillStorage.loadDiagnostic();
     }
-    if (typeof localStorage !== 'undefined') {
-      return JSON.parse(localStorage.getItem('jsdrill.diagnostic.v1') || 'null');
-    }
+    // No raw-localStorage fallback on purpose. It used to read the key
+    // directly here, which skipped the __v validation loadDiagnostic does —
+    // so an old or corrupt blob that the real loader would REJECT came back
+    // from this path as if it were a valid diagnostic result. js/storage.js is
+    // loaded before every app slice in index.html and is precached by the
+    // service worker, so its absence is not a state to paper over: treat it
+    // the same as "no diagnostic", which is this function's documented
+    // failure mode anyway.
   } catch (e) { /* corrupt or unreadable → treated as "never taken" */ }
   return null;
 }

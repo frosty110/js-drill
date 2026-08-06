@@ -58,6 +58,7 @@ const APP_SHELL = [
   // CDN assets for true cold-start offline." Until it existed, the fetch
   // handler bypassed cross-origin requests, so an offline cold start had no
   // Tailwind (unstyled app) and no CodeMirror (the L3 editor simply absent).
+  './js/core/errors.js',
   './css/00-tailwind.css',
   './vendor/codemirror/codemirror.css',
   './vendor/codemirror/dracula.css',

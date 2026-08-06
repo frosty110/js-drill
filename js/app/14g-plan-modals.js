@@ -331,8 +331,16 @@ function initBackupRestore() {
         // Write through DrillStorage so the storage-written event fires (a raw
         // setItem bypassed sync entirely — the restored blob never pushed, and
         // the post-reload pull-merge half-undid the rollback).
-        if (window.DrillStorage) window.DrillStorage.saveAppProgress(parsed);
-        else localStorage.setItem(LS_KEY, ev.target.result);
+        //
+        // There is deliberately no raw-setItem fallback. One used to sit here,
+        // and it did the exact thing the paragraph above says breaks a restore.
+        // A silent half-restore is worse than a refusal, because the user walks
+        // away believing their rollback took.
+        if (!window.DrillStorage) {
+          alert('Restore unavailable: the storage layer failed to load. Reload the page and try again.');
+          return;
+        }
+        window.DrillStorage.saveAppProgress(parsed);
         const finish = () => {
           alert('Backup restored. Reloading…');
           location.reload();

@@ -70,6 +70,26 @@ const CARD = `(() => {
   await s.eval(`location.reload()`);
   await s.sleep(1100);
 
+  // Make the shuffle deterministic. A mixed session is `shuffle(pool).slice(0,20)`
+  // over a pool that is ~78% open questions (255 open / 73 MC across the 36
+  // design problems), and this probe walks 12 cards — so "the first 12 contain
+  // at least one MC" fails about 4% of the time by chance alone. It did, twice,
+  // and cost a real investigation to rule out as a regression.
+  //
+  // Clearing the store above fixed the OTHER source of order-dependence (state
+  // left by a probe that ran earlier in the same profile). This fixes the one
+  // that remained: seeding Math.random makes the walk reproducible, so a
+  // failure here from now on means the app changed, not that the dice did.
+  await s.eval(`(() => {
+    let seed = 0x2F6E2B1;
+    Math.random = function () {                 // mulberry32
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  })()`);
+
   // ── Mixed session: every card carries its unit ───────────────────────────
   await s.eval(`location.hash = '#/design-problems/mixed'`);
   await s.sleep(1200);

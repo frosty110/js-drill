@@ -121,6 +121,22 @@ function _settingsRenderBody() {
       <div class="ds-card ds-card--flat settings-card">${ioRows}</div>`;
   }
 
+  // Diagnostics — hidden entirely until something has actually gone wrong, so
+  // a healthy app shows no extra chrome. Before js/core/errors.js existed, a
+  // runtime failure on a phone was visible to nobody: the user saw a surface
+  // that silently didn't render and had no devtools to ask why. Tapping copies
+  // a paste-ready report.
+  if (window.DrillErrors && DrillErrors.count() > 0) {
+    const n = DrillErrors.count();
+    html += `<p class="ds-label settings-grouplabel">Diagnostics</p>
+      <div class="ds-card ds-card--flat settings-card">${_settingsActionRow(
+        'alert',
+        `${n} error${n === 1 ? '' : 's'} this session`,
+        'Tap to copy a report you can paste into a bug report',
+        'data-action="copy-errors"'
+      )}</div>`;
+  }
+
   // Keyboard shortcuts (folds the topbar help button into Settings — nav-audit P2-6).
   if (document.getElementById('topbar-help')) {
     html += `<p class="ds-label settings-grouplabel">Help</p>
@@ -179,6 +195,16 @@ function _settingsOnTap(e) {
   const action = e.target.closest('[data-action], [data-action-btn]');
   if (!action) return;
   e.stopPropagation();
+  if (action.dataset.action === 'copy-errors') {
+    const text = window.DrillErrors ? DrillErrors.report() : 'No error recorder loaded.';
+    const done = () => { action.querySelector('.ds-row__main b').textContent = 'Copied — paste it into your report'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => window.prompt('Copy this report:', text));
+    } else {
+      window.prompt('Copy this report:', text);
+    }
+    return;
+  }
   if (action.dataset.action === 'sync') {
     _closeSettings();
     const chip = document.getElementById('sync-chip');

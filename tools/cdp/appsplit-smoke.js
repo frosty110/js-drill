@@ -17,6 +17,11 @@ const { ensureChrome, ensureServer, connect } = require('./lib');
   const netErr = s.networkErrors;
   if (exc.length) fails.push('boot exceptions: ' + JSON.stringify(exc.slice(0, 5)));
   if (netErr.length) fails.push('network errors (missing slice?): ' + JSON.stringify(netErr.slice(0, 8)));
+  // console.error at boot is a FAILURE, not a note. This probe printed the
+  // count and passed anyway, so the app's own "something is wrong" channel was
+  // the one signal CI ignored — and with no client-side error reporting, an
+  // error nobody's console is watching is an error nobody ever learns about.
+  if (errs.length) fails.push('console errors at boot: ' + JSON.stringify(errs.slice(0, 5)));
 
   const curr = await s.eval('(typeof CURRICULUM!=="undefined"&&CURRICULUM)?(CURRICULUM.length||(CURRICULUM.sections&&CURRICULUM.sections.length)||Object.keys(CURRICULUM).length):0');
   if (!curr) fails.push('CURRICULUM not loaded (' + curr + ')');

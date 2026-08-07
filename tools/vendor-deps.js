@@ -137,15 +137,45 @@ function check() {
   walk(VENDOR);
 
   // No page may go back to fetching these over the network. Comments are
-  // stripped first — the pages explain in prose why the CDNs were dropped, and
-  // naming a URL in a comment is not loading it.
+  // stripped first — the sources explain in prose why the CDNs were dropped,
+  // and naming a URL in a comment is not loading it.
+  //
+  // JS is scanned as well as HTML. Checking only the three pages left an open
+  // door: both remaining dynamic script injections live in JavaScript
+  // (js/sd/02-diagrams.js loads Mermaid, js/core/runner.js loads TypeScript), so
+  // pointing either back at a CDN would have passed a gate whose whole purpose
+  // is "no third-party origin on the boot path".
   const BANNED = [/cdnjs\.cloudflare\.com/, /cdn\.jsdelivr\.net/, /cdn\.tailwindcss\.com/];
+
+  // The one documented exception: the TypeScript compiler is 8.9 MB, lazy, and
+  // used by 3 of 183 lessons. It is pinned and explained at its definition.
+  const ALLOWED_REMOTE = /typescript@\d+\.\d+\.\d+\/lib\/typescript\.js/;
+
+  const scanned = [];
   for (const page of ['index.html', 'system-design.html', 'diagnostic.html']) {
-    const p = path.join(ROOT, page);
-    if (!fs.existsSync(p)) continue;
-    const html = fs.readFileSync(p, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+    const abs = path.join(ROOT, page);
+    if (fs.existsSync(abs)) scanned.push([page, fs.readFileSync(abs, 'utf8').replace(/<!--[\s\S]*?-->/g, '')]);
+  }
+  (function walkJs(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (['node_modules', '.git', 'archive'].includes(e.name)) continue;
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) walkJs(abs);
+      else if (e.name.endsWith('.js')) {
+        const src = fs.readFileSync(abs, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+        scanned.push([path.relative(ROOT, abs), src]);
+      }
+    }
+  })(path.join(ROOT, 'js'));
+
+  for (const [where, src] of scanned) {
     for (const re of BANNED) {
-      if (re.test(html)) problems.push(`${page} still loads ${re.source.replace(/\\/g, '')} — vendor it instead`);
+      const hit = src.match(new RegExp(`https?://[^\\s'"\`)]*${re.source}[^\\s'"\`)]*`));
+      if (!hit) continue;
+      if (ALLOWED_REMOTE.test(hit[0])) continue;
+      problems.push(`${where} still fetches ${hit[0]} — vendor it instead`);
     }
   }
 

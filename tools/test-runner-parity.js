@@ -40,6 +40,9 @@ const { DrillUtil } = require(path.join(ROOT, 'js', 'core', 'util.js'));
 let pass = 0;
 const failures = [];
 
+function ok(name, cond) {
+  if (cond) pass++; else failures.push(name);
+}
 function check(name, actual, expected) {
   const a = JSON.stringify(actual);
   const e = JSON.stringify(expected);
@@ -154,6 +157,55 @@ async function run(code, opts) {
   check('throw reports message', await run(`throw new Error('nope');`), 'ERROR: nope');
   check('unhandled rejection is caught',
     await run(`(async()=>{throw new Error('async nope');})();`), 'ERROR: async nope');
+
+  // ── 2b. Rejections land on the run that caused them ──────────────────────
+  // The first version of the shared runner attached a process-global
+  // unhandledRejection handler per call and detached it in `finally`. Node
+  // reports a rejection a turn or two after it happens, so lesson A's rejection
+  // routinely arrived during lesson B's window: B failed with A's message and A
+  // passed. Silent, and it sends the author to the wrong file.
+  {
+    const slowReject =
+      `(async()=>{ await new Promise(r=>setTimeout(r,0)); await new Promise(r=>setTimeout(r,0)); throw new Error('OWNED_BY_FIRST'); })(); console.log('first');`;
+    const innocent = `console.log('second');`;
+
+    // Sequential — the validator's exact access pattern.
+    const first = await DrillRunner.runCode(slowReject, { lang: 'js' });
+    const second = await DrillRunner.runCode(innocent, { lang: 'js' });
+    check('a slow rejection is blamed on the run that caused it',
+      first.ok === false && first.output === 'OWNED_BY_FIRST', true);
+    check('...and NOT on the next run', second.ok === true && second.output, 'second');
+
+    // Concurrent — nothing stops a future tool from Promise.all-ing runCode.
+    // We can't tell whose rejection it is, so the contract is that neither is
+    // told a lie; the runner reports it as unattributed instead.
+    const [a, b] = await Promise.all([
+      DrillRunner.runCode(
+        `(async()=>{ await new Promise(r=>setTimeout(r,0)); throw new Error('BELONGS_TO_A'); })(); console.log('a');`,
+        { lang: 'js' }),
+      DrillRunner.runCode(`console.log('b');`, { lang: 'js' })
+    ]);
+    ok('concurrent runs never inherit each other\'s rejection',
+      b.output !== 'BELONGS_TO_A' && a.output !== 'b');
+  }
+
+  // Requiring the runner must not disarm the host's own crashes. Attaching an
+  // unhandledRejection listener suppresses Node's default exit(1), so the
+  // runner has to put it back for rejections that aren't a drill's. When this
+  // was missed, THIS FILE hit a ReferenceError, printed nothing, and exited 0 —
+  // a gate that silently could not fail. Checked in a subprocess because the
+  // property is about process exit, not a return value.
+  {
+    const { spawnSync } = require('child_process');
+    const bug = spawnSync(process.execPath,
+      ['-e', `require(${JSON.stringify(path.join(ROOT, 'tools', 'lib', 'runner-node.js'))}); (async()=>{ throw new Error('HOST_BUG'); })();`],
+      { encoding: 'utf8' });
+    ok('a host-side unhandled rejection still exits non-zero', bug.status !== 0);
+    const clean = spawnSync(process.execPath,
+      ['-e', `require(${JSON.stringify(path.join(ROOT, 'tools', 'lib', 'runner-node.js'))}); console.log('fine');`],
+      { encoding: 'utf8' });
+    ok('...while a clean program still exits 0', clean.status === 0);
+  }
 
   // ── 3. The matcher the two sides share ───────────────────────────────────
   check('outputsMatch: exact',      DrillUtil.outputsMatch('a\nb', 'a\nb'), true);

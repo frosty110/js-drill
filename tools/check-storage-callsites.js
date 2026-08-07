@@ -35,13 +35,21 @@ const OWNER = 'js/storage.js';
 
 // Files that legitimately reference localStorage without being the owner:
 // they detect availability or clear everything, and route real I/O elsewhere.
-const ALLOWED = {
-  'js/sync.js': 'mirrors the four blobs to Supabase; reads through DrillStorage keys by design'
-};
+// Empty on purpose. js/sync.js was listed here once, but it has no raw
+// localStorage calls at all — a dead escape hatch is an invitation to use it.
+// Add an entry only with a reason that survives being read out loud.
+const ALLOWED = {};
 
 const problems = [];
+// Everything that SHIPS. This walked only `js/` at first, and then printed
+// "js/storage.js is the only direct localStorage consumer" — a claim it had not
+// checked. diagnostic.html, one of the three shipped pages, held five raw calls
+// including `localStorage.setItem('jsdrill.progress.v1', …)`: character for
+// character the bug in this file's header, sitting in the part the gate could
+// not see. A gate that asserts a repo-wide invariant has to read the repo.
 const files = [];
 (function walk(dir) {
+  if (!fs.existsSync(dir)) return;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (['node_modules', '.git', 'vendor', 'archive'].includes(e.name)) continue;
     const p = path.join(dir, e.name);
@@ -49,6 +57,19 @@ const files = [];
     else if (e.name.endsWith('.js')) files.push(p);
   }
 })(path.join(ROOT, 'js'));
+(function walkDs(dir) {
+  if (!fs.existsSync(dir)) return;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walkDs(p);
+    else if (e.name.endsWith('.js')) files.push(p);
+  }
+})(path.join(ROOT, 'ds'));
+// Inline <script> in the pages counts too — that is where the violation was.
+for (const page of ['index.html', 'system-design.html', 'diagnostic.html']) {
+  const p = path.join(ROOT, page);
+  if (fs.existsSync(p)) files.push(p);
+}
 
 // The mutating + reading calls. `localStorage.length`, `key()` and feature
 // detection (`typeof localStorage`) are not I/O and are not the concern here.

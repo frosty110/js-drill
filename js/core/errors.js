@@ -28,6 +28,7 @@
                                     // frame must not become a memory leak
   var KEY = 'jsdrill.errors.session';
   var buffer = [];
+  var notifying = false;
 
   // sessionStorage, not localStorage, and therefore NOT DrillStorage's
   // business (invariant 5 governs the four persisted localStorage blobs):
@@ -70,8 +71,15 @@
       if (buffer.length > MAX) buffer.shift();
     }
     persist();
-    if (typeof root.__drillOnError === 'function') {
-      try { root.__drillOnError(entry); } catch (e) { /* a listener must not re-throw into the handler */ }
+    if (typeof root.__drillOnError === 'function' && !notifying) {
+      // `notifying` guards re-entry, not just throwing. console.error is patched
+      // below to funnel into record(), so a listener that logs an error would
+      // otherwise loop record → listener → console.error → record forever, and
+      // a try/catch cannot see that.
+      notifying = true;
+      try { root.__drillOnError(entry); }
+      catch (e) { /* a listener must not break error recording */ }
+      finally { notifying = false; }
     }
   }
 

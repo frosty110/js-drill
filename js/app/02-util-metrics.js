@@ -485,8 +485,8 @@ const DIAG_MAX_WEAK_MECHANICS = 8;
 // Read the blob defensively. `js/storage.js` owns localStorage I/O for every
 // page (see CLAUDE.md § Shared UI + storage contract), so go through it when
 // it's there; the direct read is the fallback for a load-order or probe
-// context where DrillStorage hasn't mounted. Any throw / corrupt JSON means
-// "no diagnostic", never an exception into a render path.
+// Any throw / corrupt JSON means "no diagnostic", never an exception into a
+// render path. There is no raw-localStorage fallback — see the note inside.
 function _diagnosticBlob() {
   try {
     if (typeof window !== 'undefined' && window.DrillStorage &&

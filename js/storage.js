@@ -95,6 +95,16 @@
     _fireWriteEvent('diagnostic');
   };
 
+  // "Start over" on diagnostic.html. Exists so that page doesn't have to reach
+  // for localStorage.removeItem directly — a raw remove skips the write event,
+  // so sync would keep the cleared blob alive and push it back on the next
+  // merge, silently un-restarting the user.
+  Storage.clearDiagnostic = function () {
+    try { localStorage.removeItem(Storage.DIAGNOSTIC_KEY); }
+    catch (e) { /* private mode / quota — nothing to clear anyway */ }
+    _fireWriteEvent('diagnostic');
+  };
+
   // ============================================================================
   // SYSTEM DESIGN — DDIA (and future topics) multiple-choice memorization
   // ============================================================================

@@ -360,6 +360,17 @@ every authored output containing it just became wrong.
 type erasure, and that is injected via `DrillRunner.setTypeEraser()` rather than
 forked.
 
+**Attribution is part of the contract.** Capturing an unhandled rejection is not
+enough; it has to land on the run that caused it. The first implementation
+attached a process-global handler for the span of one `runCode` and removed it in
+`finally` — but Node reports a rejection a turn or two after it happens, so
+lesson A's rejection routinely arrived during lesson B's window and B was failed
+with A's message while A passed. The runner now keeps ONE permanent listener and
+claims a rejection only when exactly one run is in flight; zero runs means it
+belongs to the host and is re-thrown (otherwise merely loading the runner would
+turn every unhandled rejection in a tool into a silent exit 0), and more than one
+is reported unattributed rather than guessed at.
+
 ---
 
 ## 11. Nothing on the boot path comes from someone else's server
@@ -466,6 +477,15 @@ Fixing those took `system-design.html` from 4073 KB to 593 KB.
 breakdown). Uncompressed same-origin bytes the page loads eagerly; pages are
 served gzipped so the wire cost is roughly a third, and the ratio is stable
 enough that budgeting the raw number is the simpler honest measure.
+
+**The service worker's `APP_SHELL` is budgeted too, and that was learned the
+hard way.** The first version of this gate read `src=`/`href=` out of HTML and
+nothing else, so when Mermaid moved from a `<script defer>` into the precache
+the per-page number improved by 3.5 MB while every main-app visitor started
+downloading 3.4 MB *more* at install — and the gate reported the improvement.
+Only `index.html` registers the worker and it never draws a diagram, so the
+bytes were charged to precisely the users who could not use them. Anything a
+given page may never load belongs in runtime caching, not the shell.
 
 **Escape hatch** — raise the budget, in the same commit that spends it. The
 number is set with headroom; the point is to make a large regression a

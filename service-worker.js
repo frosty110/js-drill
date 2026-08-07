@@ -3,12 +3,17 @@
 //
 // 2026-08-06: the CDN assets ARE vendored now (tools/vendor-deps.js), which is
 // what the note here used to promise as "v2". Tailwind is compiled to a static
-// stylesheet, CodeMirror / Supabase / Mermaid are served from vendor/, and all
-// of them are in APP_SHELL below — so a cold start with no network now renders
-// the styled app WITH a working L3 editor, instead of an unstyled page whose
-// editor never appeared. There are no cross-origin boot dependencies left; the
-// bypass branch in the fetch handler is kept for the one remaining lazy fetch
-// (the TypeScript compiler, used by 3 lessons) and for anything added later.
+// stylesheet and CodeMirror / Supabase are served from vendor/ and precached, so
+// a cold start with no network renders the styled app WITH a working L3 editor,
+// instead of an unstyled page whose editor never appeared. There are no
+// cross-origin boot dependencies left; the bypass branch in the fetch handler is
+// kept for the one remaining lazy fetch (the TypeScript compiler, used by 3
+// lessons) and for anything added later.
+//
+// Mermaid is the deliberate exception and is NOT precached — see the note where
+// it would otherwise appear in APP_SHELL. Precaching everything vendored was the
+// first instinct and it was wrong: it charged every main-app visitor 3.4 MB for
+// a library only the system-design page uses.
 //
 // Cache strategy:
 //   - install: cache app shell + manifest.json + every full-status lesson JSON
@@ -44,7 +49,7 @@
 //
 // Bump CACHE_VERSION when changing precache shape or app-shell list. Each bump
 // invalidates the prior cache via activate.
-const CACHE_VERSION = 'jsdrill-v44-vendored-deps-offline-complete-2026-08-06';
+const CACHE_VERSION = 'jsdrill-v45-mermaid-runtime-cached-2026-08-06';
 
 // Code the SW revalidates instead of freezing. Same-origin GETs whose path ends
 // in one of these, plus navigations, take the network-first branch.
@@ -68,7 +73,16 @@ const APP_SHELL = [
   './vendor/codemirror/matchbrackets.js',
   './vendor/codemirror/runmode.js',
   './vendor/supabase/supabase.js',
-  './vendor/mermaid/mermaid.min.js',
+  // NOT './vendor/mermaid/mermaid.min.js' — deliberately. It is 3.4 MB, and
+  // only index.html registers this service worker. index.html never renders a
+  // diagram: Mermaid belongs to system-design.html, which injects it on first
+  // diagram render. Precaching it charged every main-app visitor 3.4 MB for a
+  // file they may never load — worse than the CDN era, where it was
+  // cross-origin and this worker skipped it entirely.
+  //
+  // It is still cached, just later: the fetch handler stores any successful
+  // same-origin GET, so the first diagram a user opens populates the cache and
+  // every diagram after that works offline.
   // app.js was split into ordered slices (tools/split-app.py); precache them all.
   './js/app/01-state-content.js',
   './js/app/02-util-metrics.js',

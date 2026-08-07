@@ -149,6 +149,93 @@
     try { return JSON.stringify(a); } catch { return String(a); }
   };
 
+  // ── Unhandled-rejection capture ──────────────────────────────────────────
+  // An async IIFE whose promise we never see can still reject. In the browser
+  // that would hit the page's handler with no lesson feedback; under Node the
+  // DEFAULT ACTION IS TO KILL THE PROCESS, which would take the whole validator
+  // down mid-run instead of failing one exercise.
+  //
+  // The subtle part is ATTRIBUTION, and the first version of this got it wrong.
+  // It attached a process-global handler for the span of one runCode and
+  // detached it in `finally`. But a rejection is reported a turn or two after
+  // it happens, so a rejection belonging to lesson A routinely arrived while
+  // lesson B was running — and B was told it had failed with A's error, while A
+  // passed. Silent, and it points the author at the wrong file. Reproduced
+  // through tools/verify-lesson.js: a broken lesson passed and a
+  // `console.log('perfectly fine')` lesson failed with `A_IS_BROKEN`.
+  //
+  // So: ONE permanent listener, and a rejection is only ever claimed when
+  // exactly one run is in flight. Zero runs means it belongs to the host, not
+  // to us — pass it through untouched. More than one (a caller doing
+  // Promise.all over runCode) means we genuinely cannot tell whose it is, and
+  // guessing is the bug we just fixed. Both of those report loudly instead.
+  const activeRuns = new Set();
+  let rejectionCaptureInstalled = false;
+
+  // Always drain at least this many macrotasks, so a run's own rejection has
+  // surfaced before the run stops being the active one.
+  const MIN_DRAIN = 4;
+  const MAX_DRAIN = 8;
+
+  function reportOrphan(reason, why) {
+    const msg = (reason && reason.message) || String(reason);
+    // The real console — never the lesson's fake one. This is for whoever is
+    // running the tool, not for the drill's graded output.
+    const warn = (typeof console !== 'undefined' && console.warn) ? console.warn : null;
+    if (warn) warn(`[DrillRunner] unattributed rejection (${why}): ${msg}`);
+  }
+
+  // Returns true when the rejection was claimed by exactly one run.
+  function dispatchRejection(reason) {
+    if (activeRuns.size === 1) {
+      const run = activeRuns.values().next().value;
+      if (!run.unhandled) run.unhandled = reason || new Error('Unhandled rejection');
+      return true;
+    }
+    reportOrphan(reason, activeRuns.size === 0 ? 'no drill running' : `${activeRuns.size} runs in flight`);
+    return false;
+  }
+
+  function ensureRejectionCapture() {
+    if (rejectionCaptureInstalled) return;
+    rejectionCaptureInstalled = true;
+
+    const hasWindow = typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function';
+    if (hasWindow) {
+      window.addEventListener('unhandledrejection', (e) => {
+        // preventDefault ONLY when we actually claimed it. A rejection from the
+        // app itself must still reach js/core/errors.js and the console —
+        // swallowing those would make the error recorder lie by omission.
+        if (dispatchRejection(e && e.reason)) {
+          e && e.preventDefault && e.preventDefault();
+        }
+      });
+      return;
+    }
+    if (typeof process !== 'undefined' && typeof process.on === 'function') {
+      process.on('unhandledRejection', (reason) => {
+        if (dispatchRejection(reason)) return;   // a drill's — already recorded
+        // Nothing was running, so this belongs to the TOOL that loaded us, and
+        // merely having a listener attached has already suppressed Node's
+        // default crash. Re-throw to put it back.
+        //
+        // This matters more than it looks: without it, requiring this module
+        // silently turns every unhandled rejection in the host program into an
+        // exit-0 no-op. That is not hypothetical — it happened to
+        // tools/test-runner-parity.js the first time this was written. A plain
+        // ReferenceError in the test body made the gate print nothing and exit
+        // 0, and a gate that cannot fail is worse than no gate at all.
+        //
+        // The ambiguous case (several runs in flight) is deliberately NOT
+        // re-thrown: it is a drill's rejection, we simply cannot say whose, and
+        // killing the process over it would be worse than the loud warning
+        // dispatchRejection already printed.
+        if (activeRuns.size === 0) throw reason;
+      });
+    }
+  }
+
   // Async runner. Strict-mode wraps the user code so `this` semantics match
   // what the s-this lesson teaches. Adaptive drain (up to 8 macrotasks) lets
   // async IIFEs settle without blocking forever on stuck timers.
@@ -176,33 +263,9 @@
       debug: (...args) => debugLogs.push(args.map(R.formatArg).join(' ')),
       info:  (...args) => debugLogs.push(args.map(R.formatArg).join(' '))
     };
-    // Capture unhandled async rejections inside the user code — async IIFEs
-    // whose returned Promise isn't surfaced to us would otherwise hit the
-    // host's global handler with no lesson feedback.
-    //
-    // Both engines have to be wired here, not just the browser. Under Node the
-    // default action for an unhandled rejection is to PRINT A STACK AND KILL
-    // THE PROCESS, so a single lesson whose async IIFE rejects would take the
-    // whole validator down mid-run instead of being reported as one failing
-    // exercise. Same contract, two subscription APIs.
-    let unhandled = null;
-    const noteRejection = (reason) => {
-      if (!unhandled) unhandled = reason || new Error('Unhandled rejection');
-    };
-    const browserHandler = (e) => {
-      noteRejection(e && e.reason);
-      e && e.preventDefault && e.preventDefault();
-    };
-    const nodeHandler = (reason) => noteRejection(reason);
-
-    const hasWindow = typeof window !== 'undefined' &&
-      typeof window.addEventListener === 'function';
-    const hasProcess = !hasWindow && typeof process !== 'undefined' &&
-      typeof process.on === 'function';
-    if (hasWindow) window.addEventListener('unhandledrejection', browserHandler);
-    // Node only invokes OUR handler while one is attached, which suppresses the
-    // default crash for exactly the span of this run.
-    if (hasProcess) process.on('unhandledRejection', nodeHandler);
+    const run = { unhandled: null };
+    ensureRejectionCapture();
+    activeRuns.add(run);
     try {
       const wrapped = '"use strict";\n' + source;
       // eslint-disable-next-line no-new-func
@@ -210,21 +273,29 @@
       if (result && typeof result.then === 'function') {
         await result;
       }
+      // Drain macrotasks so async work settles. MIN_DRAIN turns run
+      // unconditionally, then we keep going while output is still arriving.
+      //
+      // The unconditional floor matters for correctness, not just output: Node
+      // reports an unhandled rejection a turn or two AFTER the promise rejects,
+      // so a run that stopped logging could previously exit its own window
+      // before its own rejection surfaced — and the rejection then landed on
+      // whichever run happened to be in flight next. See the note above
+      // activeRuns.
       let prev = -1;
-      for (let i = 0; i < 8; i++) {
-        if (logs.length === prev) break;
+      for (let i = 0; i < MAX_DRAIN; i++) {
+        if (i >= MIN_DRAIN && logs.length === prev) break;
         prev = logs.length;
         await new Promise(r => setTimeout(r, 0));
       }
-      if (unhandled) {
-        return { ok: false, output: (unhandled && unhandled.message) || String(unhandled), debug: debugLogs.join('\n') };
+      if (run.unhandled) {
+        return { ok: false, output: (run.unhandled && run.unhandled.message) || String(run.unhandled), debug: debugLogs.join('\n') };
       }
       return { ok: true, output: logs.join('\n'), debug: debugLogs.join('\n') };
     } catch (e) {
       return { ok: false, output: (e && e.message) || String(e), debug: debugLogs.join('\n') };
     } finally {
-      if (hasWindow) window.removeEventListener('unhandledrejection', browserHandler);
-      if (hasProcess) process.off('unhandledRejection', nodeHandler);
+      activeRuns.delete(run);
     }
   };
 

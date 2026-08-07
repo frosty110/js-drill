@@ -28,7 +28,11 @@ const CSS = path.join(ROOT, 'css', '00-tailwind.css');
 // Narrow on purpose. Anything matching this is expected to be BUILT; anything
 // not matching is assumed to be one of the app's own class names and is the
 // stylesheets' problem, not this gate's.
-const TW = new RegExp('^(?:sm:|md:|lg:|xl:|dark:|hover:|focus:|active:|disabled:)?(?:' + [
+// Variants and families are hand-maintained, so gaps here are silent: a used
+// utility outside this list is neither built nor reported, and simply renders
+// as nothing. `top-0`/`inset-0` were exactly that gap. Widen this list when you
+// reach for a family it doesn't cover.
+const TW = new RegExp('^(?:(?:sm|md|lg|xl|2xl|dark|hover|focus|focus-visible|active|disabled|group-hover|first|last|odd|even):)*(?:' + [
   'flex', 'grid', 'block', 'inline(?:-block|-flex)?', 'hidden', 'table', 'contents',
   'absolute', 'relative', 'fixed', 'sticky', 'static',
   '(?:items|justify|self|content|place)-[a-z]+',
@@ -51,7 +55,17 @@ const TW = new RegExp('^(?:sm:|md:|lg:|xl:|dark:|hover:|focus:|active:|disabled:
   'transition(?:-[a-z]+)?', 'duration-\\d+', 'order-\\d+',
   'shrink(?:-0)?', 'grow(?:-0)?', 'basis-[a-z0-9\\/]+',
   'ring(?:-\\d+)?', 'divide-[a-z0-9-]+', 'antialiased', 'sr-only',
-  'pointer-events-[a-z]+', 'resize(?:-[a-z]+)?'
+  'pointer-events-[a-z]+', 'resize(?:-[a-z]+)?',
+  // Added after a sweep found `top-0` and `inset-0` used-but-unbuilt with the
+  // gate green. Positioning, transforms and list/outline families were all
+  // missing from the original list.
+  '(?:top|right|bottom|left)-(?:\\d+|auto|px|full|\\d+\\/\\d+)',
+  'inset(?:-[xy])?-(?:\\d+|auto|px|full)',
+  'object-[a-z]+', 'aspect-[a-z]+', 'animate-[a-z]+',
+  'scale-\\d+', 'rotate-\\d+', '(?:translate|-translate)-[xy]-[a-z0-9\\/]+',
+  'list-[a-z]+', 'col-start-\\d+', 'col-end-\\d+', 'row-span-\\d+',
+  'outline(?:-[a-z0-9]+)?', 'align-[a-z]+', 'float-[a-z]+', 'isolate',
+  'backdrop-[a-z-]+\\d*', 'break-[a-z]+', 'indent-\\d+'
 ].join('|') + ')$');
 
 // ── Collect every class token the code applies ─────────────────────────────

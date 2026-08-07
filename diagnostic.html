@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Error recorder. FIRST script on every page so it is installed before
        there is anything to catch. Keeps a bounded, in-page record of
        exceptions / rejections / failed resource loads, surfaced in Settings
        when non-empty. No network: this app has no error reporting, so a
        failure on a phone was previously invisible to everyone. -->
   <script src="js/core/errors.js"></script>
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>4-Day Interview Diagnostic</title>
 <!-- One design system across the family (design-loop P8): ds tokens + components
      (the legacy --bg/--panel/--accent names resolve as aliases inside ds/tokens.css). -->
@@ -549,9 +549,10 @@ const POST_QUESTIONS = [
 // ============================================================================
 // STATE
 // ============================================================================
-// Storage I/O delegates to window.DrillStorage (js/storage.js). Mirror the key
-// here so the reset button can fall back to direct removeItem if needed.
-const STORAGE_KEY = (window.DrillStorage && window.DrillStorage.DIAGNOSTIC_KEY) || 'jsdrill.diagnostic.v1';
+// Storage I/O goes through window.DrillStorage (js/storage.js) — all of it.
+// There is no mirrored key and no direct-localStorage fallback: both existed
+// here once, and the raw progress write meant the diagnostic-to-drill handoff
+// never fired a storage-written event and so never synced to another device.
 const TOTAL_STEPS = 1 /*intro*/ + 1 /*pre*/ + QUESTIONS.length + 1 /*post*/ + 1 /*done*/;
 const PRE_INDEX  = 1;
 const Q_START    = 2;
@@ -569,14 +570,15 @@ const state = load() || {
 
 let stepEnteredAt = Date.now();
 
+// No raw-localStorage fallback: js/storage.js loads before this script on
+// every page, and the fallback skipped __v validation on read and the
+// storage-written event (and therefore sync) on write — the two things
+// DrillStorage exists to guarantee.
 function save() {
-  if (window.DrillStorage) return window.DrillStorage.saveDiagnostic(state);
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  catch (e) { console.warn('save failed', e); }
+  if (window.DrillStorage) window.DrillStorage.saveDiagnostic(state);
 }
 function load() {
-  if (window.DrillStorage) return window.DrillStorage.loadDiagnostic();
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; }
+  return window.DrillStorage ? window.DrillStorage.loadDiagnostic() : null;
 }
 function commitStepTime() {
   const elapsed = Math.round((Date.now() - stepEnteredAt) / 1000);
@@ -821,17 +823,24 @@ function renderDone() {
       // mobile-throughput surface per PROFILE.md), then navigate. The main
       // app already restores both fields on boot — no new code needed there.
       // Also record the diagnostic handoff so future iters can wire a banner.
+      // Through DrillStorage, so the storage-written event fires and js/sync.js
+      // pushes the handoff. A raw setItem here meant the user finished the
+      // diagnostic on their phone and the handoff never reached their laptop.
+      // The version also comes from MAIN_APP_VERSION rather than a literal, so
+      // this stops being a second place that has to know the schema number.
       try {
-        const raw = localStorage.getItem('jsdrill.progress.v1');
-        const parsed = raw ? JSON.parse(raw) : { __v: 6 };
-        parsed.sidebarTrack = 'patterns';
-        parsed.lastTab = 'L1';
-        parsed.diagnosticHandoff = {
-          weakestSection: weakest.section,
-          weakestPct: weakest.pct,
-          completedAt: new Date().toISOString(),
-        };
-        localStorage.setItem('jsdrill.progress.v1', JSON.stringify(parsed));
+        if (window.DrillStorage) {
+          const parsed = window.DrillStorage.loadAppProgress() ||
+            { __v: window.DrillStorage.MAIN_APP_VERSION };
+          parsed.sidebarTrack = 'patterns';
+          parsed.lastTab = 'L1';
+          parsed.diagnosticHandoff = {
+            weakestSection: weakest.section,
+            weakestPct: weakest.pct,
+            completedAt: new Date().toISOString(),
+          };
+          window.DrillStorage.saveAppProgress(parsed);
+        }
       } catch (e) { console.warn('handoff stamp failed', e); }
       location.href = 'index.html';
     };
@@ -840,7 +849,7 @@ function renderDone() {
   document.getElementById('copy-btn').onclick = copyJson;
   document.getElementById('restart-btn').onclick = () => {
     if (confirm("Wipe saved diagnostic state and start over?")) {
-      localStorage.removeItem(STORAGE_KEY);
+      if (window.DrillStorage) window.DrillStorage.clearDiagnostic();
       location.reload();
     }
   };

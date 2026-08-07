@@ -45,21 +45,33 @@ function initMermaid() {
   return _mermaidReady;
 }
 // Render a { kind:'mermaid'|'svg', code, caption } diagram into `el`. Degrades to
-// showing the source if mermaid isn't available so the page never depends on the CDN.
-async function renderDiagramInto(el, diagram) {
+// showing the source if mermaid isn't available, so the page never depends on
+// the library actually loading.
+//
+// `isStale` is an optional predicate checked immediately before each write. A
+// caller that can re-render the same element (the deck's prev/next) passes one
+// so a slow render cannot paint over a newer one. Every write below is guarded,
+// because the awaits — the lazy library fetch AND mermaid.render itself — both
+// give the user time to press the button again.
+async function renderDiagramInto(el, diagram, isStale) {
   if (!el || !diagram || !diagram.code) return;
+  const stale = () => (typeof isStale === 'function' && isStale());
   const cap = diagram.caption ? `<div class="diagram-cap">${esc(diagram.caption)}</div>` : '';
-  if (diagram.kind === 'svg') { el.innerHTML = cap + `<div class="diagram-box">${diagram.code}</div>`; return; }
+  if (diagram.kind === 'svg') {
+    if (!stale()) el.innerHTML = cap + `<div class="diagram-box">${diagram.code}</div>`;
+    return;
+  }
   // First mermaid diagram on the page pays the fetch; the rest are free.
   await loadMermaid();
+  if (stale()) return;
   if (initMermaid()) {
     try {
       const { svg } = await window.mermaid.render('mmd' + (_mmdCounter++), diagram.code);
-      el.innerHTML = cap + `<div class="diagram-box">${svg}</div>`;
+      if (!stale()) el.innerHTML = cap + `<div class="diagram-box">${svg}</div>`;
       return;
     } catch (e) { /* fall through to source */ }
   }
-  el.innerHTML = cap + `<pre class="diagram-src">${esc(diagram.code)}</pre>`;
+  if (!stale()) el.innerHTML = cap + `<pre class="diagram-src">${esc(diagram.code)}</pre>`;
 }
 
 // New content uses `diagrams[]`; legacy content can keep its singular `diagram`.
@@ -120,8 +132,20 @@ function renderDiagramDeck(el, diagrams, label = 'Visual models') {
     prev.disabled = diagrams.length < 2;
     next.disabled = diagrams.length < 2;
     slot.innerHTML = '<div class="loading">Rendering diagram…</div>';
-    await renderDiagramInto(slot, { ...diagram, caption: '' });
-    if (token !== paintToken) return;
+    // The staleness check has to gate the WRITE, not follow it. It used to sit
+    // after this await, where it could not prevent anything — renderDiagramInto
+    // sets slot.innerHTML itself, so by the time the token was compared the
+    // stale picture was already on screen.
+    //
+    // That was survivable while the await was a mermaid.render() microtask. It
+    // stopped being survivable when Mermaid became a lazy 3.4 MB fetch: the
+    // window is now seconds on a phone, so tapping ▸ twice during the first
+    // diagram of a deck left the title reading "3 / 4" above whichever render
+    // happened to resolve last. On a study surface the label IS the thing being
+    // learned, so a header that disagrees with the picture is worse than a slow
+    // one.
+    await renderDiagramInto(slot, { ...diagram, caption: '' },
+      () => token !== paintToken);
   }
   prev.addEventListener('click', () => { index = (index - 1 + diagrams.length) % diagrams.length; paint(); });
   next.addEventListener('click', () => { index = (index + 1) % diagrams.length; paint(); });

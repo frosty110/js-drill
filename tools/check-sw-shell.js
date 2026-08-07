@@ -70,7 +70,9 @@ const PAGES = ['index.html', 'system-design.html'];
 // So the list is now explicit AND the sweep below fails on any local directory
 // that is not in it.
 const LOCAL_ASSET_DIRS = ['js', 'css', 'ds', 'vendor'];
-const assetRe = new RegExp(`(?:src|href)="((?:${LOCAL_ASSET_DIRS.join('|')})\\/[^"]+)"`, 'g');
+// Both quote styles: matching only `"` let a single-quoted tag slip past this
+// gate entirely, which is a one-character bypass of an offline guarantee.
+const assetRe = new RegExp(`(?:src|href)\\s*=\\s*["']((?:${LOCAL_ASSET_DIRS.join('|')})\\/[^"']+)["']`, 'g');
 
 for (const page of PAGES) {
   if (!shellSet.has(page)) {
@@ -89,7 +91,7 @@ for (const page of PAGES) {
   // Catch a NEW local asset directory before it can slip past the list above.
   // Any relative src/href with a path segment that resolves to a real
   // directory in the repo has to be a directory this gate knows about.
-  for (const m of html.matchAll(/(?:src|href)="([^"#:]+\/[^"]*)"/g)) {
+  for (const m of html.matchAll(/(?:src|href)\s*=\s*["']([^"'#:]+\/[^"']*)["']/g)) {
     const first = m[1].split('/')[0];
     if (!first || first === '.' || first === '..') continue;
     if (LOCAL_ASSET_DIRS.includes(first)) continue;

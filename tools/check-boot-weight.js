@@ -57,7 +57,8 @@ for (const [page, budget] of Object.entries(BUDGETS)) {
   const html = fs.readFileSync(abs, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
 
   const refs = [...new Set(
-    [...html.matchAll(/(?:src|href)="((?:js|css|ds|vendor)\/[^"]+)"/g)].map(m => m[1])
+    // Both quote styles — matching only `"` made a single-quoted tag free.
+    [...html.matchAll(/(?:src|href)\s*=\s*["']((?:js|css|ds|vendor)\/[^"']+)["']/g)].map(m => m[1])
   )];
 
   let total = fs.statSync(abs).size;
@@ -82,6 +83,50 @@ for (const [page, budget] of Object.entries(BUDGETS)) {
       `      Either trim it, load it lazily, or raise the budget in\n` +
       `      tools/check-boot-weight.js in the same commit — so the diff says\n` +
       `      someone chose to spend it.`);
+  }
+}
+
+// ── The service worker's precache is a boot cost too ───────────────────────
+// This gate parsed src=/href= out of HTML and nothing else, which made it blind
+// to the biggest download the app can make. Vendoring Mermaid moved 3.4 MB OUT
+// of system-design.html's page load and INTO APP_SHELL — so the per-page numbers
+// improved by 3.5 MB while every main-app visitor started fetching 3.4 MB more,
+// and this gate reported the improvement.
+//
+// The shell installs on first visit to index.html, so it is a real first-run
+// cost and belongs under a budget of its own.
+const SHELL_BUDGET_KB = 2600;
+{
+  const sw = fs.readFileSync(path.join(ROOT, 'service-worker.js'), 'utf8');
+  const block = sw.match(/const APP_SHELL = \[([\s\S]*?)\];/);
+  if (!block) {
+    problems.push('could not find APP_SHELL in service-worker.js — has it been renamed?');
+  } else {
+    const entries = block[1].split('\n')
+      .map(l => (l.match(/^\s*'([^']+)'/) || [])[1])
+      .filter(Boolean);
+    let total = 0;
+    const files = [];
+    for (const e of entries) {
+      const rel = e.replace(/^\.\//, '');
+      if (!rel || rel === '') continue;
+      const p = path.join(ROOT, rel);
+      if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) continue;
+      const bytes = fs.statSync(p).size;
+      total += bytes;
+      files.push([rel, bytes]);
+    }
+    files.sort((a, b) => b[1] - a[1]);
+    const kb = total / 1024;
+    report.push({ page: 'service-worker APP_SHELL', kb, budget: SHELL_BUDGET_KB, files });
+    if (kb > SHELL_BUDGET_KB) {
+      problems.push(
+        `service-worker APP_SHELL precaches ${kb.toFixed(0)} KB, over its ${SHELL_BUDGET_KB} KB budget.\n` +
+        `      Every first-time visitor to index.html downloads this before the app is\n` +
+        `      usable offline, whether or not they ever open the surface it belongs to.\n` +
+        `      Largest: ${files.slice(0, 3).map(f => `${f[0]} ${(f[1] / 1024).toFixed(0)}KB`).join(', ')}\n` +
+        `      Prefer runtime caching for anything a given page may never load.`);
+    }
   }
 }
 
